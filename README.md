@@ -42,13 +42,15 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 - **Windows in space.** Any Android app opens as a window around you, at its own size and distance. You can drag a
   window by its edge, snap it next to others, curve it, or push it further and pull it closer.
 - **All windows at once.** Hold both hands up, or use Adjust all, to move, push, pull or resize every window together.
-- **Head tracking.** Windows stay where you put them in the room. It reads the glasses' own motion sensor at 1000 Hz,
-  paced to the glasses' display.
+- **Head tracking.** Windows stay where you put them as you turn your head. It reads the glasses' own motion sensor
+  at 1000 Hz, paced to the glasses' display. This is 3DoF (turning, not walking around); 6DoF is open for the
+  community to build (see below).
 - **3D side by side.** Each eye gets its own view, so windows sit at a real depth. Pocket XR switches the glasses
   into 3D by itself where they allow it.
 - **Your phone as the controller.** A trackpad, with taps, two-finger scroll and pinch and three-finger swipes; a
   Spatial Mouse you point like a laser; and a scroll strip. On a Galaxy Z Flip it also works on the cover screen.
-- **Hand tracking**, on glasses with a camera (the XREAL Aura): point, pinch and drag, with each hand separately.
+- **Hand tracking**, on glasses with a camera: point, pinch and drag, with each hand separately. It works on the
+  XREAL Aura today. The One and One Pro can get it through the XREAL Eye camera add-on, which is next (help wanted).
 - **An app launcher, a Control Center** (arrange layouts, presets, Wi-Fi, Bluetooth, quick settings) and **Wide
   view**, which gives phone-shaped apps a landscape screen.
 
@@ -57,13 +59,27 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 | Glasses | Status | Hand tracking |
 | --- | --- | --- |
 | XREAL Aura | Tested | Yes |
-| XREAL One | Tested | No (no camera). Turn **Stabilizer off** in the glasses' menu. |
-| XREAL One Pro | Community testing | No, unless a camera is found |
+| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Turn **Stabilizer off** in the glasses' menu. |
+| XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) |
 | XREAL 1S | Community testing | No |
 | Other glasses | Help wanted | No |
 
 Details, settings for each model and how to report your glasses: [docs/GLASSES.md](docs/GLASSES.md). If you own a
 model marked "Community testing", a Glasses report from the app helps a lot (Menu, then Pocket XR Settings, then Advanced, then Glasses report).
+
+## Where the community can take it
+
+I wanted to get 1.0 into people's hands rather than wait until everything was done, so some big pieces are left open
+on purpose. These are the ones I'm most excited to see the community build:
+
+- **6DoF tracking.** Pocket XR follows your head turning (3DoF) today. With the cameras on the XREAL Aura and the
+  XREAL Eye, 6DoF is possible, so you could lean in and walk around your windows.
+- **Hand tracking on the One and One Pro**, through the XREAL Eye camera add-on.
+- **More glasses and phones.** Testing and Glasses reports from models other than the Aura, the One and the Galaxy Z
+  Flip 7.
+
+The [Roadmap](https://github.com/pocket-xr/pocket-xr/issues/11) has the full list, and
+[the testers issue](https://github.com/pocket-xr/pocket-xr/issues/12) is the easiest place to start.
 
 ## Supported phones
 

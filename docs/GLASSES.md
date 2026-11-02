@@ -8,8 +8,8 @@ set on the glasses themselves, and what to send when something is wrong.
 | Glasses | Status | Hand tracking | Notes |
 | --- | --- | --- | --- |
 | XREAL Aura | Tested | Yes, through its camera | The model the app was built on. |
-| XREAL One | Tested (30 October 2026) | No (no camera) | Turn **Stabilizer off**, see below. |
-| XREAL One Pro | Community testing | No (unless a camera is found, such as the Eye) | Treated as a One with a 57 degree view. Not run by the project yet. |
+| XREAL One | Tested (30 October 2026) | Not yet: possible with the XREAL Eye add-on (help wanted) | Turn **Stabilizer off**, see below. |
+| XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) | Treated as a One with a 57 degree view. Not run by the project yet. |
 | XREAL 1S | Community testing | No | Treated as a One. Its view is not published, so the One's 50 degrees is used. |
 | Other glasses | Help wanted | No | Plain fallbacks; see "Unknown glasses" below. |
 
