@@ -28,7 +28,7 @@ Thanks for helping. The most useful contributions:
 You need:
 - JDK 17;
 - the Android SDK (compile SDK 36), with the NDK and CMake 3.22.1;
-- Gradle 9.5.1.
+- Gradle 9.8.2.
 
 ```bash
 gradle :core:test          # the unit tests (fast, no device)
