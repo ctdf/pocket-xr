@@ -8,7 +8,7 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 
 <p align="center"><img src="docs/media/demo.gif" width="600" alt="Pocket XR on XREAL glasses: windows all around you, looking around, opening an app, moving and resizing a window, and the Control Center"></p>
 
-<!-- TODO before launch: a link to the full demo video. -->
+<p align="center"><a href="https://youtu.be/H8dBKm-I6zw">▶ Watch the full demo video (46 s)</a></p>
 
 ## What it does
 
