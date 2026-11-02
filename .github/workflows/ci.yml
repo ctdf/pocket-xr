@@ -26,9 +26,11 @@ jobs:
           packages: platform-tools
       - name: NDK and CMake
         run: sdkmanager "ndk;27.0.12077973" "cmake;3.22.1"
+      # Keep this the same as distributionUrl in gradle/wrapper/gradle-wrapper.properties. AGP 9.5 needs Gradle 9.6 or
+      # later, so CI on 9.5.1 failed Dependabot's AGP and wrapper update.
       - uses: gradle/actions/setup-gradle@v6
         with:
-          gradle-version: "9.5.1"
+          gradle-version: "9.8.2"
       - name: Unit tests
         run: gradle :core:test --no-daemon
       - name: Build the app
