@@ -2,6 +2,14 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.0.1: crash reports
+
+- If Pocket XR closes unexpectedly, the next time you open it, it offers to send a crash report: by email or as a
+  GitHub bug, both filled in already. You see the report before it's sent, and nothing is sent unless you send it.
+  It holds the error, the app version, your phone model and Android version.
+- The README explains the Play Protect block some countries show at install ("This app can request access to
+  sensitive data"), and how to install with adb instead.
+
 ## 1.0.0 (2 November 2026): the first public release
 
 Pocket XR was developed privately through 107 test versions on a Galaxy Z Flip 7 with XREAL Aura and One glasses. This
