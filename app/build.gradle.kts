@@ -5,7 +5,8 @@ plugins {
 
 android {
     namespace = "com.hayeco.flipspaces"
-    compileSdk = 36
+    // Compose 1.12 and core 1.19 need API 37 to compile against. targetSdk stays 36, so the app behaves as before.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.hayeco.flipspaces"
@@ -101,7 +102,7 @@ dependencies {
     implementation(libs.androidx.graphics.core)
     // 0.5.49: the release build's lint (InvalidFragmentVersionForActivityResult): a library brings an old Fragment, under
     // which registerForActivityResult's permission results can be lost; this one is new enough.
-    implementation("androidx.fragment:fragment:1.8.5")
+    implementation("androidx.fragment:fragment:1.9.1")
 
     testImplementation(libs.junit)
 }
