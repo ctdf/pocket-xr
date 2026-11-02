@@ -16,6 +16,8 @@ import com.hayeco.flipspaces.core.GlassesReady
 class FlipSpacesApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // 1.0.1: a crash is kept and offered the next time the app opens ([CrashCatcher]); first, so it catches the rest.
+        CrashCatcher.install(this)
         // 0.5.28: the app's own rotating log file, before anything logs.
         AppLogFile.start(this)
         // 0.5.68: the bundled font, before the Space or the trackpad paints any text.

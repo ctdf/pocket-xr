@@ -405,6 +405,8 @@ class TrackpadActivity : Activity(), PadHost {
         }
         GlassesAutoOpen.resumed(this)
         CoverTrackpad.resumed(this)
+        // 1.0.1: if the last run crashed, offer to send the report.
+        CrashCatcher.offer(this)
         // 0.5.101: Settings' Trackpad row opens the trackpad with its Menu out, where its settings are.
         if (intent?.getBooleanExtra(EXTRA_MENU, false) == true) {
             intent.removeExtra(EXTRA_MENU)

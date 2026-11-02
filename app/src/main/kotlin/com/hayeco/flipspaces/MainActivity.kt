@@ -196,6 +196,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         GlassesAutoOpen.resumed(this)
+        // 1.0.1: if the last run crashed, offer to send the report.
+        CrashCatcher.offer(this)
         // 0.5.97: a newer Pocket XR on GitHub Releases, checked at most once a day.
         UpdateChecker.checkIfDue(this)
         // 0.4.4: always allowed from a screen in front, should the app start's try have been refused.
