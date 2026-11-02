@@ -1,14 +1,41 @@
-# Pocket XR
+<p align="center">
+  <img src="docs/brand/pocket-xr-logo-512.png" width="128" alt="Pocket XR icon">
+</p>
 
-**A spatial desktop for XREAL glasses, run from your Android phone.**
+<h1 align="center">Pocket XR</h1>
+
+<p align="center">
+  <b>A spatial desktop for XREAL glasses, run from your Android phone.</b><br>
+  Free, open source, no ads, no accounts.
+</p>
+
+<p align="center">
+  <a href="https://github.com/pocket-xr/pocket-xr/releases/latest"><img src="https://img.shields.io/github/v/release/pocket-xr/pocket-xr?label=download&color=5A93FF" alt="Latest release"></a>
+  <a href="https://github.com/pocket-xr/pocket-xr/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pocket-xr/pocket-xr/ci.yml?branch=main&label=build" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/Android-11%2B-3DDC84?logo=android&logoColor=white" alt="Android 11+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-blue" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/pocket-xr/pocket-xr/releases/latest"><b>Download</b></a> ·
+  <a href="https://youtu.be/H8dBKm-I6zw"><b>Watch the demo</b></a> ·
+  <a href="#setup">Setup</a> ·
+  <a href="#supported-glasses">Glasses</a> ·
+  <a href="https://github.com/pocket-xr/pocket-xr/discussions">Discussions</a> ·
+  <a href="https://github.com/pocket-xr/pocket-xr/issues/11">Roadmap</a>
+</p>
+
+<p align="center"><img src="docs/media/demo.gif" width="720" alt="Pocket XR on XREAL glasses: windows all around you, looking around, opening an app, moving and resizing a window, and the Control Center"></p>
+
+<p align="center"><a href="https://youtu.be/H8dBKm-I6zw">▶ Watch the full demo video (46 s)</a></p>
 
 Pocket XR turns a phone and a pair of XREAL glasses into a multi-window workspace. Your apps float around you as
 windows you can move, resize, curve and push back. Head tracking keeps them in place as you look around, and the
 phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 
-<p align="center"><img src="docs/media/demo.gif" width="600" alt="Pocket XR on XREAL glasses: windows all around you, looking around, opening an app, moving and resizing a window, and the Control Center"></p>
-
-<p align="center"><a href="https://youtu.be/H8dBKm-I6zw">▶ Watch the full demo video (46 s)</a></p>
+> [!NOTE]
+> Pocket XR is a community project. It is not made by or affiliated with XREAL. Thanks to XREAL for approving its
+> release.
 
 ## What it does
 
