@@ -5,7 +5,8 @@ plugins {
 
 android {
     namespace = "com.hayeco.flipspaces"
-    compileSdk = 36
+    // Compose 1.12 and core 1.19 need API 37 to compile against. targetSdk stays 36, so the app behaves as before.
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.hayeco.flipspaces"

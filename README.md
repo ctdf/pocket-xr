@@ -127,7 +127,7 @@ key. Every official release is, and you can check it: the release key's SHA-256 
 
 ## Building from source
 
-You need JDK 17, the Android SDK (compile SDK 36) with NDK and CMake 3.22.1, and Gradle 9.8.2.
+You need JDK 17, the Android SDK (compile SDK 37) with NDK and CMake 3.22.1, and Gradle 9.8.2.
 
 ```bash
 gradle :core:test
