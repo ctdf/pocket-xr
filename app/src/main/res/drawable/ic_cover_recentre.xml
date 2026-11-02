@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17 cover screen: Recentre, a ring with four ticks and a centre dot. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M12,5.5a6.5,6.5 0,1 1,0 13a6.5,6.5 0,1 1,0 -13zM12,1.8v3M12,19.2v3M1.8,12h3M19.2,12h3" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,10.2a1.8,1.8 0,1 1,0 3.6a1.8,1.8 0,1 1,0 -3.6z" />
+</vector>

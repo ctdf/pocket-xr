@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17 cover screen: a button, lighter while pressed (radius 14 = CoverLayoutMath.BUTTON_RADIUS). 0.5.73: the tokens' raised glass with its hairline rim, brighter while pressed. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="@color/look_glass_hover" />
+            <stroke android:width="1dp" android:color="@color/look_rim_focus" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="@color/look_glass_raised" />
+            <stroke android:width="1dp" android:color="@color/look_rim" />
+        </shape>
+    </item>
+</selector>

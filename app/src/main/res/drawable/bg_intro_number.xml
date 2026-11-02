@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17: the usage instructions' 15 dp numbered circles. 0.5.78: in the accent, on the dark card. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/look_accent_deep" />
+    <size android:width="15dp" android:height="15dp" />
+</shape>

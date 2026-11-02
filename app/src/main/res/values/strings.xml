@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Pocket XR</string>
+    <string name="pointer_service_label">Pocket XR pointer</string>
+    <string name="pointer_service_description">Lets you control your XR glasses with your hands or your phone\'s screen. It draws a cursor on the glasses, reads where app windows are on the glasses display (position and size only), and performs taps and drags there so you can click, move and resize windows. It does nothing on the phone\'s own screen and sends nothing off the phone.</string>
+</resources>

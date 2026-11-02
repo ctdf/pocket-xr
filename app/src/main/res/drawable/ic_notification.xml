@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.87 (Pocket XR): the status bar icon: the phone and its window as a white silhouette (Android tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M5,4.5 a1.5,1.5 0 0 1 1.5,-1.5 h11 a1.5,1.5 0 0 1 1.5,1.5 v6 a1.5,1.5 0 0 1 -1.5,1.5 h-11 a1.5,1.5 0 0 1 -1.5,-1.5 z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:pathData="M9.5,15 a1.2,1.2 0 0 1 1.2,-1.2 h2.6 a1.2,1.2 0 0 1 1.2,1.2 v5.6 a1.2,1.2 0 0 1 -1.2,1.2 h-2.6 a1.2,1.2 0 0 1 -1.2,-1.2 z" />
+</vector>

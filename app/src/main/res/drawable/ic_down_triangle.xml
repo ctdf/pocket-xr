@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.96 (open source audit): the mode selector's open mark: Material Symbols Rounded "arrow_drop_down" (Apache License 2.0, Google), replacing a
+     glyph drawn after another product's trackpad. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M459,579L314,434Q311,431 309.5,427.5Q308,424 308,420Q308,412 313.5,406Q319,400 328,400L632,400Q641,400 646.5,406Q652,412 652,420Q652,422 646,434L501,579Q496,584 491,586Q486,588 480,588Q474,588 469,586Q464,584 459,579Z" />
+</vector>

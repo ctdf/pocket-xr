@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17 cover screen: Move or Resize while it holds a window, edged in the held colour (Look.HELD). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="14dp" />
+    <solid android:color="@color/look_held_glass" />
+    <stroke android:width="2dp" android:color="@color/look_held" />
+</shape>

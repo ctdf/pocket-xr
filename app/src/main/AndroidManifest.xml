@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- M2-hands. CAMERA: Android requires it before granting USB access to a video class
+         device such as the glasses' UVC camera, and for the camera foreground service.
+         INTERNET: one-time download of MediaPipe's hand model. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- M3-spatial: find the glasses' USB network and read their sensor stream over it
+         (INTERNET above covers the TCP connection). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 0.4.4: the glasses ready service (GlassesReadyService), a connectedDevice foreground
+         service started at boot, so the glasses' display event reaches Pocket XR while it is
+         in the background. Android 14 asks for one of a list of permissions with that type;
+         CHANGE_NETWORK_STATE is the one Pocket XR has a use for (the glasses' USB network). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 0.5.1: never used to record. The glasses have a microphone, and for such a USB device
+         Android hides the "Always open Pocket XR" box on its plug-in prompt unless the app
+         holds RECORD_AUDIO, so without it Mike was asked at every plug-in. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 0.5.17: the trackpad's one shot buzzes (10 ms, and 1 ms ticks). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- 0.5.46: the Control Center's Bluetooth page (paired and connected devices); granted through Shizuku on its press. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- Lets the launcher query see every app with a home screen icon (package visibility, API 30+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Samsung DeX (to offer its settings) and Shizuku (the shell fallback). -->
+        <package android:name="com.sec.android.desktopmode.uiservice" />
+        <package android:name="moe.shizuku.privileged.api" />
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.EXTERNAL_DISPLAY_SETTINGS" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".FlipSpacesApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FlipSpaces">
+        <!-- 0.5.43: Samsung's NPU driver, public to apps on the Flip7 (/vendor/etc/public.libraries.txt); the Samsung dispatch opens it. -->
+        <uses-native-library android:name="libenn_public_api_cpp.so" android:required="false" />
+        <uses-native-library android:name="libenn_user.samsung_slsi.so" android:required="false" />
+
+        <!-- Samsung DeX: 0 x 0 launch size means open full screen instead of a freeform window. -->
+        <meta-data
+            android:name="com.samsung.android.dex.launchwidth"
+            android:value="0" />
+        <meta-data
+            android:name="com.samsung.android.dex.launchheight"
+            android:value="0" />
+        <!-- 0.5.17 cover screen: Samsung's keep alive flags (from its DeX and multi display
+             guides): the process is not restarted when the density changes (480 dpi main screen,
+             380 dpi Flex Window) or when an activity moves between displays. Ignored where unknown. -->
+        <meta-data
+            android:name="com.samsung.android.keepalive.density"
+            android:value="true" />
+        <meta-data
+            android:name="com.samsung.android.multidisplay.keep_process_alive"
+            android:value="true" />
+        <!-- Android's own: activities may change size without a restart (the fold). -->
+        <meta-data
+            android:name="android.supports_size_changes"
+            android:value="true" />
+
+        <!-- Phone side: app list, glasses status and launch controls. 0.5.24 (four
+             MainActivity windows in the process after four plug-ins): singleTop, so the glasses' USB prompt
+             brings the one on top back with the new intent instead of stacking another. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Offers Pocket XR when the XREAL glasses are plugged in; accepting grants USB
+                 access to them (still needs the camera permission for the UVC camera). -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_glasses" />
+        </activity>
+
+        <!-- 0.4.0: the glasses' home. SECONDARY_HOME only (no HOME), so the phone keeps its
+             own launcher; it opens the Space, or in flat mode the DeX home, on its display.
+             Standard launch mode: Android refuses a singleTask secondary home. -->
+        <activity
+            android:name=".GlassesEntryActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="standard"
+            android:noHistory="true"
+            android:resizeableActivity="true"
+            android:taskAffinity="com.hayeco.flipspaces.entry"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SECONDARY_HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- M2-hands setup: providers, permissions, the accessibility service explained. -->
+        <activity
+            android:name=".HandsActivity"
+            android:exported="false"
+            android:label="Hands and trackpad" />
+
+        <!-- The Flip's main screen as a trackpad for the glasses cursor. 0.5.17:
+             each page locks its own orientation and a turn or a fold never recreates the screen
+             mid gesture, the dark theme with no title.
+             0.5.17 cover screen: it also runs on the Flip's Flex Window with the phone closed:
+             shown over the lock screen and waking that screen (showWhenLocked; 0.5.51: the wake is set in code,
+             only while the Menu's "Trackpad keeps screen on" is on), its
+             own task so moving it between the cover and the main screen never takes the phone
+             screen with it, resizeable, every orientation (each page locks its own in code). The
+             keyboard still never resizes the pad: the cover's text field sits at the top, above it. -->
+        <activity
+            android:name=".TrackpadActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode|fontScale|fontWeightAdjustment"
+            android:excludeFromRecents="false"
+            android:exported="false"
+            android:label="Trackpad"
+            android:resizeableActivity="true"
+            android:screenOrientation="unspecified"
+            android:showWhenLocked="true"
+            android:supportsPictureInPicture="false"
+            android:taskAffinity="com.hayeco.flipspaces.trackpad"
+            android:theme="@style/Theme.FlipSpaces.Trackpad"
+            android:windowSoftInputMode="adjustNothing|stateHidden">
+            <meta-data
+                android:name="android.supports_size_changes"
+                android:value="true" />
+        </activity>
+
+        <!-- M3-spatial setup on the phone: mode, Shizuku setup, app panels, Space settings. -->
+        <activity
+            android:name=".SpatialActivity"
+            android:exported="false"
+            android:label="Spatial windows" />
+
+        <!-- Diagnostics for the glasses' head tracking stream. -->
+        <activity
+            android:name=".HeadTrackingActivity"
+            android:exported="false"
+            android:label="Glasses head tracking" />
+
+        <!-- The Space: full screen OpenGL scene of app panels on the glasses, with its own
+             launcher; opened on plug-in whenever Shizuku is ready (0.4.0). 0.4.3: exported so
+             the shell can start it on the glasses through Shizuku with nothing of Pocket XR
+             in front, but only for callers holding INTERACT_ACROSS_USERS_FULL (the shell and
+             the system; no installed app gets it). Pocket XR itself needs no permission.
+             0.5.17 cover screen: showWhenLocked, so folding the phone (which locks it) leaves the
+             Space on the glasses instead of the lock screen's picture there. -->
+
+        <activity
+            android:name=".spatial.SpaceActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:showWhenLocked="true"
+            android:taskAffinity="com.hayeco.flipspaces.space"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+            <!-- If a desktop display still opens it freeform, start at the whole display. -->
+            <layout
+                android:defaultWidth="100%"
+                android:defaultHeight="100%"
+                android:gravity="center" />
+            <meta-data
+                android:name="com.samsung.android.dex.launchwidth"
+                android:value="0" />
+            <meta-data
+                android:name="com.samsung.android.dex.launchheight"
+                android:value="0" />
+        </activity>
+
+        <!-- Draws the cursor on the glasses, reads where windows are there and performs taps
+             and drags on that display. -->
+        <service
+            android:name=".pointer.PointerService"
+            android:exported="true"
+            android:label="@string/pointer_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/pointer_service" />
+        </service>
+
+        <!-- Reads the glasses camera over USB and runs hand tracking while Pocket XR is in use. -->
+        <!-- 0.5.46: the Space's Notifications page; Android binds it once notification access is on. -->
+        <service
+            android:name=".phone.PhoneNotifications$Listener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".hands.HandTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
+
+        <!-- 0.4.4: keeps the process awake for the glasses' plug-in, with a quiet notification. -->
+        <service
+            android:name=".GlassesReadyService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- 0.4.4: starts the glasses ready service after boot and after an update. -->
+        <receiver
+            android:name=".GlassesReadyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Glasses side: the home surface, launched onto the external display. Own task so it
+             never drags the phone activity along with it. -->
+        <activity
+            android:name=".GlassesHomeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:taskAffinity="com.hayeco.flipspaces.glasses">
+            <!-- If a desktop display still opens it freeform, start at the whole display. -->
+            <layout
+                android:defaultWidth="100%"
+                android:defaultHeight="100%"
+                android:gravity="center" />
+            <meta-data
+                android:name="com.samsung.android.dex.launchwidth"
+                android:value="0" />
+            <meta-data
+                android:name="com.samsung.android.dex.launchheight"
+                android:value="0" />
+        </activity>
+
+        <!-- Receives the Shizuku binder when Shizuku is running: the launch fallback, and the
+             panel service for M3-spatial app panels. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    </application>
+</manifest>

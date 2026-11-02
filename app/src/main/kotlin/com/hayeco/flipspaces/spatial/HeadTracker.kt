@@ -1,0 +1,1008 @@
+package com.hayeco.flipspaces.spatial
+
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.SystemClock
+import android.util.Log
+import com.hayeco.flipspaces.core.ShizukuStatus
+import com.hayeco.flipspaces.core.spatial.BiasSavePolicy
+import com.hayeco.flipspaces.core.spatial.FramerCounts
+import com.hayeco.flipspaces.core.spatial.FusionSettings
+import com.hayeco.flipspaces.core.spatial.HeadChain
+import com.hayeco.flipspaces.core.spatial.HeadFusion
+import com.hayeco.flipspaces.core.spatial.HeadHold
+import com.hayeco.flipspaces.core.spatial.HeadPredictor
+import com.hayeco.flipspaces.core.spatial.ImuClock
+import com.hayeco.flipspaces.core.spatial.ImuReadGaps
+import com.hayeco.flipspaces.core.spatial.HeadPose
+import com.hayeco.flipspaces.core.spatial.HeadPoseHistory
+import com.hayeco.flipspaces.core.spatial.GlassesReach
+import com.hayeco.flipspaces.core.spatial.HeadRetryBackoff
+import com.hayeco.flipspaces.core.spatial.HeadRouteKind
+import com.hayeco.flipspaces.core.spatial.HeadView
+import com.hayeco.flipspaces.core.spatial.HeadRoutePlan
+import com.hayeco.flipspaces.core.spatial.HeadTrackingStatus
+import com.hayeco.flipspaces.core.spatial.ImuReportType
+import com.hayeco.flipspaces.core.spatial.OneImuFramer
+import com.hayeco.flipspaces.core.spatial.OneImuProtocol
+import com.hayeco.flipspaces.core.spatial.Quat
+import com.hayeco.flipspaces.core.spatial.RateMeter
+import com.hayeco.flipspaces.core.spatial.Vec3
+import com.hayeco.flipspaces.platform.ShizukuBridge
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicBoolean
+
+/** Live numbers for the diagnostics screen, about ten times a second. */
+data class HeadLive(
+    val yaw: Float,
+    val pitch: Float,
+    val roll: Float,
+    /** Angular velocity in head axes with the learned bias removed, rad/s. */
+    val gyro: Vec3,
+    /** Accelerometer as the glasses report it, before the axis mapping. */
+    val rawAccel: Vec3,
+    val rateHz: Double,
+    val counts: FramerCounts,
+    val still: Boolean,
+    val gyroBias: Vec3,
+)
+
+/**
+ * Reads the glasses' IMU stream (XREAL One family protocol, docs/SPATIAL.md 1.1) on its own
+ * thread and fuses it into a head pose. Anything that fails is reported in [status] with the
+ * exact error, and the tracker keeps retrying; nothing here throws to the caller, so without the
+ * stream the Space simply runs head locked.
+ */
+object HeadTracker {
+    private const val TAG = "FlipSpaces/Head"
+
+    /** 0.5.62: the head reader thread's id once it runs (0 before), for the render thread's hint session. */
+    @Volatile
+    var headReaderTid = 0
+        private set
+    private const val CONNECT_TIMEOUT_MS = 3000
+    private const val READ_TIMEOUT_MS = 1000
+    private const val NO_REPORT_SECONDS = 4
+
+    /**
+     * 0.5.49: the head thread's rest between reads of the glasses' reports, ns (they come every 1 ms); 0 reads each as it
+     * comes. Measured on the Flip at severe heat with the release build: 3 ms rests took the thread from 43 % of a core
+     * (the debug build, no rest) to 18 %, 1.5 ms to 21 %, but the gap between reads grew to p95 9.9 and 7.4 ms (at most 21
+     * and 26 ms) against 1.5 ms (at most 6.1) with no rest: a hot phone schedules a sleeping thread late, and the newest
+     * pose ages with it. Most of the saving was the release build's, so off until a glasses run shows it is worth it.
+     */
+    private const val READ_BATCH_NS = 0L
+
+    /** 0.5.53: the app's own socket is tried this many more times before the shell helper, this far apart ([openRoute]). */
+    private const val DIRECT_RETRIES = 3
+    private const val DIRECT_RETRY_MS = 1000L
+
+    /** 0.5.48: the head thread refreshes its streaming status this often at most, ms. */
+    private const val STATUS_EVERY_MS = 500L
+
+    /** 0.5.6: how often a wait looks again at the glasses' network, to retry at once when it changes. */
+    private const val NETWORK_LOOK_MS = 3000L
+
+    private val _status = MutableStateFlow<HeadTrackingStatus>(HeadTrackingStatus.Off)
+    val status: StateFlow<HeadTrackingStatus> = _status.asStateFlow()
+
+    private val _live = MutableStateFlow<HeadLive?>(null)
+    val live: StateFlow<HeadLive?> = _live.asStateFlow()
+
+    /** What the last network scan saw, for the diagnostics screen. */
+    private val _networks = MutableStateFlow<List<String>>(emptyList())
+    val networks: StateFlow<List<String>> = _networks.asStateFlow()
+
+    /** The last TCP connect attempt and how it ended. */
+    private val _connectResult = MutableStateFlow<String?>(null)
+    val connectResult: StateFlow<String?> = _connectResult.asStateFlow()
+
+    /** 0.5.5: each route tried in the last round and how it ended, for the diagnostics screen. */
+    private val _attempts = MutableStateFlow<List<String>>(emptyList())
+    val attempts: StateFlow<List<String>> = _attempts.asStateFlow()
+
+    /** 0.5.5: the route the stream is open on, null while there is none. */
+    private val _route = MutableStateFlow<String?>(null)
+    val route: StateFlow<String?> = _route.asStateFlow()
+
+    /**
+     * 0.5.6: in plain words whether the glasses answered on 169.254.2.1:52998 in the last round
+     * ("The glasses do not answer on ..."), for the diagnostics screen; null before a try.
+     */
+    private val _answer = MutableStateFlow<String?>(null)
+    val answer: StateFlow<String?> = _answer.asStateFlow()
+
+    /** What the USB Ethernet bring-up saw and tried (GlassesEthernetLink), step by step. */
+    private val _ethernet = MutableStateFlow<List<String>>(emptyList())
+    val ethernet: StateFlow<List<String>> = _ethernet.asStateFlow()
+
+    @Volatile private var pose: HeadPose? = null
+
+    /**
+     * 0.5.10: the newest fused pose on the phone's clock, smoothed rate and acceleration, for the
+     * prediction to each frame's present time ([renderPose]). Guarded by itself.
+     */
+    private val predictor = HeadPredictor()
+    @Volatile private var lastSampleHostNs = 0L
+
+    /**
+     * 0.5.12: the newest IMU sample's time on the phone's clock (System.nanoTime,
+     * mapped from the glasses' own timestamps by [ImuClock]), so the renderer can log how old it is
+     * when the draw pose is taken. 0 before the first sample.
+     */
+    val newestSampleNs: Long get() = lastSampleHostNs
+
+    /** 0.5.10: what [renderPose] predicted last, ms ahead of the newest sample, for the chain line. */
+    @Volatile private var lastPredictMs = 0f
+
+    /** 0.5.20: the head's own motion in the sway and tremor bands, from every sample (reader thread). */
+    private val tremorBands = com.hayeco.flipspaces.core.spatial.TremorBands()
+
+    /** 0.5.21: the last 10 s of raw gyro, written out while worn and still ([com.hayeco.flipspaces.core.spatial.GyroRing]). */
+    private val gyroRing = com.hayeco.flipspaces.core.spatial.GyroRing()
+
+    /** Writes the ring to files/gyro/ on a thread of its own, keeping the newest [com.hayeco.flipspaces.core.spatial.GyroRing.KEEP_FILES]. */
+    private fun writeGyroRing(peakToPeak: Float) {
+        // 0.5.49: in the app's external files (beside the logs), so they can be pulled from the release build, which
+        // run-as cannot read.
+        val dir = appContext?.let { java.io.File(it.getExternalFilesDir(null) ?: it.filesDir, "gyro") } ?: return
+        val note = String.format(java.util.Locale.ROOT, "a worn still head, still check %.4f rad/s, written at %d ms uptime", peakToPeak, SystemClock.uptimeMillis())
+        // 0.5.55: the ring as it is now, written out as text on the writer's thread: 0.5.21 to 0.5.54 formatted all its
+        // 12000 samples here on the head thread, a few MB of strings once a minute. The file is the same.
+        val ring = gyroRing.copy()
+        Thread({
+            runCatching {
+                val text = ring.dump(note)
+                dir.mkdirs()
+                val f = java.io.File(dir, "still-${System.currentTimeMillis()}.txt")
+                f.writeText(text)
+                dir.listFiles()?.sortedByDescending { it.name }?.drop(com.hayeco.flipspaces.core.spatial.GyroRing.KEEP_FILES)?.forEach { it.delete() }
+                Log.i(TAG, "raw gyro: the last 10 s of a worn still head (still check %.4f rad/s) written to %s".format(java.util.Locale.ROOT, peakToPeak, f.absolutePath))
+            }.onFailure { Log.w(TAG, "raw gyro not written: ${it.message}") }
+        }, "gyro-ring").start()
+    }
+
+    /** 0.5.20: the frames' horizons (centre row), for the chain line's p50 and p95. Guarded by [predictor]. */
+    private val predictAhead = com.hayeco.flipspaces.core.spatial.RollingStats(600)
+
+    /** Recent poses on SystemClock.uptimeMillis, the hand camera's clock, for [poseAt]. */
+    private val history = HeadPoseHistory()
+    @Volatile private var settings = FusionSettings()
+    private val recentreRequested = AtomicBoolean(false)
+    private val resetRequested = AtomicBoolean(false)
+
+    private var thread: Thread? = null
+    private var openLink: GlassesNetwork.Link? = null
+    private var users = 0
+    private var appContext: Context? = null
+
+    /**
+     * 0.5.10: interfaces where Android refused the app's own socket (EPERM, EACCES), for as long as
+     * the app runs. 0.5.5 kept them per tracker thread, so every restart of the tracker tried the
+     * app's socket again first (Mike's log: "app socket bound to the network failed: EPERM").
+     */
+    private val refusedDirect: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** 0.5.10: the tracker keeps running this long after its last user lets go, so a Space restart does not drop the stream. */
+    private const val RELEASE_GRACE_MS = 15_000L
+    private val graceHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val stopAfterGrace = Runnable {
+        synchronized(this) {
+            if (users == 0) {
+                Log.i(TAG, "head tracking: no user for ${RELEASE_GRACE_MS / 1000} s; stopping the stream")
+                stop()
+            }
+        }
+    }
+
+    /** Starts the tracker for one more user (the Space, the diagnostics screen). */
+    @Synchronized
+    fun acquire(context: Context) {
+        graceHandler.removeCallbacks(stopAfterGrace)
+        users++
+        val store = SpaceStore(context)
+        settings = fromStore(store, context)
+        if (thread?.isAlive == true) return
+        val app = context.applicationContext
+        appContext = app
+        _ethernet.value = emptyList()
+        _attempts.value = emptyList()
+        _answer.value = null
+        watchNetworks(app)
+        thread = Thread({ run(app) }, "head-tracker").apply {
+            isDaemon = true
+            start()
+        }
+    }
+
+    /**
+     * 0.5.6: try again now with the backoff back at its first step: the glasses were plugged in,
+     * their network changed, or "Try again" was tapped. Any thread.
+     */
+    fun kick(why: String) {
+        synchronized(wake) {
+            kicked = why
+            wake.notifyAll()
+        }
+    }
+
+    /** A network event: look at the network now; only a real change resets the backoff ([waitFor]). */
+    private fun nudge() {
+        synchronized(wake) {
+            nudged = true
+            wake.notifyAll()
+        }
+    }
+
+    private val wake = Object()
+    private var kicked: String? = null
+    private var nudged = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    /** Best effort: Android may not tell this app about the glasses' restricted networks; [waitFor] looks too. */
+    private fun watchNetworks(context: Context) {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = nudge()
+            override fun onLost(network: Network) = nudge()
+            override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = nudge()
+        }
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            .addTransportType(NetworkCapabilities.TRANSPORT_USB)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        runCatching { cm.registerNetworkCallback(request, callback) }
+            .onSuccess { networkCallback = callback }
+            .onFailure { Log.i(TAG, "network callback not available (${it.javaClass.simpleName}: ${it.message}); network changes are found by looking every ${NETWORK_LOOK_MS / 1000} s") }
+    }
+
+    @Synchronized
+    fun release() {
+        users = (users - 1).coerceAtLeast(0)
+        // 0.5.10: not at once: a Space that stops and starts again (a mode switch, a reload) keeps one stream.
+        if (users == 0 && thread?.isAlive == true) {
+            graceHandler.removeCallbacks(stopAfterGrace)
+            graceHandler.postDelayed(stopAfterGrace, RELEASE_GRACE_MS)
+        } else if (users == 0) {
+            stop()
+        }
+    }
+
+    @Synchronized
+    private fun stop() {
+        thread?.interrupt()
+        runCatching { openLink?.close() }
+        GlassesNetwork.ShellHelper.close()
+        networkCallback?.let { cb -> runCatching { appContext?.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
+        networkCallback = null
+        thread = null
+        pose = null
+        synchronized(predictor) { predictor.reset() }
+        lastSampleHostNs = 0L
+        history.clear()
+        _status.value = HeadTrackingStatus.Off
+        _live.value = null
+        // Ethernet goes back to how it was once the bring-up (if any) has stopped.
+        appContext?.let { GlassesEthernetLink.restore(it, ::ethernetLog) }
+    }
+
+    private fun ethernetLog(line: String) {
+        _ethernet.value = (_ethernet.value + line).takeLast(60)
+    }
+
+    val tracking: Boolean get() = _status.value.tracking
+
+    /**
+     * 0.5.21: the poses' frame: [epoch] counts new fusions (a reset, a new tracker
+     * thread), [jump] is the product of every recentre's turn since that fusion began, so the
+     * glasses' record can undo Pocket XR's recentres ([com.hayeco.flipspaces.core.spatial.GlassesFrameAlign]).
+     */
+    data class FrameRef(val epoch: Int, val jump: Quat)
+
+    @Volatile var frameRef = FrameRef(0, Quat.IDENTITY)
+        private set
+
+    /** 0.5.21: whether the glasses lie still now (the fusion's static detector), for the yaw offset check. */
+    val lyingStill: Boolean get() = pose?.still == true
+
+    /**
+     * 0.5.10: the pose at [presentNs] (System.nanoTime), the time the frame being drawn reaches the
+     * eyes ([com.hayeco.flipspaces.core.spatial.FramePacer]): the newest sample, on the phone's clock
+     * ([ImuClock]), turned on by the smoothed gyro rate to that time. During a pause in the stream
+     * (a reconnect) the last pose holds for up to [HeadHold.HOLD_MS], unpredicted, instead of the
+     * view snapping to head locked; after that, or with no pose, null, and (0.5.6) null for anything
+     * that is not a finite rotation, so a bad stream draws exactly the head locked view ([HeadView]).
+     */
+    fun renderPose(presentNs: Long = System.nanoTime(), record: Boolean = true): Quat? {
+        val sampleNs = lastSampleHostNs
+        val since = if (sampleNs == 0L) Long.MAX_VALUE else (System.nanoTime() - sampleNs) / 1_000_000L
+        val q = synchronized(predictor) {
+            when (HeadHold.use(since, predictor.orientation != null)) {
+                // 0.5.15: the chain line's horizon is the frame's own
+                // (centre row) pose; the per-row poses pass record = false (0.5.14 logged the bottom
+                // row's, 8 ms high at 60 Hz).
+                HeadHold.Use.PREDICT -> predictor.predict(presentNs).also {
+                    if (record) {
+                        lastPredictMs = (presentNs - predictor.sampleNs) / 1e6f
+                        predictAhead.add(lastPredictMs.toDouble())
+                    }
+                }
+                HeadHold.Use.HOLD -> predictor.orientation
+                HeadHold.Use.NONE -> null
+            }
+        }
+        // 0.5.32 (Mike, vc52: the windows still follow the head's natural tremor): the still head's lock. The frame's
+        // own pose (record) moves it on; the rows' and the late warp's poses take the same hold or correction.
+        val usable = HeadView.usable(q)
+        // 0.5.64: the drawn orientation shook with small movements on Mike's Aura until it went through a One Euro
+        // filter; the still lock then holds a pose that is already free of the tremor.
+        val smoothed = synchronized(drawSmoothing) {
+            when {
+                usable == null -> null.also { drawSmoothing.free() }
+                record -> drawSmoothing.update(usable, presentNs)
+                else -> drawSmoothing.apply(usable)
+            }
+        }
+        synchronized(restLock) {
+            if (smoothed == null) {
+                restLock.free()
+                return null
+            }
+            return if (record) restLock.update(smoothed, presentNs) else restLock.apply(smoothed)
+        }
+    }
+
+    /** 0.5.64: the drawn orientation's One Euro filter ([com.hayeco.flipspaces.core.spatial.DrawSmoothing]). */
+    private val drawSmoothing = com.hayeco.flipspaces.core.spatial.DrawSmoothing()
+
+    /** 0.5.64: draw smoothing on or off (the Menu's Developer card; on by default). */
+    fun setDrawSmoothing(on: Boolean) {
+        synchronized(drawSmoothing) {
+            if (drawSmoothing.enabled != on) Log.i(TAG, "draw smoothing: ${if (on) "on" else "off"}")
+            drawSmoothing.enabled = on
+            if (!on) drawSmoothing.free()
+        }
+    }
+
+    /** 0.5.32: the head's turn speed, deg/s (the predictor's peak held [turnSpeed]), for the glasses' duty on turns. */
+    val turnSpeedDegS: Float get() = synchronized(predictor) { predictor.turnSpeed } * (180f / Math.PI.toFloat())
+
+    /** 0.5.32: the still head's lock ([com.hayeco.flipspaces.core.spatial.RestLock]); its switch is on the Menu's Developer card. */
+    private val restLock = com.hayeco.flipspaces.core.spatial.RestLock()
+
+    /** 0.5.32: the still lock on or off (the Menu's Developer card; on by default). */
+    fun setStillLock(on: Boolean) {
+        synchronized(restLock) {
+            if (restLock.enabled != on) Log.i(TAG, "still lock: ${if (on) "on" else "off"}")
+            restLock.enabled = on
+            if (!on) restLock.free()
+        }
+    }
+
+    /**
+     * The (unpredicted) pose at [uptimeMs] on SystemClock.uptimeMillis, the clock hand frames are
+     * stamped with, so a hand seen by the glasses' camera is placed with the head pose of that
+     * moment. Null without live tracking or when the time is out of the kept range.
+     */
+    fun poseAt(uptimeMs: Long): Quat? {
+        if (lastSampleHostNs == 0L) return null
+        return HeadView.usable(history.poseAt(uptimeMs))
+    }
+
+    /**
+     * 0.5.16: one recentre per press. Requests within 300 ms of the last
+     * accepted one are dropped and logged, whichever way they came (the Space's command, the phone,
+     * the glasses' key), so nothing relevels twice.
+     */
+    fun recentre(why: String = "the Space") {
+        val ok = synchronized(recentreGate) { recentreGate.accept(SystemClock.uptimeMillis()) }
+        if (ok) {
+            recentreRequested.set(true)
+            synchronized(restLock) { restLock.free() }
+            synchronized(drawSmoothing) { drawSmoothing.free() }
+        }
+        else Log.i(TAG, "recentre from $why dropped: one already requested within ${recentreGate.windowMs} ms (one press)")
+    }
+
+    private val recentreGate = com.hayeco.flipspaces.core.spatial.RecentreRoute.Debounce()
+
+    fun applySettings(context: Context) {
+        val store = SpaceStore(context)
+        val next = fromStore(store, context)
+        if (next.axes != settings.axes) resetRequested.set(true)
+        settings = next
+        val line = when {
+            next.factoryMount != null || next.gyroMatrix != null -> "fusion uses the glasses' factory calibration: " + (GlassesCalibrationStore.last(context)?.line() ?: "")
+            store.factoryCalibration -> "fusion uses the level calibration's mount: no factory calibration read yet"
+            else -> "fusion uses the level calibration's mount: factory calibration switched off"
+        }
+        if (line != loggedFactory) {
+            loggedFactory = line
+            Log.i(TAG, line)
+        }
+    }
+
+    /**
+     * The saved settings the fusion uses; 0.5.15: with the level calibration's mount. 0.5.65: with the
+     * glasses' factory gyro matrix and display mount when the switch is on and a calibration has been read.
+     */
+    private fun fromStore(store: SpaceStore, context: Context): FusionSettings {
+        val cal = if (store.factoryCalibration) GlassesCalibrationStore.last(context) else null
+        return settings.copy(
+            axes = store.axisMap, predictSeconds = store.predictMs / 1000f, mountRollDeg = store.mountRollDeg, mountPitchDeg = store.mountPitchDeg,
+            factoryMount = cal?.displayMount, gyroMatrix = cal?.gyroMatrix,
+        )
+    }
+
+    /** 0.5.65: the control link read the glasses' calibration: the fusion takes it from the next settings beat. */
+    fun factoryCalibrationArrived(context: Context) {
+        applySettings(context)
+    }
+
+    private var loggedFactory: String? = null
+
+    @Volatile private var lastReportAtNs = 0L
+
+    /** 0.5.12: the gaps between reads that brought reports, and the reports a read: bursts or a stream. Reader thread. */
+    private val readGaps = ImuReadGaps()
+    private var loggedLearn: String? = null
+    private var loggedOldBias: String? = null
+    private var loggedYawGuard: String? = null
+    private var loggedPoolCap: String? = null
+
+    /** 0.5.19: when the glasses' wear was last told to the hand press gate. */
+    private var lastWornMs = 0L
+    private var lastStillLogMs = 0L
+
+    /** 0.5.11: the bias updates already saved to [SpaceStore.gyroBias]. Reader thread. */
+    private var savedBiasEvents = 0
+    private var savedWornMinutes = 0
+
+    /**
+     * 0.5.11: one line on how the anchor is held, for the device check: no smoothing or dead zone on
+     * the pose, the static detector's verdict, the bias and how often it moved.
+     */
+    private fun stillLine(fusion: HeadFusion): String {
+        val b = fusion.gyroBias
+        return String.format(
+            java.util.Locale.ROOT,
+            "head anchor: every rotation applied in full (no dead zone, no smoothing on the pose, prediction on from the first degree); glasses %s; gyro bias %.5f, %.5f, %.5f rad/s, learned %d times while static, %.0f s from gravity and %d yaw windows while worn; gravity skipped on %d samples (accelerating)",
+            if (fusion.isStatic) "static" else "moving", b.x, b.y, b.z, fusion.biasEvents, fusion.wornLearnS, fusion.wornYawUpdates, fusion.gravitySkipped,
+        )
+    }
+
+    private fun run(context: Context) {
+        // 0.5.12: the IMU reader is the head of the render chain, so it runs at the
+        // display's priority: each read is taken as it lands rather than when the scheduler gets to it.
+        // 0.5.62: vc79's head reads still starved under load, so this thread asks for more. Urgent audio (-19) first, urgent display (-8) if that is refused; the
+        // render thread's hint session takes this thread in too (RenderThreadBoost), which keeps it on the big cores.
+        val prio = HeadReaderPriority.raise()
+        Log.i(TAG, prio)
+        headReaderTid = android.os.Process.myTid()
+        val fusion = HeadFusion(settings)
+        frameRef = FrameRef(frameRef.epoch + 1, Quat.IDENTITY)
+        // 0.5.11: the bias learned in an earlier session, so start up does not have to learn it.
+        // 0.5.15: the last static measurement (and a worn bias saved near it); 0.5.14's key held
+        // the worn bias it saved while walking, so it is not used.
+        val store = SpaceStore(context)
+        val staticSeed = store.staticGyroBias
+        if (staticSeed != null) {
+            val worn = store.wornGyroBias?.takeIf { BiasSavePolicy.decide(it, staticSeed, staticThisSession = false).worn != null }
+            val seed = worn ?: staticSeed
+            fusion.seedBias(seed, staticSeed)
+            Log.i(TAG, "head fusion: gyro bias from the last session %.5f, %.5f, %.5f rad/s (%s; static %.5f, %.5f, %.5f)".format(
+                java.util.Locale.ROOT, seed.x, seed.y, seed.z, if (worn != null) "worn, near the static one" else "static", staticSeed.x, staticSeed.y, staticSeed.z,
+            ))
+            // 0.5.17: 0.5.14's key is not offered once a static bias is saved
+            // (HeadFusion.offerOldBias): the static one supersedes it, and is often that key confirmed.
+            // A static bias off along up is corrected by the rested yaw windows instead.
+            store.gyroBias?.let { k ->
+                Log.i(TAG, "head fusion: 0.5.14's saved bias %.5f, %.5f, %.5f rad/s not offered: the saved static bias supersedes it (%.5f, %.5f, %.5f from it); its yaw part is checked by the rested yaw windows (guard %.4f, %.4f once %d agree)".format(
+                    java.util.Locale.ROOT, k.x, k.y, k.z, staticSeed.x - k.x, staticSeed.y - k.y, staticSeed.z - k.z,
+                    settings.wornYawAnchorMax, settings.wornYawAnchorGrown, settings.wornYawAgreeCount,
+                ))
+            }
+        } else {
+            // 0.5.16: 0.5.14's key is offered, and taken (its yaw part with
+            // it) once the x and z learned worn this session confirm it; a walked one never is.
+            val old = store.gyroBias
+            old?.let(fusion::offerOldBias)
+            Log.i(TAG, "head fusion: no static gyro bias saved yet" + (old?.let { b -> " (0.5.14's saved bias %.5f, %.5f, %.5f rad/s is offered: taken once this session's worn x and z come within %.4f rad/s of it)".format(java.util.Locale.ROOT, b.x, b.y, b.z, settings.oldBiasConfirm) } ?: "") + "; learning it while worn, or on a table")
+        }
+        Log.i(TAG, com.hayeco.flipspaces.core.spatial.LevelCalibration.line(settings.mountRollDeg, settings.mountPitchDeg, store.levelCalibrated))
+        // Once per start: the glasses were found as eth interfaces and handled one way or another.
+        var ethernetTried = false
+        // 0.5.6: 3 s after a failed round, doubling up to 60 s; back to 3 s on plug-in or a network change.
+        val backoff = HeadRetryBackoff()
+        // 0.5.6: interfaces the kernel said have no way to the glasses (ENETUNREACH, EHOSTUNREACH),
+        // left alone until the network changes.
+        val noRoute = mutableSetOf<String>()
+        var lastPrint: String? = null
+        while (!Thread.currentThread().isInterrupted) {
+            takeKick()?.let { why ->
+                Log.i(TAG, "head tracking: trying again now ($why)")
+                backoff.reset()
+                noRoute.clear()
+            }
+            if (backoff.failures == 0) _status.value = HeadTrackingStatus.Searching
+            var scan = GlassesNetwork.scan(context)
+            if (scan.empty && !ethernetTried) {
+                val outcome = GlassesEthernetLink.bringUp(context, ::ethernetLog)
+                if (outcome == GlassesEthernetLink.Outcome.INTERRUPTED) return
+                // No interface yet: the glasses may be plugged in later, so look again next round.
+                ethernetTried = outcome != GlassesEthernetLink.Outcome.NO_INTERFACE
+                scan = GlassesNetwork.scan(context)
+            }
+            if (lastPrint != null && scan.fingerprint != lastPrint) {
+                Log.i(TAG, "head tracking: the glasses' network changed; trying again with the backoff reset")
+                backoff.reset()
+                noRoute.clear()
+            }
+            lastPrint = scan.fingerprint
+            _networks.value = scan.seen
+            if (scan.empty) {
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
+                continue
+            }
+            // 0.5.6: only networks with a route to the glasses are tried; with none, nothing is
+            // tried until the network changes (Mike's eth1 said ENETUNREACH every 3 s).
+            val reachable = scan.networks.filter { it.reachable && it.iface !in noRoute }.map { it.iface } +
+                scan.kernel.map { it.first }.filter { it !in noRoute }
+            if (reachable.isEmpty()) {
+                val names = scan.networks.map { it.iface } + scan.kernel.map { it.first }
+                _status.value = HeadTrackingStatus.NoRoute(names)
+                _answer.value = "No route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}: nothing is tried until the glasses' network changes or they are plugged in again."
+                Log.i(TAG, "head tracking: no route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}; waiting for a network change")
+                if (!waitFor(Long.MAX_VALUE, scan.fingerprint, context)) return
+                continue
+            }
+            val shizuku = ShizukuBridge.status(context)
+            val routes = scan.routes(shizuku == ShizukuStatus.READY, refusedDirect).filter { it.iface in reachable }
+            if (routes.isEmpty()) {
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
+                continue
+            }
+            val tried = mutableListOf<String>()
+            var why: String? = null
+            for (route in routes) {
+                _status.value = HeadTrackingStatus.Connecting(route.label)
+                val link = try {
+                    openRoute(route, context)
+                } catch (e: Exception) {
+                    if (Thread.currentThread().isInterrupted) return
+                    val error = "${e.javaClass.simpleName}: ${e.message}"
+                    if (route.kind == HeadRouteKind.DIRECT && HeadRoutePlan.bindRefused(error)) refusedDirect += route.iface
+                    if (GlassesReach.noRoute(error)) noRoute += route.iface
+                    val plain = GlassesReach.explain(error)
+                    val explained = HeadRoutePlan.explain(error, scan.vpn, shizuku) ?: plain
+                    if (plain != null && (why == null || GlassesReach.noAnswer(error))) why = plain
+                    tried += "${route.label}: $error"
+                    _attempts.value = tried.toList()
+                    _connectResult.value = "Failed over ${route.label}: $error" + (explained?.let { "\n$it" } ?: "")
+                    Log.i(TAG, "connect over ${route.label} failed: $error" + (explained?.let { " ($it)" } ?: ""))
+                    _status.value = HeadTrackingStatus.ConnectFailed(route.label, error + (explained?.let { ". $it" } ?: ""))
+                    continue
+                }
+                tried += "${route.label}: connected"
+                _attempts.value = tried.toList()
+                _route.value = route.label
+                _answer.value = "The glasses answered on ${OneImuProtocol.HOST}:${OneImuProtocol.STREAM_PORT} over ${route.label}."
+                _connectResult.value = "Connected over ${route.label} (${link.local})"
+                Log.i(TAG, "head tracking route: connected over ${route.label} (${link.local})")
+                openLink = link
+                // 0.5.10: the fusion, the recentre and the pose carry on across a reconnect: the
+                // first report's time step is not plausible and is skipped, then the gyro goes on
+                // from where it was (0.5.6 to 0.5.9 reset here, and forward became wherever the
+                // head pointed, a snap on every drop).
+                val opened = SystemClock.elapsedRealtime()
+                val streamed = stream(link, route.label, fusion)
+                runCatching { link.close() }
+                openLink = null
+                _route.value = null
+                Log.i(TAG, "head tracking stream over ${route.label} ended after ${(SystemClock.elapsedRealtime() - opened) / 1000.0} s: ${_status.value.summary}; the last pose holds for up to ${HeadHold.HOLD_MS / 1000} s while it reconnects")
+                if (Thread.currentThread().isInterrupted) return
+                // A stream that worked starts the backoff over; one that never sent a report does not.
+                if (streamed) backoff.reset()
+                why = if (streamed) "The stream stopped." else "The glasses accepted the connection but sent no head tracking reports."
+                break
+            }
+            if (why != null) _answer.value = why
+            val delay = backoff.nextDelayMs()
+            val last = _status.value
+            val reason = why ?: (last as? HeadTrackingStatus.ConnectFailed)?.let { "Could not connect over ${it.network}." } ?: "Could not connect."
+            _status.value = HeadTrackingStatus.RetryLater(reason, (delay / 1000).toInt())
+            Log.i(TAG, "head tracking: next try in ${delay / 1000} s (failed round ${backoff.failures}; ${GlassesNetwork.ShellHelper.started} shell helpers started so far)")
+            if (!waitFor(delay, scan.fingerprint, context)) return
+        }
+    }
+
+    /** Poses from before a recentre or a new mount are in the old frame: the prediction starts from the new one. Reader thread. */
+    private fun restartPrediction(fusion: HeadFusion) {
+        pose = fusion.pose()
+        val now = System.nanoTime()
+        synchronized(predictor) {
+            predictor.reset()
+            pose?.let { predictor.add(it.orientation, it.angularVelocity, now) }
+        }
+        lastSampleHostNs = now
+        history.clear()
+    }
+
+    // ---- 0.5.15: the level calibration ----
+
+    private val levelRequested = AtomicBoolean(false)
+    private val _level = MutableStateFlow<String?>(null)
+
+    /** The last level calibration's result in plain words, for the head tracking screen. */
+    val level: StateFlow<String?> = _level.asStateFlow()
+
+    /** Takes the level calibration on the next IMU read: the display is held level now. Any thread. */
+    fun takeLevelCalibration() {
+        if (!tracking) {
+            _level.value = "Not saved: head tracking is not running."
+            return
+        }
+        levelRequested.set(true)
+    }
+
+    /** Forgets the level calibration: the IMU is taken as level with the display again. */
+    fun clearLevelCalibration(context: Context) {
+        SpaceStore(context).clearLevel()
+        applySettings(context)
+        _level.value = "Level calibration cleared."
+        Log.i(TAG, "level calibration: cleared")
+    }
+
+    /** Reader thread: reads the averaged gravity, saves it as the mount when it is steady and plausible. */
+    private fun takeLevel(fusion: HeadFusion) {
+        val r = fusion.levelReading()
+        val c = appContext
+        val msg = when {
+            r == null -> "Not saved: hold your head still for a moment first (gravity was not steady or the head was turning)."
+            // 0.5.16: pitch up to 25 degrees (the Aura's IMU sits about 14.5 pitched), roll up to 10.
+            !com.hayeco.flipspaces.core.spatial.LevelCalibration.plausible(r.first, r.second) ->
+                "Not saved: the glasses read roll %.1f, pitch %.1f degrees: %s; is the line really on a level edge at eye height?".format(
+                    java.util.Locale.ROOT, r.first, r.second, com.hayeco.flipspaces.core.spatial.LevelCalibration.refusal(r.first, r.second),
+                )
+            c == null -> "Not saved: no app context."
+            else -> {
+                val store = SpaceStore(c)
+                store.mountRollDeg = r.first
+                store.mountPitchDeg = r.second
+                settings = settings.copy(mountRollDeg = r.first, mountPitchDeg = r.second)
+                fusion.settings = settings
+                restartPrediction(fusion)
+                "Saved: the IMU reads roll %.2f, pitch %.2f degrees while the display is level; applied from now on.".format(java.util.Locale.ROOT, r.first, r.second)
+            }
+        }
+        Log.i(TAG, "level calibration: $msg")
+        _level.value = msg
+    }
+
+    private fun takeKick(): String? = synchronized(wake) { kicked.also { kicked = null } }
+
+    /**
+     * 0.5.6: waits up to [ms], looking at the glasses' network every [NETWORK_LOOK_MS]: a kick
+     * or a changed network ends the wait early. False when the tracker was stopped.
+     */
+    private fun waitFor(ms: Long, print: String, context: Context): Boolean {
+        val end = if (ms == Long.MAX_VALUE) Long.MAX_VALUE else SystemClock.elapsedRealtime() + ms
+        try {
+            while (true) {
+                val left = end - SystemClock.elapsedRealtime()
+                if (left <= 0) return true
+                synchronized(wake) {
+                    if (kicked == null && !nudged) wake.wait(minOf(left, NETWORK_LOOK_MS))
+                    nudged = false
+                    if (kicked != null) return true
+                }
+                if (Thread.currentThread().isInterrupted) return false
+                if (GlassesNetwork.scan(context).fingerprint != print) return true
+            }
+        } catch (_: InterruptedException) {
+            return false
+        }
+    }
+
+    /** Reads until the stream breaks. True when at least one IMU report came. */
+    /**
+     * 0.5.53 (Mike, vc73: the windows' motion grew choppier as the phone heated): opens [route]; the app's own socket is
+     * tried again [DIRECT_RETRIES] times, [DIRECT_RETRY_MS] apart, when it only timed out or was refused (the glasses still
+     * coming up), before the shell helper is tried. In vc73 one such failure 0.4 s before the glasses answered left the whole
+     * session on the helper: every report through a second process, 21 % of a core (`top`). A bind refusal (the VPN case the
+     * helper is for) goes to the helper at once.
+     */
+    private fun openRoute(route: GlassesNetwork.Route, context: Context): GlassesNetwork.Link {
+        var tries = 0
+        while (true) {
+            try {
+                return route.open(context, OneImuProtocol.HOST, OneImuProtocol.STREAM_PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
+            } catch (e: Exception) {
+                val error = "${e.javaClass.simpleName}: ${e.message}"
+                if (route.kind != HeadRouteKind.DIRECT || HeadRoutePlan.bindRefused(error) || tries >= DIRECT_RETRIES || Thread.currentThread().isInterrupted) throw e
+                tries++
+                Log.i(TAG, "connect over ${route.label} failed ($error); the glasses may still be coming up, so the app's own socket again in $DIRECT_RETRY_MS ms (try ${tries + 1} of ${DIRECT_RETRIES + 1})")
+                Thread.sleep(DIRECT_RETRY_MS)
+            }
+        }
+    }
+
+    // ---- 0.5.55: the app's garbage collection, once per chain line (every 10 s) ----
+
+    private var gcCount = 0L
+    private var gcBlocking = 0L
+    private var gcMs = 0L
+    private var gcBytes = 0L
+    private var gcAtNs = 0L
+
+    /** ART's figure [name] (Debug.getRuntimeStat, API 23), or -1 when it is not there. */
+    private fun gcStat(name: String): Long = runCatching { android.os.Debug.getRuntimeStat(name)?.toLongOrNull() }.getOrNull() ?: -1L
+
+    /** Takes the GC figures now as the start of the next [gcLine]. Reader thread. */
+    private fun gcMark() {
+        gcCount = gcStat("art.gc.gc-count")
+        gcBlocking = gcStat("art.gc.blocking-gc-count")
+        gcMs = gcStat("art.gc.gc-time")
+        gcBytes = gcStat("art.gc.bytes-allocated")
+        gcAtNs = System.nanoTime()
+    }
+
+    /**
+     * 0.5.55 (Mike: one GC every 16 s, 1.5 MB/s allocated): the whole app's collections, their time and the bytes it
+     * allocated since the last line, for the next log pull to show what the head path's cut did. A few strings every
+     * 10 s, like the lines around it.
+     */
+    private fun gcLine(): String {
+        val count = gcStat("art.gc.gc-count")
+        val blocking = gcStat("art.gc.blocking-gc-count")
+        val ms = gcStat("art.gc.gc-time")
+        val bytes = gcStat("art.gc.bytes-allocated")
+        val s = (System.nanoTime() - gcAtNs) / 1e9
+        val line = if (count < 0 || gcCount < 0 || bytes < 0 || gcBytes < 0 || s <= 0.0) {
+            "head gc: not available on this Android"
+        } else {
+            String.format(
+                java.util.Locale.ROOT,
+                "head gc: %d collections (%d blocking), %d ms in them, %.2f MB allocated a second over the last %.1f s (the whole app)",
+                count - gcCount, if (blocking >= 0 && gcBlocking >= 0) blocking - gcBlocking else 0L, if (ms >= 0 && gcMs >= 0) ms - gcMs else 0L,
+                (bytes - gcBytes) / 1e6 / s, s,
+            )
+        }
+        gcCount = count
+        gcBlocking = blocking
+        gcMs = ms
+        gcBytes = bytes
+        gcAtNs = System.nanoTime()
+        return line
+    }
+
+    private fun stream(link: GlassesNetwork.Link, label: String, fusion: HeadFusion): Boolean {
+        val framer = OneImuFramer()
+        val rate = RateMeter()
+        val reads = RateMeter()
+        val clock = ImuClock()
+        var lastChainMs = SystemClock.elapsedRealtime()
+        val buf = ByteArray(16 * 1024)
+        val startMs = SystemClock.elapsedRealtime()
+        var lastImuMs = startMs
+        var lastLiveMs = 0L
+        var lastStatusMs = 0L
+        var everStreamed = false
+        // 0.5.55: one list each for the reports and the fused poses of a read, kept for the stream (two new lists a read).
+        val reports = ArrayList<com.hayeco.flipspaces.core.spatial.ImuReport>(64)
+        val fused = ArrayList<HeadPose>(64)
+        // 0.5.55: the GC figures at the last chain line, for the "head gc:" line ([gcLine]).
+        gcMark()
+        while (!Thread.currentThread().isInterrupted) {
+            val n = try {
+                link.read(buf)
+            } catch (e: Exception) {
+                if (Thread.currentThread().isInterrupted) return everStreamed
+                if (everStreamed) _status.value = HeadTrackingStatus.Lost(label, "${e.javaClass.simpleName}: ${e.message}")
+                else _status.value = HeadTrackingStatus.ConnectFailed(label, "read failed: ${e.javaClass.simpleName}: ${e.message}")
+                return everStreamed
+            }
+            if (n < 0) {
+                _status.value = if (everStreamed) HeadTrackingStatus.Lost(label, "the glasses closed the connection")
+                else HeadTrackingStatus.NoReports(label, ((SystemClock.elapsedRealtime() - startMs) / 1000).toInt(), framer.counts.bytes, framer.counts)
+                return everStreamed
+            }
+            val nowMs = SystemClock.elapsedRealtime()
+            if (resetRequested.getAndSet(false)) {
+                fusion.reset()
+                frameRef = FrameRef(frameRef.epoch + 1, Quat.IDENTITY)
+                history.clear()
+                synchronized(predictor) { predictor.reset() }
+                lastSampleHostNs = 0L
+            }
+            fusion.settings = settings
+            if (n > 0) {
+                // 0.5.55: into the kept lists, walked by index (no iterator), and the poses only tested with
+                // [HeadView.isUsable] (usable made a normalized Quat that was thrown away, twice a sample).
+                framer.append(buf, n, reports)
+                fused.clear()
+                for (ri in 0 until reports.size) {
+                    val r = reports[ri]
+                    if (r.type != ImuReportType.IMU) continue
+                    fusion.update(r)?.let { fused += it }
+                }
+                val imu = fused.size
+                if (imu > 0) {
+                    // 0.5.6: a pose that is not a finite rotation is dropped, never drawn ([HeadView]).
+                    pose = fused.last().takeIf { HeadView.isUsable(it.orientation) } ?: pose
+                    // 0.5.10: every report on the phone's clock from the glasses' own timestamps
+                    // ([ImuClock]), not from when its read arrived, so bursts do not shake the pose.
+                    val arrivedNs = System.nanoTime()
+                    for (pi in 0 until fused.size) {
+                        val p = fused[pi]
+                        if (!HeadView.isUsable(p.orientation)) continue
+                        val hostNs = clock.toHost(p.timestampNs, arrivedNs)
+                        history.add(hostNs / 1_000_000L, p.orientation, p.angularVelocity)
+                        synchronized(predictor) { predictor.add(p.orientation, p.angularVelocity, hostNs) }
+                        tremorBands.add(hostNs, p.angularVelocity)
+                        gyroRing.add(hostNs, p.angularVelocity)
+                        lastSampleHostNs = hostNs
+                    }
+                    reads.tick(arrivedNs)
+                    readGaps.add(arrivedNs, imu)
+                    // 0.5.12: once a second while the glasses lie still, and at each bias learning event.
+                    fusion.lastLearnLine?.let { if (it != loggedLearn) { loggedLearn = it; Log.i(TAG, it) } }
+                    // 0.5.16: the start gate's result the moment it passes, and which way.
+                    fusion.takeStartGateEvent()?.let { Log.i(TAG, it) }
+                    // 0.5.16: the old saved bias confirmed: it is the static bias
+                    // from now on, saved so the next session starts seeded.
+                    fusion.oldBiasConfirmedLine?.let { line ->
+                        if (line != loggedOldBias) {
+                            loggedOldBias = line
+                            Log.i(TAG, line)
+                            fusion.staticBias?.let { b -> appContext?.let { c -> SpaceStore(c).staticGyroBias = b } }
+                        }
+                    }
+                    // 0.5.17: once, when rested yaw windows agreed and the yaw guard grew.
+                    fusion.yawGuardLine?.let { line ->
+                        if (line != loggedYawGuard) {
+                            loggedYawGuard = line
+                            Log.i(TAG, line)
+                        }
+                    }
+                    // 0.5.19: once, when the pool's cap near the static bias lifts.
+                    fusion.poolCapLine?.let { line ->
+                        if (line != loggedPoolCap) {
+                            loggedPoolCap = line
+                            Log.i(TAG, line)
+                        }
+                    }
+                    // 0.5.19: whether the glasses are on a head, for the hand press gate.
+                    val wornNow = SystemClock.uptimeMillis()
+                    if (wornNow - lastWornMs >= 100L) {
+                        lastWornMs = wornNow
+                        val (_, pitch, roll) = fused.last().orientation.yawPitchRoll()
+                        com.hayeco.flipspaces.core.hands.PhoneHandling.shared.glasses(roll, pitch, fusion.isStatic, wornNow)
+                    }
+                    val nowStill = SystemClock.elapsedRealtime()
+                    if (fusion.lyingStill && nowStill - lastStillLogMs >= 1_000L) {
+                        lastStillLogMs = nowStill
+                        Log.i(TAG, fusion.stillnessLine())
+                        // 0.5.20: with the head held still while worn, the tremor itself.
+                        if (!fusion.isStatic && tremorBands.ready) Log.i(TAG, tremorBands.line())
+                        // 0.5.21: the raw gyro of a worn still head, to a file for the next replay.
+                        if (gyroRing.due(nowStill, !fusion.isStatic, fusion.stillPeakToPeak)) writeGyroRing(fusion.stillPeakToPeak)
+                    }
+                    val nowChain = SystemClock.elapsedRealtime()
+                    if (nowChain - lastChainMs >= 10_000L) {
+                        lastChainMs = nowChain
+                        val waited = clock.waited(fused.last().timestampNs, arrivedNs) / 1e6f
+                        val (p50, p95) = synchronized(predictor) {
+                            (if (predictAhead.count > 0) predictAhead.median().toFloat() else lastPredictMs) to
+                                (if (predictAhead.count > 0) predictAhead.percentile(0.95).toFloat() else lastPredictMs)
+                        }
+                        Log.i(TAG, HeadChain(rate.rate, reads.rate, waited, p50, SpaceSession.pacerLine ?: "no Space frames", p95).line())
+                        // 0.5.18: the still head mode and the gravity pull held to a slow ramp, every 10 s.
+                        // 0.5.20: it follows only glasses lying still (the gyro's RMS under 15 Hz).
+                        val (share, weight) = synchronized(predictor) { predictor.predictionShare to predictor.stillWeight }
+                        val lying = synchronized(predictor) { predictor.lyingRms }
+                        Log.i(TAG, "head still mode: prediction at %.0f %% now (still weight %.2f, gyro under 15 Hz %.4f rad/s RMS, lying still under %.4f); %d gravity samples held to the still head's slow ramp so far".format(java.util.Locale.ROOT, share * 100, weight, lying, predictor.lyingRmsEnter, fusion.correctionsLimited))
+                        // 0.5.20: what the tremor predictor learned and does at today's horizon.
+                        val tremorLine = synchronized(predictor) {
+                            val (byTremor, byFallback) = predictor.takeTremorCounts()
+                            predictor.tremor?.let { t ->
+                                t.line(p50.toDouble()) + "; %d frames by it, %d by 0.5.19's fallback (a gap in the stream); learned weights at %.0f %% now (head speed %.3f rad/s)".format(java.util.Locale.ROOT, byTremor, byFallback, predictor.tremorShare * 100, predictor.turnSpeed)
+                            }
+                        }
+                        tremorLine?.let { Log.i(TAG, it) }
+                        // 0.5.30: the still blend (the prediction scaled by the share of it that came true).
+                        val (bGain, bShare) = synchronized(predictor) { predictor.blendGain to predictor.blendShare }
+                        Log.i(TAG, "still blend: %.0f %% of the predicted turn came true over the last %.0f ms, prediction at %.0f %% now (1 on any move)".format(java.util.Locale.ROOT, bGain * 100, predictor.blendTauMs, bShare * 100))
+                        // 0.5.32: how much of the last 10 s the still lock held, and its lets go.
+                        Log.i(TAG, synchronized(restLock) { restLock.line() })
+                        // 0.5.64: how far the drawn orientation trailed the head over the last 10 s.
+                        Log.i(TAG, synchronized(drawSmoothing) { drawSmoothing.line() })
+                        Log.i(TAG, stillLine(fusion))
+                        // 0.5.14: the start gate's result and how much of the
+                        // last 10 s gravity was used, so a session with gravity off shows at once.
+                        Log.i(TAG, "head gravity: ${fusion.startGateLine()}; ${fusion.gravityShareLine()}")
+                        Log.i(TAG, "head reads: ${readGaps.line()}")
+                        // 0.5.55: the app's garbage collections since the last chain line, with these lines.
+                        Log.i(TAG, gcLine())
+                        // 0.5.15: yaw, pitch and roll every 10 s, and what gravity says.
+                        Log.i(TAG, fusion.attitudeLine())
+                        // 0.5.16: the yaw bias and the yaw drift, measured every 10 s.
+                        Log.i(TAG, fusion.yawLine())
+                        // 0.5.14: a bias learned while worn is saved too (each minute of learning), so
+                        // the next session starts from it instead of 0. 0.5.15: a static measurement
+                        // is saved as such; a worn bias only while it is near the last static one.
+                        val wornMinutes = (fusion.wornLearnS / 60f).toInt() + fusion.wornYawUpdates
+                        if (fusion.biasEvents != savedBiasEvents || wornMinutes != savedWornMinutes) {
+                            savedBiasEvents = fusion.biasEvents
+                            savedWornMinutes = wornMinutes
+                            val save = BiasSavePolicy.decide(fusion.gyroBias, fusion.staticBias, fusion.staticThisSession)
+                            appContext?.let { c ->
+                                val s = SpaceStore(c)
+                                save.static?.let { s.staticGyroBias = it }
+                                s.wornGyroBias = save.worn
+                            }
+                            Log.i(TAG, save.line)
+                        }
+                    }
+                }
+                if (imu > 0) {
+                    lastImuMs = nowMs
+                    lastReportAtNs = SystemClock.elapsedRealtimeNanos()
+                    rate.tick(lastReportAtNs, imu)
+                    if (!everStreamed) Log.i(TAG, "first IMU report over $label")
+                    everStreamed = true
+                }
+            }
+            if (levelRequested.getAndSet(false)) takeLevel(fusion)
+            if (recentreRequested.getAndSet(false)) {
+                // 0.5.15: roll and pitch relevelled too (when steady), and every recentre logged.
+                val before = fusion.pose().orientation
+                Log.i(TAG, fusion.recentre())
+                // 0.5.21: the turn the recentre gave the frame, for the glasses' record.
+                val turn = (fusion.pose().orientation * before.conjugate()).normalized()
+                frameRef = frameRef.copy(jump = (turn * frameRef.jump).normalized())
+                restartPrediction(fusion)
+            }
+            val silentS = (nowMs - lastImuMs) / 1000
+            if (silentS >= NO_REPORT_SECONDS) {
+                // 0.5.22: a stream that worked and went quiet is lost, not "no sensor reports".
+                _status.value = com.hayeco.flipspaces.core.spatial.HeadSilence.status(label, everStreamed, silentS, ((nowMs - startMs) / 1000).toInt(), framer.counts.bytes, framer.counts)
+                if (silentS >= NO_REPORT_SECONDS * 3) return everStreamed // reconnect
+            } else if (everStreamed && (_status.value !is HeadTrackingStatus.Streaming || nowMs - lastStatusMs >= STATUS_EVERY_MS)) {
+                // 0.5.48 (Mike, vc68: windows shaky when looking around, the phone at severe heat): the status at most
+                // twice a second. 0.5.6 to 0.5.47 made a new one, with its formatted line, on every report: a fifth of
+                // this thread's time (simpleperf on the Flip), at 1000 reports a second.
+                lastStatusMs = nowMs
+                val st = HeadTrackingStatus.Streaming(label, rate.rate)
+                if (_status.value != st) _status.value = st
+            }
+            // 0.5.49 (Mike: "batch the glasses' motion reads"): rest [READ_BATCH_NS] before the next read, so it takes
+            // the reports that came meanwhile in one go (off: see [READ_BATCH_NS]). 0.5.6 to 0.5.48 read each 1 ms report as it came: 1000
+            // wake-ups, socket reads and polls a second, a third of this thread (simpleperf on the Flip). The reports keep
+            // their own times ([ImuClock]: the least waited sample sets the offset), so only the newest pose is up to
+            // that much older, which the prediction to the frame's time covers.
+            if (n > 0 && everStreamed && READ_BATCH_NS > 0L) java.util.concurrent.locks.LockSupport.parkNanos(READ_BATCH_NS)
+            if (nowMs - lastLiveMs >= 100) {
+                lastLiveMs = nowMs
+                val p = pose
+                if (p != null) {
+                    val (y, pi, r) = p.orientation.yawPitchRoll()
+                    _live.value = HeadLive(y, pi, r, p.angularVelocity, fusion.lastRawAccel, rate.rate, framer.counts, p.still, p.gyroBias)
+                } else {
+                    _live.value = HeadLive(0f, 0f, 0f, Vec3.ZERO, Vec3.ZERO, rate.rate, framer.counts, false, Vec3.ZERO)
+                }
+            }
+        }
+        return everStreamed
+    }
+}

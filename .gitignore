@@ -1,0 +1,16 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+# 0.5.58: CMake's build folder for src/main/cpp
+.cxx/
+captures/
+*.apk
+# JVM crash files from a Gradle daemon out of memory
+replay_pid*.log
+hs_err_pid*.log
+
+# The export's marker (the private repo's tools/export-public.py).
+.pocketxr-export

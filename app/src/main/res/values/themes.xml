@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.FlipSpaces" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <!-- 0.5.68 (Mike: one bundled font): Inter for every view, whatever the phone's own font. -->
+        <item name="android:fontFamily">@font/inter_regular</item>
+    </style>
+
+    <!-- 0.5.17: the trackpad, dark only: a near-black page behind everything. -->
+    <style name="Theme.FlipSpaces.Trackpad" parent="Theme.FlipSpaces">
+        <item name="android:windowBackground">@color/pad_background</item>
+        <item name="android:colorAccent">#FFFFFFFF</item>
+    </style>
+</resources>

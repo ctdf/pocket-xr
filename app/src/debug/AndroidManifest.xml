@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only (0.3.6): hand replay and open commands for emulator testing without the
+     glasses. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Lets the open command start the Spaces home or the Space from a broadcast while the app
+         is in the background (granted with adb shell appops, never asked for). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application>
+        <!-- Only senders holding DUMP may use it: adb shell has it, apps do not. -->
+        <receiver
+            android:name=".debug.DebugReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.hayeco.flipspaces.debug.REPLAY" />
+                <action android:name="com.hayeco.flipspaces.debug.REPLAY_STOP" />
+                <action android:name="com.hayeco.flipspaces.debug.REPLAY_DUMP" />
+                <action android:name="com.hayeco.flipspaces.debug.OPEN" />
+                <action android:name="com.hayeco.flipspaces.debug.STALL" />
+                <action android:name="com.hayeco.flipspaces.debug.UPDATE_TEST" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 0.5.43: MediaPipe and the NPU hand engine side by side in this process (adb start). -->
+        <activity
+            android:name=".hands.NpuSelfTestActivity"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+    </application>
+</manifest>

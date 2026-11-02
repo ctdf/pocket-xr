@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.87: Pocket XR Settings on the Menu: three slider lines with their knobs. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" android:strokeLineCap="round" android:pathData="M3,5h14M3,10h14M3,15h14" />
+    <path android:fillColor="#FF1A1D24" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" android:pathData="M7,5m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0 M13,10m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0 M9,15m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+</vector>

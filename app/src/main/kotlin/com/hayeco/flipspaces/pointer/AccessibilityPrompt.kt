@@ -1,0 +1,68 @@
+package com.hayeco.flipspaces.pointer
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import android.util.Log
+import com.hayeco.flipspaces.R
+
+/**
+ * 0.5.10: the one time phone prompt for the pointer accessibility service. DeX's full screen
+ * button is in the desktop shell's caption, which only an accessibility service may press (no
+ * app or shell call reaches it on One UI 8: 0.5.9's section 24.2). When the press finds the
+ * service off, the phone shows this once (per install), with a button that opens the service's
+ * own Accessibility page, else the Accessibility list.
+ *
+ * The full screen task hold (0.5.7) needs no accessibility service and has no DeX taskbar; with
+ * 0.5.10's check it is no longer undone by an "unknown" answer, so this prompt only matters when
+ * the Space ends up in its DeX window.
+ */
+object AccessibilityPrompt {
+    private const val TAG = "FlipSpaces/Mode"
+    private const val CHANNEL = "accessibility_prompt"
+    private const val NOTIFICATION_ID = 31
+    private const val PREFS = "accessibility_prompt"
+    private const val KEY_SHOWN = "shown"
+
+    /** The hidden Settings action for one service's page (AOSP AccessibilityDetailsSettingsActivity). */
+    private const val DETAILS_ACTION = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
+
+    /** The intent that opens the pointer service's Accessibility page, or the Accessibility list. */
+    fun settingsIntent(context: Context): Intent {
+        val details = Intent(DETAILS_ACTION)
+            .putExtra(Intent.EXTRA_COMPONENT_NAME, ComponentName(context, PointerService::class.java))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val resolves = runCatching { context.packageManager.resolveActivity(details, 0) != null }.getOrDefault(false)
+        return if (resolves) details else Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    /** Shows the prompt unless it was shown before; [why] is what is missing without the service. */
+    fun showOnce(context: Context, why: String) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_SHOWN, false)) return
+        prefs.edit().putBoolean(KEY_SHOWN, true).apply()
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        runCatching {
+            manager.createNotificationChannel(NotificationChannel(CHANNEL, "Setup prompts", NotificationManager.IMPORTANCE_DEFAULT))
+            val open = PendingIntent.getActivity(context, NOTIFICATION_ID, settingsIntent(context), PendingIntent.FLAG_IMMUTABLE)
+            val n = Notification.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("Turn on the Pocket XR pointer service")
+                .setStyle(Notification.BigTextStyle().bigText("$why: only the Pocket XR pointer accessibility service may press DeX's full screen button. Tap to open its Accessibility page and turn it on."))
+                .setContentIntent(open)
+                .addAction(Notification.Action.Builder(null, "Open Accessibility", open).build())
+                .setAutoCancel(true)
+                .build()
+            manager.notify(NOTIFICATION_ID, n)
+        }.onSuccess {
+            Log.i(TAG, "phone prompt shown once: turn on the pointer accessibility service ($why)")
+        }.onFailure {
+            Log.w(TAG, "phone prompt for the pointer accessibility service not shown: ${it.javaClass.simpleName}: ${it.message}")
+        }
+    }
+}

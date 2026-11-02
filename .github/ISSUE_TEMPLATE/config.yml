@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/pocket-xr/pocket-xr/discussions
+    about: Ask a question or share an idea in Discussions.
+  - name: Security issue
+    url: https://github.com/pocket-xr/pocket-xr/security/advisories/new
+    about: Report a security problem privately (see SECURITY.md).

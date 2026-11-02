@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.73 ("Light on glass", docs/VISUAL-DIRECTION.md): the design tokens of core/Look.kt as colour resources, so the
+     trackpad's drawables and the glasses share one palette. Keep them equal to Look's values. -->
+<resources>
+    <color name="look_page">#FF0C0D10</color>
+    <color name="look_pad">#FF15171C</color>
+    <color name="look_card">#FF1A1D24</color>
+    <color name="look_glass_raised">#FF1E2330</color>
+    <color name="look_glass_hover">#FF2A3142</color>
+    <color name="look_toast">#F21E2330</color>
+    <color name="look_rim">#24FFFFFF</color>
+    <color name="look_rim_focus">#52FFFFFF</color>
+    <color name="look_accent">#FF5A93FF</color>
+    <color name="look_accent_deep">#FF3A6FD8</color>
+    <color name="look_held">#FF8FB6FF</color>
+    <color name="look_held_glass">#FF16233D</color>
+</resources>

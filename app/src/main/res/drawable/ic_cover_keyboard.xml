@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17 cover screen: Keyboard, a rounded key block with keys and a space bar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineJoin="round"
+        android:pathData="M3,6.5h18v11h-18z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.5,8.8h2v2h-2zM9,8.8h2v2h-2zM12.5,8.8h2v2h-2zM16,8.8h2v2h-2zM5.5,12h2v2h-2zM16,12h2v2h-2zM9,12.4h6v1.6h-6z" />
+</vector>

@@ -1,0 +1,32 @@
+Pocket XR turns an Android phone and a pair of XREAL glasses into a multi-window workspace. Your apps float around you as windows you can move, resize, curve and push back. Head tracking keeps them in place, and the phone becomes the controller.
+
+<b>Windows in space</b>
+<ul>
+<li>Any app opens as a window around you, at its own size and distance.</li>
+<li>Drag windows by their edges, snap them side by side, curve them, push them further or pull them closer.</li>
+<li>Move, push, pull or resize every window at once.</li>
+<li>Arrange layouts and presets that reopen a set of windows where they were.</li>
+</ul>
+
+<b>Seeing it</b>
+<ul>
+<li>3D side by side, with each window at a real depth.</li>
+<li>Head tracking from the glasses' own motion sensor, paced to their display.</li>
+</ul>
+
+<b>Controls</b>
+<ul>
+<li>The phone as a trackpad, with taps, two-finger scroll and pinch, and three-finger swipes.</li>
+<li>The Spatial Mouse: point the phone like a laser.</li>
+<li>Hand tracking on glasses with a camera (XREAL Aura).</li>
+</ul>
+
+<b>What it needs</b>
+<ul>
+<li>A phone whose USB-C port carries video (DisplayPort alt mode), on Android 11 or later.</li>
+<li>XREAL glasses: the Aura and the One are tested; the One Pro and 1S are in community testing.</li>
+<li>Shizuku, to create a window for each app.</li>
+<li>Its accessibility service, which draws the cursor on the glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone.</li>
+</ul>
+
+Pocket XR is not made by or affiliated with XREAL. "XREAL" and the glasses' names are XREAL's trademarks, used only to say what the app works with.

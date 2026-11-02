@@ -1,0 +1,287 @@
+package com.hayeco.flipspaces.ui
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import com.hayeco.flipspaces.core.ShizukuStatus
+import com.hayeco.flipspaces.core.spatial.ModeChoice
+import com.hayeco.flipspaces.core.spatial.SpatialMode
+import com.hayeco.flipspaces.spatial.PanelHost
+import com.hayeco.flipspaces.spatial.SpaceSnapshot
+
+data class SpaceSettings(
+    /** 0.5.26: the glasses' screen size in 2D and in their 3D mode (their Display size, 0.8 to 1.3), the projection's. */
+    val screen2d: Float,
+    val screen3d: Float,
+    val handsSteer: Boolean,
+    /** 0.5.9: side by side 3D when the glasses send 3840 x 1080, the eyes [ipdMm] apart. */
+    val stereo: Boolean = true,
+    val ipdMm: Float = 63f,
+    /** 0.5.9, experimental: the glasses as a plain display with DeX off while the Space runs. */
+    val plainDisplay: Boolean = false,
+)
+
+const val SECURE_NOTE =
+    "Protected video shows black on panels: apps that mark their windows secure (FLAG_SECURE, DRM video such as Netflix, " +
+        "some banking apps) cannot be captured into a panel, even with Shizuku. Open those in flat DeX mode."
+
+@Composable
+fun SpatialScreen(
+    choice: ModeChoice,
+    shizuku: ShizukuStatus,
+    host: PanelHost.State,
+    space: SpaceSnapshot,
+    glassesName: String?,
+    settings: SpaceSettings,
+    message: String?,
+    onMessageShown: () -> Unit,
+    onOpenSpace: () -> Unit,
+    onToggleLauncher: () -> Unit,
+    onRemove: (Int) -> Unit,
+    onRecentre: () -> Unit,
+    onClear: () -> Unit,
+    onSettings: (SpaceSettings) -> Unit,
+    onReset: () -> Unit,
+    onAllowShizuku: () -> Unit,
+    onGetShizuku: () -> Unit,
+) {
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(message) {
+        if (message != null) {
+            snackbar.showSnackbar(message)
+            onMessageShown()
+        }
+    }
+    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+        LazyColumn(
+            Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Text("Spatial windows", style = MaterialTheme.typography.headlineSmall) }
+            item { ModeCard(choice, glassesName, space, onOpenSpace, onToggleLauncher, onRecentre) }
+            if (shizuku != ShizukuStatus.READY) item { ShizukuCard(shizuku, onAllowShizuku, onGetShizuku) }
+            if (host is PanelHost.State.Failed) {
+                item { Problem("Panel service", host.error) }
+            }
+            space.problem?.let { item { Problem("Last problem in the Space", it) } }
+            if (space.panels.isNotEmpty()) {
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Panels (${space.panels.size} of 6)", style = MaterialTheme.typography.titleMedium)
+                            space.panels.forEach { p ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(p.label, style = MaterialTheme.typography.bodyLarge)
+                                        Text(p.status, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    TextButton(onClick = { onRemove(p.id) }) { Text("Close") }
+                                }
+                            }
+                            TextButton(onClick = onClear) { Text("Close all panels") }
+                            space.perf?.let { Text("Perf: $it", style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
+                        }
+                    }
+                }
+            }
+            item { SettingsCard(settings, onSettings) }
+            // 0.5.101 (Mike's settings audit): the app list is gone from here (the launcher on the glasses and Advanced on
+            // the main screen open apps); the plain display test is under Developer; and a reset to the defaults.
+            item { DeveloperCard(settings, onSettings) }
+            item { ResetButton("Spatial windows", "The glasses' screen sizes, 3D (on for the Aura and the One), eye distance and the hand pointer go back to Pocket XR's defaults. Your windows, presets and the glasses' calibration stay.", onReset) }
+        }
+    }
+}
+
+@Composable
+private fun ModeCard(
+    choice: ModeChoice,
+    glassesName: String?,
+    space: SpaceSnapshot,
+    onOpenSpace: () -> Unit,
+    onToggleLauncher: () -> Unit,
+    onRecentre: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(choice.mode.label, style = MaterialTheme.typography.titleMedium)
+            choice.reasons.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Text(
+                glassesName?.let { "Glasses: $it" } ?: "Glasses not connected.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(SECURE_NOTE, style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onOpenSpace, enabled = glassesName != null && choice.mode != SpatialMode.FLAT) {
+                    Text(if (space.running) "Show the Space" else "Open the Space")
+                }
+                OutlinedButton(onClick = onRecentre) { Text("Recentre") }
+            }
+            if (space.running) {
+                OutlinedButton(onClick = onToggleLauncher) { Text(if (space.launcherOpen) "Close the launcher" else "Open the launcher") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShizukuCard(status: ShizukuStatus, onAllow: () -> Unit, onGet: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("One-time setup: Shizuku", style = MaterialTheme.typography.titleMedium)
+            Text(status.label + ".", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "App panels need Shizuku: it lets Pocket XR act as the phone's shell to create the virtual displays apps run on, " +
+                    "start apps there and pass your clicks to them. Until then apps open as flat DeX windows.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            listOf(
+                "1. Install Shizuku from Google Play.",
+                "2. Turn on Developer options (Settings, About phone, Software information, tap Build number 7 times).",
+                "3. Connect to Wi-Fi, then in Developer options turn on Wireless debugging.",
+                "4. Open Shizuku, tap Pairing under Start via Wireless debugging, and enter the pairing code from Wireless debugging (split screen helps).",
+                "5. In Shizuku tap Start.",
+                "6. Come back here and tap Allow Pocket XR.",
+                "After every reboot, open Shizuku and tap Start again (Wireless debugging must be on).",
+            ).forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (status == ShizukuStatus.NOT_INSTALLED) OutlinedButton(onClick = onGet) { Text("Get Shizuku") }
+                if (status == ShizukuStatus.NO_PERMISSION) Button(onClick = onAllow) { Text("Allow Pocket XR") }
+            }
+        }
+    }
+}
+
+/** 0.5.26: the degrees a 1920 x 1080 picture fills at the glasses' screen size [factor]. */
+private fun degreesOf(factor: Float): Pair<Float, Float> =
+    com.hayeco.flipspaces.core.spatial.GlassesScreen(factor, 1f, "").degrees()
+
+@Composable
+private fun SettingsCard(settings: SpaceSettings, onChange: (SpaceSettings) -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Space settings", style = MaterialTheme.typography.titleMedium)
+            // 0.5.26: the projection is the glasses' own screen; its size is theirs to set.
+            val steps = com.hayeco.flipspaces.core.spatial.GlassesScreen.STEPS
+            Text("Glasses screen size in 2D: %.0f %% (%.1f by %.1f degrees)".format(settings.screen2d * 100, degreesOf(settings.screen2d).first, degreesOf(settings.screen2d).second), style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = steps.indexOf(com.hayeco.flipspaces.core.spatial.GlassesScreen.nearestStep(settings.screen2d)).toFloat(),
+                onValueChange = { onChange(settings.copy(screen2d = steps[it.toInt().coerceIn(0, steps.size - 1)])) },
+                valueRange = 0f..(steps.size - 1).toFloat(),
+                steps = steps.size - 2,
+            )
+            Text("In their 3D mode: %.0f %% (%.1f by %.1f degrees)".format(settings.screen3d * 100, degreesOf(settings.screen3d).first, degreesOf(settings.screen3d).second), style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = steps.indexOf(com.hayeco.flipspaces.core.spatial.GlassesScreen.nearestStep(settings.screen3d)).toFloat(),
+                onValueChange = { onChange(settings.copy(screen3d = steps[it.toInt().coerceIn(0, steps.size - 1)])) },
+                valueRange = 0f..(steps.size - 1).toFloat(),
+                steps = steps.size - 2,
+            )
+            Text(
+                "Set these to the glasses' own Display size (their menu). For the full view set Display size to 100 % on the glasses and here; " +
+                    "130 % is wider than their panels and cuts the edges. The 3D size is read from the glasses' own log whenever Glasses warp has it on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Toggle("3D: windows at real depth", settings.stereo) { onChange(settings.copy(stereo = it)) }
+            Text(
+                "On: each eye gets its own picture, so windows sit at their distance. Off: the same picture in both eyes, the steadiest. " +
+                    "The 3D / 2D button in the launcher switches it too. Eye distance for 3D: %.0f mm".format(settings.ipdMm),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Slider(
+                value = settings.ipdMm,
+                onValueChange = { onChange(settings.copy(ipdMm = it)) },
+                valueRange = com.hayeco.flipspaces.core.spatial.StereoLayout.MIN_IPD_MM..com.hayeco.flipspaces.core.spatial.StereoLayout.MAX_IPD_MM,
+            )
+            Text("Hand pointer", style = MaterialTheme.typography.bodyMedium)
+            Choice("Hand ray: the hand aims, pinch clicks", settings.handsSteer) { onChange(settings.copy(handsSteer = true)) }
+            Choice("Look and pinch: head gaze aims, pinch anywhere clicks", !settings.handsSteer) { onChange(settings.copy(handsSteer = false)) }
+            Text(
+                "Look and pinch needs head tracking; the hand only has to be seen pinching, which is the steadiest thing the camera does.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+/** 0.5.101: tests for developers, closed until opened. */
+@Composable
+private fun DeveloperCard(settings: SpaceSettings, onChange: (SpaceSettings) -> Unit) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().clickable { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+                Text("Developer", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(if (open) "Hide" else "Show", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            if (open) {
+                Toggle("Plain glasses display without DeX (experimental)", settings.plainDisplay) { onChange(settings.copy(plainDisplay = it)) }
+                Text(
+                    "With Shizuku: on plug-in, DeX is switched off for the Space's session so it can fill the glasses. Every setting changed is logged and put back when the Space closes or the glasses unplug; if it does not work within a few seconds, DeX comes back and the Space opens as before.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun Choice(label: String, selected: Boolean, onSelect: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onSelect), verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = onSelect)
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun Problem(title: String, text: String) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            SelectionContainer { Text(text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}

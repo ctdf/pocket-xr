@@ -1,0 +1,11 @@
+name: Feature request
+description: An idea for Pocket XR.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What you want to do, and why. A picture or a comparison helps.
+    validations:
+      required: true

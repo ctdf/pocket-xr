@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.17: the Vertical Trackpad's scroll strip: a pill of radius 32 with a vertical
+     grey-white-grey gradient at 6%, 33 ticks 20 x 3 every 23 units with the middle one opaque and
+     5% less each tick outward, and small up and down chevrons at half alpha. Drawn for Pocket XR. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="21dp"
+    android:height="387dp"
+    android:viewportWidth="64"
+    android:viewportHeight="1160">
+    <path
+        android:fillAlpha="0.06"
+        android:pathData="M32,0h0a32,32 0,0 1,32 32v1096a32,32 0,0 1,-32 32h0a32,32 0,0 1,-32 -32v-1096a32,32 0,0 1,32 -32z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="32"
+                android:startY="0"
+                android:endX="32"
+                android:endY="1160">
+                <item android:offset="0" android:color="#FF999999" />
+                <item android:offset="0.5" android:color="#FFFFFFFF" />
+                <item android:offset="1" android:color="#FF999999" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.5" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M25,77L32,66L39,77" />
+    <path android:strokeColor="#FFFFFF" android:strokeAlpha="0.5" android:strokeWidth="3" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M25,1082L32,1093L39,1082" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.20" android:pathData="M22,208.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.25" android:pathData="M22,231.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.30" android:pathData="M22,254.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.35" android:pathData="M22,277.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.40" android:pathData="M22,300.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.45" android:pathData="M22,323.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.50" android:pathData="M22,346.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55" android:pathData="M22,369.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.60" android:pathData="M22,392.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.65" android:pathData="M22,415.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.70" android:pathData="M22,438.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.75" android:pathData="M22,461.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.80" android:pathData="M22,484.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.85" android:pathData="M22,507.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.90" android:pathData="M22,530.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.95" android:pathData="M22,553.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="1.00" android:pathData="M22,576.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.95" android:pathData="M22,599.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.90" android:pathData="M22,622.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.85" android:pathData="M22,645.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.80" android:pathData="M22,668.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.75" android:pathData="M22,691.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.70" android:pathData="M22,714.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.65" android:pathData="M22,737.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.60" android:pathData="M22,760.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55" android:pathData="M22,783.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.50" android:pathData="M22,806.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.45" android:pathData="M22,829.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.40" android:pathData="M22,852.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.35" android:pathData="M22,875.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.30" android:pathData="M22,898.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.25" android:pathData="M22,921.5h20v3h-20z" />
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.20" android:pathData="M22,944.5h20v3h-20z" />
+</vector>
