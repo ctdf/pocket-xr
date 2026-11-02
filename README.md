@@ -89,11 +89,12 @@ developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video 
 ## Setup
 
 1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases) page.
-   Google Play Protect may warn that the app "can request access to sensitive data". That is because Pocket XR
-   uses an accessibility service for the cursor on the glasses (step 3), and scam apps also use that permission. You
-   can check that it's the official build with the signing fingerprint under [Updates](#updates), and all the code is
-   here to read. Tap **More details**, then **Install anyway**. In some countries Google blocks such installs from a
-   browser entirely; if that happens to you, please [tell us](https://github.com/pocket-xr/pocket-xr/issues/new?template=bug.yml).
+   In some countries Google Play Protect blocks the install with "This app can request access to sensitive data".
+   Play Protect blocks sideloaded apps that use an accessibility service, and Pocket XR needs one for the cursor on
+   the glasses (step 3). The block only applies to installs from a browser, chat app or file manager, so installing
+   from a computer with `adb install pocketxr-x.y.z.apk` should still work. You can check it's the official build with
+   the signing fingerprint under [Updates](#updates), and all the code is here to read. If you hit the block, please
+   [tell us](https://github.com/pocket-xr/pocket-xr/issues/new?template=bug.yml) which country you're in.
 2. **Install and start [Shizuku](https://shizuku.rikka.app/)**, and allow Pocket XR in it. Pocket XR uses it to
    create a window for each app and to start the Space on the glasses. Without Shizuku, apps open as ordinary desktop
    windows instead.
