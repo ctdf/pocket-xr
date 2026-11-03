@@ -14,9 +14,18 @@ import com.hayeco.flipspaces.core.spatial.FollowMode
 class TrackpadPrefs(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("trackpad", Context.MODE_PRIVATE)
 
+    /** 1.1.2: the phone's own screen is landscape by nature (a handheld such as a Retroid), read once. */
+    private val landscapeDevice: Boolean by lazy {
+        runCatching {
+            val d = context.applicationContext.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
+            TrackpadSettings.landscapeByNature(m.widthPixels, m.heightPixels, d.rotation)
+        }.getOrDefault(false)
+    }
+
     var settings: TrackpadSettings
         get() = TrackpadSettings(
-            mode = TrackpadSettings.modeOf(prefs.getInt(KEY_TYPE, -1)),
+            mode = TrackpadSettings.modeOf(prefs.getInt(KEY_TYPE, -1), landscapeDevice),
             cursorSpeed = TrackpadSettings.speedOf(prefs.getInt(KEY_SPEED, -1)),
             stripSide = TrackpadSettings.stripOf(prefs.getInt(KEY_STRIP, -1)),
             direction = TrackpadSettings.directionOf(prefs.getInt(KEY_DIRECTION, PadDirection.DEFAULT.stored)),

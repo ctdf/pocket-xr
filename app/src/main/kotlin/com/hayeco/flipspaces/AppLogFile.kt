@@ -32,14 +32,23 @@ object AppLogFile {
     @Synchronized
     fun start(context: Context) {
         if (started) return
-        val d = context.getExternalFilesDir("logs") ?: File(context.filesDir, "logs")
-        dir = d
         started = true
-        val file = RotatingLogFile(d)
         val pid = Process.myPid()
         val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).let { "${it.versionName} (vc ${it.longVersionCode})" } }.getOrDefault("?")
-        file.write("---- Pocket XR $version, pid $pid, started ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.ROOT).format(java.util.Date())} ----")
-        file.flush()
+        val header = "---- Pocket XR $version, pid $pid, started ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.ROOT).format(java.util.Date())} ----"
+        // 1.1.2 (a fresh reinstall: the external files folder refused with EACCES, and the app closed at start): the log is
+        // best effort. The external folder, else the app's own, else no log file at all.
+        val candidates = listOfNotNull(runCatching { context.getExternalFilesDir("logs") }.getOrNull(), File(context.filesDir, "logs"))
+        var file: RotatingLogFile? = null
+        for (d in candidates) {
+            val f = runCatching { RotatingLogFile(d).also { it.write(header); it.flush() } }
+                .onFailure { android.util.Log.w("FlipSpaces/Log", "log file in $d not usable: ${it.javaClass.simpleName}: ${it.message}") }
+                .getOrNull() ?: continue
+            dir = d
+            file = f
+            break
+        }
+        if (file == null) return
         Thread({ run(file, pid) }, "fs-log-file").apply {
             isDaemon = true
             priority = Thread.MIN_PRIORITY
@@ -56,7 +65,7 @@ object AppLogFile {
             priority = Thread.MIN_PRIORITY
             start()
         }
-        Log.i(TAG, "this process's log lines also go to ${d.absolutePath} (8 files of 8 MB, flipspaces.log the newest; adb pull /sdcard/Android/data/${context.packageName}/files/logs)")
+        Log.i(TAG, "this process's log lines also go to ${dir?.absolutePath} (8 files of 8 MB, flipspaces.log the newest; adb pull /sdcard/Android/data/${context.packageName}/files/logs)")
     }
 
     private fun run(file: RotatingLogFile, pid: Int) {

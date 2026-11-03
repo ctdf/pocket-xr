@@ -90,13 +90,24 @@ data class TrackpadSettings(
         /** 0.5.83: a stored scroll speed, or [default] when unset or out of range. */
         fun scrollSpeedOf(stored: Int, default: Int): Int = if (stored in 0..100) stored else default
 
-        /** The stored pad type -1..3: 0 and 1 are Spatial Mouse, 2 and 3 the trackpads; unset (-1) is the default, the Vertical Trackpad. */
-        fun modeOf(stored: Int): PadMode = when (stored) {
+        /**
+         * The stored pad type -1..3: 0 and 1 are Spatial Mouse, 2 and 3 the trackpads; unset (-1) is the default, the Vertical
+         * Trackpad. 1.1.2 (a Retroid Nova owner): on a device whose screen is landscape by nature ([landscapeDevice]), a
+         * handheld, the default is the Horizontal Trackpad, so the screen does not turn on its side. A chosen page is kept.
+         */
+        fun modeOf(stored: Int, landscapeDevice: Boolean = false): PadMode = when (stored) {
             2 -> PadMode.VERTICAL
             3 -> PadMode.HORIZONTAL
             0, 1 -> PadMode.SPATIAL_MOUSE
-            else -> PadMode.VERTICAL
+            else -> if (landscapeDevice) PadMode.HORIZONTAL else PadMode.VERTICAL
         }
+
+        /**
+         * 1.1.2: whether a screen is landscape by nature: [width] by [height] as it is now, at [rotation] quarter turns from its
+         * natural way up (Display.getRotation).
+         */
+        fun landscapeByNature(width: Int, height: Int, rotation: Int): Boolean =
+            if (rotation % 2 == 0) width > height else height > width
 
         fun storedOf(mode: PadMode): Int = mode.pageType
 

@@ -2,6 +2,13 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.2: landscape handhelds
+
+- On a device whose screen is landscape by nature, such as a Retroid, Pocket XR starts on the Horizontal Trackpad.
+  Before, it started on the Vertical one, which turned the screen on its side. A page you chose is kept.
+- The first tutorial fits short screens.
+- Pocket XR no longer closes at start when Android refuses its log folder.
+
 ## 1.1.1: Android 11 to 13
 
 - On Android 11, Pocket XR closed as soon as the glasses were plugged in (seen on a Galaxy S20 FE). It now runs there.
