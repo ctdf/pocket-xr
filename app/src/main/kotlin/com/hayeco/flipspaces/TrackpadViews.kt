@@ -715,6 +715,11 @@ interface PadHost {
     fun turnDutyOn(): Boolean
     fun turnDutyChosen(on: Boolean)
 
+    /** 1.1.0: the hover duty test (Developer, off at every start), and its line under the switch. */
+    fun hoverTestOn(): Boolean
+    fun hoverTestChosen(on: Boolean)
+    fun hoverTestLine(): String
+
     /** 0.5.28: the per-row pose in the glasses' 3D mode, for an A/B by eye. */
     fun rowPoseSbsOn(): Boolean
     fun rowPoseSbsChosen(on: Boolean)
@@ -1864,6 +1869,22 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 buildDrawer()
             })
             dev.addView(c.padText(host.glassesWarpState(), 12f, WHITE))
+            // 1.1.0 (why the Aura drops scene mode 1): 0.5.26's decisive test D, back on the card. One fixed record for
+            // 60 s: a drop means the glasses' capture is at fault, a hold means the per-frame record is.
+            val testD = com.hayeco.flipspaces.core.spatial.WarpRecordTest.FIXED
+            val running = host.glassesWarpTestRunning()
+            dev.addView(row(R.drawable.ic_follow_mode, if (running == testD) "Warp test D: running (60 s)" else "Warp test D: one fixed record (60 s)", tick = running == testD) {
+                if (running == null) host.glassesWarpTestChosen(testD)
+                buildDrawer()
+            })
+            // 1.1.0 (the motion blur test): the glasses' hover, to see if it gives the Space's picture their world lock
+            // duty (shorter lit frames, the same brightness). The Space draws head locked while it is on.
+            val hoverOn = host.hoverTestOn()
+            dev.addView(row(R.drawable.ic_follow_mode, "Less blur test (glasses hover): ${if (hoverOn) "ON" else "OFF"}", tick = hoverOn) {
+                host.hoverTestChosen(!hoverOn)
+                buildDrawer()
+            })
+            dev.addView(c.padText(host.hoverTestLine(), 12f, WHITE))
             // 0.5.55: off draws the trackpad in its window again, scaled by SurfaceFlinger on the cover.
             val nativeOn = host.nativeBufferOn()
             dev.addView(row(R.drawable.ic_follow_mode, "Trackpad at the screen's own pixels: ${if (nativeOn) "ON" else "OFF"}", tick = nativeOn) {

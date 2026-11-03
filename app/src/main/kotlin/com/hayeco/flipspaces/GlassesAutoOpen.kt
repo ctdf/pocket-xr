@@ -154,6 +154,8 @@ object GlassesAutoOpen {
     /** A Pocket XR phone screen came to the front. */
     fun resumed(activity: Activity) {
         front = WeakReference(activity)
+        // 1.1.0: finds an add-on installed since the process started.
+        com.hayeco.flipspaces.platform.AddonLink.connect(activity)
         start(activity)
         schedule()
     }

@@ -23,6 +23,8 @@ class FlipSpacesApp : Application() {
         // 0.5.68: the bundled font, before the Space or the trackpad paints any text.
         com.hayeco.flipspaces.ui.LookType.init(this)
         GlassesAutoOpen.start(this)
+        // 1.1.0: the add-on's pointer service and notification listener, when the add-on is installed.
+        com.hayeco.flipspaces.platform.AddonLink.connect(this)
         GlassesReadyService.start(this, GlassesReady.From.APP_START)
         // 0.5.1: each plug-in's time, so the hand camera never asks over Android's plug-in prompt.
         com.hayeco.flipspaces.hands.UsbPrompt.register(this)

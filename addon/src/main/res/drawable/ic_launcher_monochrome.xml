@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.90: the themed icon's layer: the three panes in one colour, the further ones fainter. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.45" android:pathData="M56,32 h16 a5,5 0 0 1 5,5 v8 a5,5 0 0 1 -5,5 h-16 a5,5 0 0 1 -5,-5 v-8 a5,5 0 0 1 5,-5 z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="0.7" android:pathData="M46.5,41 h19 a5.5,5.5 0 0 1 5.5,5.5 v10 a5.5,5.5 0 0 1 -5.5,5.5 h-19 a5.5,5.5 0 0 1 -5.5,-5.5 v-10 a5.5,5.5 0 0 1 5.5,-5.5 z" />
+    <path android:fillColor="#FFFFFFFF" android:fillAlpha="1.0" android:pathData="M37,50 h22 a6,6 0 0 1 6,6 v12 a6,6 0 0 1 -6,6 h-22 a6,6 0 0 1 -6,-6 v-12 a6,6 0 0 1 6,-6 z" />
+</vector>

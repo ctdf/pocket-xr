@@ -18,14 +18,15 @@ All commands below run on the PC, from the repo folder.
 2. Start it, then build and install:
 
    ```
-   gradle :app:assembleDebug
+   gradle :app:assembleDebug :addon:assembleDebug
    adb install -r app/build/outputs/apk/debug/app-debug.apk
+   adb install -r addon/build/outputs/apk/debug/addon-debug.apk
    ```
 
-3. Turn on the Pocket XR pointer accessibility service without the Settings screens:
+3. Turn on the Pocket XR pointer accessibility service (in the add-on) without the Settings screens:
 
    ```
-   adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces/com.hayeco.flipspaces.pointer.PointerService
+   adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces.addon/com.hayeco.flipspaces.addon.PointerAccess
    adb shell settings put secure accessibility_enabled 1
    ```
 
