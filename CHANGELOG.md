@@ -2,6 +2,11 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.6: Developer settings you can find
+
+- The trackpad's Menu ends with a "Developer settings" switch. Before, the Developer card only opened with a hidden
+  long press on the Menu's title.
+
 ## 1.1.5: recording and reports on more phones
 
 - Recording the glasses could save an empty video on some phones (seen on a Retroid). It now uses a video surface
