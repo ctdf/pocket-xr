@@ -2218,7 +2218,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
      * 0.5.28: the toast with a one-tap action ([action] on a second line): a tap on it runs [onTap] and hides it.
      * Shown for [ACTION_TOAST_MS] (the wrapped Space's Curve note).
      */
-    fun showAction(text: String, action: String, onTap: () -> Unit) {
+    fun showAction(text: String, action: String, millis: Long = ACTION_TOAST_MS, onTap: () -> Unit) {
         toast.text = "$text\n$action"
         toast.visibility = View.VISIBLE
         toast.setOnClickListener {
@@ -2227,7 +2227,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             onTap()
         }
         removeCallbacks(hideToast)
-        postDelayed(hideToast, ACTION_TOAST_MS)
+        postDelayed(hideToast, millis)
         requestLayout()
     }
 

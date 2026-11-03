@@ -2,6 +2,11 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.3: allow in Shizuku with one tap
+
+- When Shizuku is running but hasn't allowed Pocket XR yet, the trackpad now says so, and one tap opens Shizuku's
+  allow dialog. Before, the button was only under Menu, Pocket XR Settings, Spatial windows.
+
 ## 1.1.2: landscape handhelds
 
 - On a device whose screen is landscape by nature, such as a Retroid, Pocket XR starts on the Horizontal Trackpad.
