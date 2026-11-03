@@ -5,6 +5,8 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
 ## 1.1.1: no crash at plug-in on Android 11
 
 - On Android 11, Pocket XR closed as soon as the glasses were plugged in (seen on a Galaxy S20 FE). It now runs there.
+- The README now says Android 14 or later. Windows in the Space need it; on Android 11 to 13 the Space opens without
+  app windows.
 
 ## 1.1.0: the add-on, so Pocket XR installs everywhere
 
