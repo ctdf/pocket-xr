@@ -12,8 +12,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 135
-        versionName = "1.1.4"
+        versionCode = 136
+        versionName = "1.1.5"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
     }

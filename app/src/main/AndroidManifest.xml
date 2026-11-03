@@ -260,6 +260,17 @@
 
         <!-- Receives the Shizuku binder when Shizuku is running: the launch fallback, and the
              panel service for M3-spatial app panels. -->
+        <!-- 1.1.5: the Glasses report shared as a file too, so a file manager can save it (it got only text before). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/report_paths" />
+        </provider>
+
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
