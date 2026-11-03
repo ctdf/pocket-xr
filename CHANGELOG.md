@@ -2,6 +2,10 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.1: no crash at plug-in on Android 11
+
+- On Android 11, Pocket XR closed as soon as the glasses were plugged in (seen on a Galaxy S20 FE). It now runs there.
+
 ## 1.1.0: the add-on, so Pocket XR installs everywhere
 
 - In some countries Google Play Protect blocks installing a sideloaded app that uses an accessibility service or
