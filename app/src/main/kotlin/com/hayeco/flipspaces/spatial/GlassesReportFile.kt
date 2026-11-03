@@ -79,6 +79,12 @@ object GlassesReportFile {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, "Pocket XR glasses report")
             .putExtra(Intent.EXTRA_TEXT, text)
+        // 1.1.5 (issue 26: saving it to Downloads with a file manager failed): the file too, so apps that save files get one.
+        file?.let { f ->
+            runCatching { androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".reports", f) }
+                .onSuccess { u -> send.putExtra(Intent.EXTRA_STREAM, u).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                .onFailure { Log.i(TAG, "the report file is not attached: ${it.message}") }
+        }
         runCatching { context.startActivity(Intent.createChooser(send, "Share the glasses report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { Log.i(TAG, "no share sheet: ${it.message}") }
         return file

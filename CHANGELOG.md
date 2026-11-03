@@ -2,6 +2,12 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.5: recording and reports on more phones
+
+- Recording the glasses could save an empty video on some phones (seen on a Retroid). It now uses a video surface
+  those phones accept, and if nothing was recorded it says so instead of "Saved".
+- The Glasses report is shared as a file too, so a file manager can save it to Downloads.
+
 ## 1.1.4: One Pro windows stay level
 
 - On the XREAL One Pro, windows rolled as you turned your head. Its factory calibration was applied in a way only
