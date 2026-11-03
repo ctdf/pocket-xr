@@ -35,6 +35,8 @@ import java.io.File
  *   its Presentation fallback; `false` turns that off again.
  * - STALL (0.5.3): the Space's render thread sleeps once for `--ei ms <n>` (default 6000, at most
  *   60000), so the frame stall watchdog can be watched shedding, releasing and recovering.
+ * - ADD_APP (1.1.1): opens `--es pkg <package>`'s launcher activity as a window in the Space, as the launcher does, so
+ *   panels can be tested on an emulator without aiming pinches at the launcher.
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -44,6 +46,7 @@ class DebugReceiver : BroadcastReceiver() {
                 ACTION_STOP -> HandReplayPlayer.stop()
                 ACTION_DUMP -> dump(context, intent)
                 ACTION_OPEN -> open(context, intent)
+                ACTION_ADD_APP -> addApp(context, intent)
                 ACTION_STALL -> com.hayeco.flipspaces.spatial.SpaceSession.debugStallMs = (number(intent, "ms")?.toLong() ?: 6_000L).coerceIn(0L, 60_000L)
                 // 0.5.101: the update check against another repository's latest release ("url"; none: back to Pocket XR's).
                 ACTION_UPDATE_TEST -> {
@@ -136,6 +139,20 @@ class DebugReceiver : BroadcastReceiver() {
         Log.i(TAG, if (failure == null) "Opened $what on display $id" else "Could not open $what on display $id: ${failure.message}")
     }
 
+    private fun addApp(context: Context, intent: Intent) {
+        val pkg = intent.getStringExtra("pkg") ?: run {
+            Log.w(TAG, "ADD_APP takes --es pkg <package>")
+            return
+        }
+        val component = context.packageManager.getLaunchIntentForPackage(pkg)?.component ?: run {
+            Log.w(TAG, "ADD_APP: $pkg has no launcher activity")
+            return
+        }
+        val label = runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        com.hayeco.flipspaces.spatial.SpaceSession.send(com.hayeco.flipspaces.spatial.SpaceCommand.AddApp(com.hayeco.flipspaces.core.AppEntry(label, component.packageName, component.className), inFrontOfGaze = true))
+        Log.i(TAG, "ADD_APP: $label (${component.flattenToShortString()}) sent to the Space")
+    }
+
     /** A number extra given with --ef, --ei, --el or --es. */
     @Suppress("DEPRECATION")
     private fun number(intent: Intent, key: String): Float? = when (val v = intent.extras?.get(key)) {
@@ -151,6 +168,7 @@ class DebugReceiver : BroadcastReceiver() {
         const val ACTION_DUMP = "com.hayeco.flipspaces.debug.REPLAY_DUMP"
         const val ACTION_OPEN = "com.hayeco.flipspaces.debug.OPEN"
         const val ACTION_STALL = "com.hayeco.flipspaces.debug.STALL"
+        const val ACTION_ADD_APP = "com.hayeco.flipspaces.debug.ADD_APP"
         const val ACTION_UPDATE_TEST = "com.hayeco.flipspaces.debug.UPDATE_TEST"
     }
 }

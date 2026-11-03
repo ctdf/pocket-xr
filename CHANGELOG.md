@@ -2,6 +2,12 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.1: Android 11 to 13
+
+- On Android 11, Pocket XR closed as soon as the glasses were plugged in (seen on a Galaxy S20 FE). It now runs there.
+- App windows in the Space now open on Android 11 to 13 too. Before, they needed Android 14, and the Space opened
+  empty on older phones. Tested on Android 11 and 13; there, windows run at the refresh rate Android gives them.
+
 ## 1.1.0: the add-on, so Pocket XR installs everywhere
 
 - In some countries Google Play Protect blocks installing a sideloaded app that uses an accessibility service or

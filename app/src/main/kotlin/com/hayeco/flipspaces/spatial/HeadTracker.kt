@@ -6,6 +6,7 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.hayeco.flipspaces.core.ShizukuStatus
@@ -253,13 +254,17 @@ object HeadTracker {
             override fun onLost(network: Network) = nudge()
             override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = nudge()
         }
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-            .addTransportType(NetworkCapabilities.TRANSPORT_USB)
-            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
-            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        runCatching { cm.registerNetworkCallback(request, callback) }
+        // 1.1.1 (an S20 FE on Android 11 crashed at plug-in: "Transport type 8 is out of range"): TRANSPORT_USB is
+        // Android 12 (API 31) and up; on 11 the builder throws. The request is built inside the guard too.
+        runCatching {
+            val builder = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            if (Build.VERSION.SDK_INT >= 31) builder.addTransportType(NetworkCapabilities.TRANSPORT_USB)
+            val request = builder
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            cm.registerNetworkCallback(request, callback)
+        }
             .onSuccess { networkCallback = callback }
             .onFailure { Log.i(TAG, "network callback not available (${it.javaClass.simpleName}: ${it.message}); network changes are found by looking every ${NETWORK_LOOK_MS / 1000} s") }
     }
