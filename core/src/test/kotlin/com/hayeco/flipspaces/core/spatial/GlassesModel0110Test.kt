@@ -35,4 +35,9 @@ class GlassesModel0110Test {
     @Test fun aMonitorWithNoXrealUsbStaysUnknown() {
         assertEquals(GlassesModel.UNKNOWN, GlassesModel.detect(GlassesId("LG Monitor", "1234"), null))
     }
+
+    /** 1.1.4 (issue 26): the factory display mount only where it was checked, the Aura. */
+    @Test fun theFactoryMountIsUsedOnlyOnTheAura() {
+        assertEquals(listOf(GlassesModel.AURA), GlassesModel.entries.filter { it.factoryMountChecked })
+    }
 }
