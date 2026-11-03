@@ -2108,7 +2108,9 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         intro.clipToOutline = true
         val page = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
-            addView(IntroCover(c, introPage), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 300f))
+            // 1.1.2 (a Retroid in landscape, 432 dp tall: the last line and the dots were cut off): on a short screen the
+            // picture goes and the words get the card.
+            if (resources.configuration.screenHeightDp >= 500) addView(IntroCover(c, introPage), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 300f))
             val text = LinearLayout(c).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(com.hayeco.flipspaces.core.Look.CARD)
