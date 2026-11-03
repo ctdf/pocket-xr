@@ -1561,14 +1561,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         drawerBody.removeAllViews()
         val landscape = cover || settings.mode == PadMode.HORIZONTAL
         // The wordmark: the app's own name at the drawer's top (64 x 14).
-        // 0.5.30: a long press on the wordmark shows or hides the hidden Developer card (the debug info panel).
+        // 1.1.6 (issue 26: "there's no Developer settings"): the Developer card has its own switch at the Menu's end; the
+        // wordmark's hidden long press (0.5.30) is gone.
         drawerBody.addView(c.padText("POCKET XR", 11f, WHITE, bold = true).apply {
             letterSpacing = 0.12f
-            setOnLongClickListener {
-                developerShown = !developerShown
-                buildDrawer()
-                true
-            }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, c.dp(14f)).apply { topMargin = c.dp(61f) })
         // The function card: Capture, Record and Scan are left out (Pocket XR has none of them).
         val functions = card()
@@ -1816,7 +1812,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // is off at every start; the edge fade keeps its saved mode.
 
         // 0.5.30 (Mike: remove the grey debug block at the bottom of the view): the Space's debug info panel is off
-        // by default and only here, in a Developer card the wordmark's long press shows.
+        // by default and only here, in the Developer card. 1.1.6: shown by its own switch, remembered.
+        val devToggle = card()
+        devToggle.addView(row(R.drawable.ic_follow_mode, "Developer settings: ${if (developerShown) "ON" else "OFF"}", tick = developerShown) {
+            developerShown = !developerShown
+            buildDrawer()
+        })
+        drawerBody.addView(devToggle, cardParams(30f))
         if (developerShown) {
             drawerBody.addView(c.padText("Developer", 14f, WHITE), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(30f) })
             val dev = card()
@@ -1905,7 +1907,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     }
 
     /** 0.5.30: the hidden Developer card is shown (a long press on the wordmark); not kept past the Menu's view. */
-    private var developerShown = false
+    /** 1.1.6: the Developer card's switch, remembered across starts. */
+    private var developerShown: Boolean
+        get() = context.getSharedPreferences("trackpad", Context.MODE_PRIVATE).getBoolean("developer_shown", false)
+        set(value) = context.getSharedPreferences("trackpad", Context.MODE_PRIVATE).edit().putBoolean("developer_shown", value).apply()
 
     /** 0.5.27: whether the picture adjust is open under the edge check, and which eye it adjusts (0 left, 1 right). */
     private var adjustOpen = false
