@@ -437,7 +437,18 @@ class TrackpadActivity : Activity(), PadHost {
      * home's banner with the same fix.
      */
     private fun offerShizuku() {
-        if (com.hayeco.flipspaces.platform.ShizukuBridge.status(this) != com.hayeco.flipspaces.core.ShizukuStatus.NOT_RUNNING) return
+        val status = com.hayeco.flipspaces.platform.ShizukuBridge.status(this)
+        // 1.1.3 (issue 20: "there was no Shizuku enable flow"): Shizuku running but Pocket XR not allowed yet. The allow
+        // button was only under Menu, Settings, Spatial windows; the trackpad now asks Shizuku's own dialog at one tap.
+        if (status == com.hayeco.flipspaces.core.ShizukuStatus.NO_PERMISSION) {
+            Log.i(TAG, "Shizuku is running but has not allowed Pocket XR: the trackpad offers to allow it")
+            screen.showAction("Allow Pocket XR in Shizuku for app windows.", "Tap here to allow", millis = 15_000L) {
+                Log.i(TAG, "Shizuku's allow dialog asked for from the trackpad's note")
+                com.hayeco.flipspaces.platform.ShizukuBridge.requestPermission()
+            }
+            return
+        }
+        if (status != com.hayeco.flipspaces.core.ShizukuStatus.NOT_RUNNING) return
         Log.i(TAG, "Shizuku is installed but not running: the trackpad offers to start it")
         screen.showAction("Start Shizuku for app windows.", "Tap here to open Shizuku") {
             Log.i(TAG, "Shizuku opened from the trackpad's note")
