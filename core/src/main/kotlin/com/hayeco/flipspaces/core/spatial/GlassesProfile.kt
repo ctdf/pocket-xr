@@ -67,6 +67,13 @@ enum class GlassesModel(
     val tanPerPx1to1: Float
         get() = if (this == AURA) GlassesScreen.TAN_PER_PX_1TO1 else tanPerPx(diagonalFovDeg ?: ONE.diagonalFovDeg!!)
 
+    /**
+     * 1.1.4 (issue 26, a One Pro: windows rolled as the head turned, while the level bar was right): the factory
+     * calibration's display mount is used only where it was checked against a level calibration, the Aura. The One sends
+     * none, and the One Pro's was never checked, so the level calibration's mount is used there.
+     */
+    val factoryMountChecked: Boolean get() = this == AURA
+
     /** Whether [tanPerPx1to1] comes from this model's own figure. */
     val fovKnown: Boolean get() = this == AURA || diagonalFovDeg != null
 

@@ -425,7 +425,8 @@ object HeadTracker {
         if (next.axes != settings.axes) resetRequested.set(true)
         settings = next
         val line = when {
-            next.factoryMount != null || next.gyroMatrix != null -> "fusion uses the glasses' factory calibration: " + (GlassesCalibrationStore.last(context)?.line() ?: "")
+            next.factoryMount != null || next.gyroMatrix != null -> "fusion uses the glasses' factory calibration: " + (GlassesCalibrationStore.last(context)?.line() ?: "") +
+                if (next.factoryMount == null && GlassesCalibrationStore.last(context)?.displayMount != null) "; its display mount is not used on the ${store.model.label} (checked only on the Aura), the level calibration's is" else ""
             store.factoryCalibration -> "fusion uses the level calibration's mount: no factory calibration read yet"
             else -> "fusion uses the level calibration's mount: factory calibration switched off"
         }
@@ -443,7 +444,7 @@ object HeadTracker {
         val cal = if (store.factoryCalibration) GlassesCalibrationStore.last(context) else null
         return settings.copy(
             axes = store.axisMap, predictSeconds = store.predictMs / 1000f, mountRollDeg = store.mountRollDeg, mountPitchDeg = store.mountPitchDeg,
-            factoryMount = cal?.displayMount, gyroMatrix = cal?.gyroMatrix,
+            factoryMount = cal?.displayMount?.takeIf { store.model.factoryMountChecked }, gyroMatrix = cal?.gyroMatrix,
         )
     }
 

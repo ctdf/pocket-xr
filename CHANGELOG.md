@@ -2,6 +2,12 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.4: One Pro windows stay level
+
+- On the XREAL One Pro, windows rolled as you turned your head. Its factory calibration was applied in a way only
+  checked on the Aura; Pocket XR now uses its own level calibration there, as on the One.
+- The Glasses report shows the factory calibration's numbers.
+
 ## 1.1.3: allow in Shizuku with one tap
 
 - When Shizuku is running but hasn't allowed Pocket XR yet, the trackpad now says so, and one tap opens Shizuku's
