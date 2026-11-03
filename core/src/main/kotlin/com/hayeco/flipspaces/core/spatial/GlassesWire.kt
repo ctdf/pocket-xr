@@ -85,12 +85,13 @@ object GlassesControl {
     // 0.5.37: and the lenses' dimming film level (Immersive mode dims the room, then puts the level back).
     // 0.5.65 (Mike's go): the 2D / 3D state's read and set, and the calibration and serial reads, all as they appear in
     // our own captures of the Aura's USB network traffic.
+    // 1.1.0 (Mike chose the motion blur test): and the space mode, for the hover duty test (HoverDutyTest).
     val SENDABLE = setOf(HEARTBEAT, SCENE_MODE, DEVICE_MESSAGE, NET_LOG, DUTY_GET, DUTY_SET, EDID_GET, DEPTH_GET, EC_COUNT, EC_GET, EC_SET,
-        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET)
+        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET, SPACE_MODE)
 
     /** RPC types whose replies are parsed as RPC replies (an id, then a protobuf). */
     val RPC_TYPES = setOf(SCENE_MODE, RECENTER, NET_LOG, DUTY_GET, DUTY_SET, EDID_GET, EDID_SET, DEPTH_GET, EC_COUNT, EC_GET, EC_SET,
-        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET)
+        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET, SPACE_MODE)
 
     /**
      * 0.5.65: the glasses' 2D / 3D state. Get 10273 answers { result 1, value 2 }, 0 (left out) in 2D;
@@ -129,6 +130,16 @@ object GlassesControl {
      */
     const val DUTY_GET = 10065
     const val DUTY_SET = 10066
+
+    /**
+     * 1.1.0 (Mike chose the motion blur test): the glasses' space
+     * mode, 0 hover (their own 3DoF world lock: the panel at 120 Hz and the world lock duty, 16 to 32 %, with more drive
+     * current) and 1 follow (their default; the status line reads `space:1`). Set takes { value 1 } like the scene mode;
+     * that the value is in field 1 is inferred from 10281. It is the glasses' own mode button, a run-time mode.
+     */
+    const val SPACE_MODE = 10284
+    const val SPACE_HOVER = 0
+    const val SPACE_FOLLOW = 1
 
     /**
      * 0.5.32 (Mike chose "72 Hz 3D mode"): the DisplayPort EDID index. Get 10078 answers { result 1, edid 2 }; set 10079
@@ -300,6 +311,9 @@ object ControlWire {
     /** 0.5.32: the panel duty, read (10065) and set to [percent] (10066). */
     fun dutyGet(rpcId: Int): ByteArray = rpc(GlassesControl.DUTY_GET, rpcId, ByteArray(0))
     fun dutySet(rpcId: Int, percent: Int): ByteArray = rpc(GlassesControl.DUTY_SET, rpcId, ProtoWriter().varint(1, percent.toLong()).bytes())
+
+    /** 1.1.0: space mode (10284), built as [sceneMode] is: hover (0) is an empty request, follow (1) is `0801`. */
+    fun spaceMode(rpcId: Int, mode: Int): ByteArray = rpc(GlassesControl.SPACE_MODE, rpcId, ProtoWriter().varint(1, mode.toLong()).bytes())
 
     /** 0.5.32: the DisplayPort EDID index, read (10078) and set to [edid] (10079). */
     fun edidGet(rpcId: Int): ByteArray = rpc(GlassesControl.EDID_GET, rpcId, ByteArray(0))

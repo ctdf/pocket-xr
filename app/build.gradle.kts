@@ -12,8 +12,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 130
-        versionName = "1.0.1"
+        versionCode = 131
+        versionName = "1.1.0"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -75,8 +75,15 @@ android {
 
     buildFeatures {
         compose = true
-        // IPanelHost: the Shizuku user service that hosts app panels.
+        // IPanelHost: the Shizuku user service that hosts app panels. 1.1.0: IAddon, the link to the add-on.
         aidl = true
+    }
+
+    // 1.1.0: the add-on's link (IAddon, IAddonCallback) is compiled into both apps from the add-on's one copy.
+    sourceSets {
+        getByName("main") {
+            aidl.directories.add("../addon/src/main/aidl")
+        }
     }
 }
 

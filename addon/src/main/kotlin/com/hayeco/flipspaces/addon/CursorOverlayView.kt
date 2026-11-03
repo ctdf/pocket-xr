@@ -1,4 +1,4 @@
-package com.hayeco.flipspaces.pointer
+package com.hayeco.flipspaces.addon
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -12,11 +12,9 @@ import android.os.SystemClock
 import android.view.View
 import androidx.core.graphics.withTranslation
 import com.hayeco.flipspaces.core.Bounds
-import com.hayeco.flipspaces.core.hands.HandPose
-import com.hayeco.flipspaces.core.hands.HandStatus
+import com.hayeco.flipspaces.core.pointer.DockLayout
 import com.hayeco.flipspaces.core.pointer.Point
 import com.hayeco.flipspaces.core.spatial.CursorWindow
-import com.hayeco.flipspaces.core.windows.WindowHit
 import com.hayeco.flipspaces.core.windows.WindowZone
 
 /**
@@ -24,21 +22,26 @@ import com.hayeco.flipspaces.core.windows.WindowZone
  * pinch would do where the cursor is, the outline of a window being moved or resized, hand
  * status, and the dock. Black is see-through on the glasses, so it only draws light strokes.
  * The window is not touchable; injected touches pass straight through to the apps.
+ *
+ * 1.1.0: in the add-on. Pocket XR sends what to draw over the link ([LinkService]) as plain values, and hit tests
+ * the dock itself with the same [DockLayout].
  */
 @SuppressLint("ViewConstructor")
 class CursorOverlayView(context: Context, private val density: Float) : View(context) {
-    data class DockItem(val label: String, val icon: Bitmap?, val onPick: () -> Unit)
+    data class DockItem(val label: String, val icon: Bitmap?)
+
+    /** The hand as Pocket XR last reported it: null when no hand provider runs. */
+    data class Hand(val present: Boolean, val pinchProgress: Float, val openPalm: Boolean)
 
     private var cursor: Point? = null
     private var pressed = false
-    private var hover: WindowHit? = null
+    private var hover: WindowZone? = null
     private var preview: Bounds? = null
-    private var hand: HandStatus? = null
+    private var hand: Hand? = null
     private var source: String = ""
     private var banner: String? = null
     private var bannerUntil = 0L
     private var dock: List<DockItem> = emptyList()
-    private val dockRects = mutableListOf<RectF>()
 
     private fun dp(v: Float) = v * density
 
@@ -80,9 +83,9 @@ class CursorOverlayView(context: Context, private val density: Float) : View(con
         if (visibility != want) visibility = want
     }
 
-    fun showCursor(at: Point, hit: WindowHit?, isPressed: Boolean) {
+    fun showCursor(at: Point, zone: WindowZone?, isPressed: Boolean) {
         cursor = at
-        hover = hit
+        hover = zone
         pressed = isPressed
         invalidate()
     }
@@ -93,7 +96,7 @@ class CursorOverlayView(context: Context, private val density: Float) : View(con
         invalidate()
     }
 
-    fun showHand(status: HandStatus?, sourceLabel: String) {
+    fun showHand(status: Hand?, sourceLabel: String) {
         if (status?.present == true && hand?.present != true && !spaceUp) {
             flash("Pinch to click. Pinch and hold a title bar to move, a corner to resize. Open palm for the dock.", 5000)
         }
@@ -114,20 +117,6 @@ class CursorOverlayView(context: Context, private val density: Float) : View(con
         dock = items
         updateWindow()
         invalidate()
-    }
-
-    val dockVisible: Boolean get() = dock.isNotEmpty()
-
-    /** The dock item under [p], if the dock is up. */
-    fun dockItemAt(p: Point): DockItem? {
-        dockRects.forEachIndexed { i, r -> if (r.contains(p.x, p.y)) return dock.getOrNull(i) }
-        return null
-    }
-
-    fun dockContains(p: Point): Boolean {
-        val first = dockRects.firstOrNull() ?: return false
-        val last = dockRects.last()
-        return p.x >= first.left - dp(16f) && p.x <= last.right + dp(16f) && p.y >= first.top - dp(16f) && p.y <= last.bottom + dp(16f)
     }
 
     private val location = IntArray(2)
@@ -156,14 +145,14 @@ class CursorOverlayView(context: Context, private val density: Float) : View(con
     }
 
     private fun hint(): String? {
-        val zone = hover?.zone ?: return null
+        val zone = hover ?: return null
         val held = pressed
         return when {
             zone == WindowZone.TITLE_BAR -> if (held) "Moving" else "Hold to move"
             zone.isCorner -> if (held) "Resizing" else "Hold to resize"
             zone.isResize -> if (held) "Resizing" else "Hold to resize"
             held -> null
-            hand?.pose == HandPose.OPEN_PALM -> "Dock"
+            hand?.openPalm == true -> "Dock"
             else -> null
         }
     }
@@ -191,18 +180,15 @@ class CursorOverlayView(context: Context, private val density: Float) : View(con
     }
 
     private fun drawDock(canvas: Canvas) {
-        dockRects.clear()
         if (dock.isEmpty()) return
-        val size = dp(52f)
+        val boxes = DockLayout.boxes(dock.size, width, height, density)
         val gap = dp(14f)
-        val total = dock.size * size + (dock.size - 1) * gap
-        val left = (width - total) / 2f
-        val top = height - size - dp(84f)
-        canvas.drawRoundRect(left - gap, top - gap, left + total + gap, top + size + gap + dp(18f), dp(18f), dp(18f), dockBg)
+        val first = boxes.first()
+        val last = boxes.last()
+        canvas.drawRoundRect(first.left - gap, first.top - gap, last.right + gap, first.bottom + gap + dp(18f), dp(18f), dp(18f), dockBg)
         dock.forEachIndexed { i, item ->
-            val x = left + i * (size + gap)
-            val rect = RectF(x, top, x + size, top + size)
-            dockRects += rect
+            val b = boxes[i]
+            val rect = RectF(b.left, b.top, b.right, b.bottom)
             val icon = item.icon
             if (icon != null) {
                 canvas.drawBitmap(icon, null, rect, null)

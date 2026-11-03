@@ -36,6 +36,7 @@ import com.hayeco.flipspaces.hands.HandInputManager
 import com.hayeco.flipspaces.hands.HandModelStore
 import com.hayeco.flipspaces.hands.HandTrackingService
 import com.hayeco.flipspaces.pointer.PointerHub
+import com.hayeco.flipspaces.platform.AddonLink
 import com.hayeco.flipspaces.ui.FlipSpacesTheme
 import com.hayeco.flipspaces.ui.HandsScreen
 import com.hayeco.flipspaces.ui.HandsSetup
@@ -98,6 +99,7 @@ class HandsActivity : ComponentActivity() {
                     setup = HandsSetup(
                         statuses = statuses,
                         active = HandInputManager.active(statuses),
+                        addonInstalled = checks.addonInstalled,
                         serviceEnabled = checks.serviceEnabled,
                         serviceConnected = connected,
                         glassesDisplayId = displayId,
@@ -123,8 +125,9 @@ class HandsActivity : ComponentActivity() {
                     onMessageShown = { message = null },
                     onOpenAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
                     onOpenAppInfo = {
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", AddonLink.PACKAGE, null)))
                     },
+                    onGetAddon = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AddonLink.GET_URL))) },
                     onAskCamera = { askPermissions.launch(runtimePermissions()) },
                     onAskUsb = { GlassesUsbAccess.find(this)?.let { GlassesUsbAccess.requestPermission(this, it) } },
                     onDownloadModel = { downloadModel() },
@@ -214,6 +217,7 @@ class HandsActivity : ComponentActivity() {
     }
 
     private data class Checks(
+        val addonInstalled: Boolean,
         val serviceEnabled: Boolean,
         val usbDevice: String?,
         val usbAllowed: Boolean,
@@ -238,6 +242,7 @@ class HandsActivity : ComponentActivity() {
         val fit = prefs.calibration
         val rms = prefs.calibrationRmsDeg
         return Checks(
+            addonInstalled = AddonLink.isInstalled(this),
             serviceEnabled = PointerHub.enabledInSettings(this),
             usbDevice = device?.let { GlassesUsbAccess.label(it) },
             usbAllowed = device?.let { GlassesUsbAccess.hasPermission(this, it) } == true,

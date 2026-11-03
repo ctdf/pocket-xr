@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 rootProject.name = "pocket-xr"
 include(":core")
 include(":app")
+// 1.1.0: the add-on with the accessibility service and the notification listener (addon/build.gradle.kts).
+include(":addon")

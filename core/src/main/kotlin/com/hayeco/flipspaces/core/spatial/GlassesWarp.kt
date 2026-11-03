@@ -385,6 +385,13 @@ class GlassesWarpController(private val io: Io) {
                     netLogReply(m, nowMs)
                     return
                 }
+                if (m.type == GlassesControl.DUTY_GET) {
+                    val d = if (m.result == 0L) m.value?.toInt()?.takeIf { it in 1..100 } else null
+                    if (d != null) dutyInWarp = d
+                    log(nowMs, "reply: duty with the glasses warping the Space's frames: ${d?.let { "$it %" } ?: "not answered (result ${m.result ?: "absent"})"}" +
+                        " (head lock is about 90 %, the glasses' own world lock 16 to 32 %)")
+                    return
+                }
                 if (m.type == GlassesControl.RECENTER) {
                     val mine = recenterId != 0 && (m.rpcId and 0x7FFFFFFF) == (recenterId and 0x7FFFFFFF)
                     log(nowMs, "reply: recenter answer id ${"%08x".format(m.rpcId)} result ${m.result ?: "absent"}${if (mine) " after ${nowMs - recenterSentMs} ms" else " (not the one waited for)"}")
@@ -402,6 +409,7 @@ class GlassesWarpController(private val io: Io) {
                         else log(nowMs, "glasses mode left as it is, no LSR (0.5.32's way)")
                         enter(Phase.ACTIVE, nowMs)
                         activeSinceMs = nowMs
+                        warpDutyReads = 0
                         failedStarts = 0
                         val t = test
                         if (t == null) {
@@ -467,6 +475,7 @@ class GlassesWarpController(private val io: Io) {
             }
             Phase.ENTERING, Phase.ACTIVE -> {
                 beat(nowMs)
+                if (phase == Phase.ACTIVE) readWarpDuty(nowMs)
                 if (nowMs - lastRxMs > LINK_LOST_MS) {
                     log(nowMs, "watchdog: nothing from the glasses for ${nowMs - lastRxMs} ms")
                     restore(WarpRestore.LINK_LOST, nowMs)
@@ -1014,6 +1023,26 @@ class GlassesWarpController(private val io: Io) {
 
     /** 0.5.29: when scene mode 1 was last accepted (-1 before), the time held at the last drop, and the drops this app session. */
     private var activeSinceMs = -1L
+
+    /**
+     * 1.1.0 (the motion blur test): the glasses' duty read while they warp the Space's own frames (scene mode 1), at
+     * [WARP_DUTY_READS_MS] after they accept it; null before. Low (16 to 32 %) would mean the glasses treat host frames
+     * as world locked and light each one briefly, which is what would cut the smear without dimming. Read only.
+     */
+    @Volatile var dutyInWarp: Int? = null
+        private set
+    private var warpDutyReads = 0
+
+    /** 1.1.0: the duty is read in scene mode 1 only while the motion blur test's switch is on. */
+    @Volatile var readDuty = false
+
+    private fun readWarpDuty(nowMs: Long) {
+        if (!readDuty || activeSinceMs < 0 || warpDutyReads >= WARP_DUTY_READS_MS.size) return
+        if (nowMs - activeSinceMs < WARP_DUTY_READS_MS[warpDutyReads]) return
+        warpDutyReads++
+        val id = ControlWire.rpcId(rpcCounter++)
+        send(ControlWire.dutyGet(id), "duty read ${warpDutyReads} of ${WARP_DUTY_READS_MS.size} in scene mode 1 (10065), RPC id ${"%08x".format(id)}", nowMs)
+    }
     @Volatile var lastDropHeldMs: Long? = null
         private set
     @Volatile var dropsThisSession = 0
@@ -1079,6 +1108,12 @@ class GlassesWarpController(private val io: Io) {
 
         /** 0.5.29: test D's one fixed record, 60 s. */
         const val FIXED_TEST_MS = 60_000L
+
+        /**
+         * 1.1.0: when the duty is read after scene mode 1 is accepted. Early, because Mike's Aura leaves scene mode 1 by
+         * itself about 0.7 s after accepting it (2 Nov 2026); reads at 1 s and 5 s never went out.
+         */
+        val WARP_DUTY_READS_MS = longArrayOf(200L, 500L)
 
         /** 0.5.24: how long the net log on waits for the listener after scene mode 1 is accepted. */
         const val NET_LOG_LISTEN_MS = 8_000L

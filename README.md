@@ -88,21 +88,36 @@ developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video 
 
 ## Setup
 
-1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases) page.
-   In some countries Google Play Protect blocks the install with "This app can request access to sensitive data".
-   Play Protect blocks sideloaded apps that use an accessibility service, and Pocket XR needs one for the cursor on
-   the glasses (step 3). The block only applies to installs from a browser, chat app or file manager, so installing
-   from a computer with `adb install pocketxr-x.y.z.apk` should still work. You can check it's the official build with
-   the signing fingerprint under [Updates](#updates), and all the code is here to read. If you hit the block, please
-   [tell us](https://github.com/pocket-xr/pocket-xr/issues/new?template=bug.yml) which country you're in.
+1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases/latest) page.
+   You can check it's the official build with the signing fingerprint under [Updates](#updates), and all the code is
+   here to read.
 2. **Install and start [Shizuku](https://shizuku.rikka.app/)**, and allow Pocket XR in it. Pocket XR uses it to
    create a window for each app and to start the Space on the glasses. Without Shizuku, apps open as ordinary desktop
    windows instead.
-3. **Turn on the Pocket XR pointer** in Android's accessibility settings when the app asks. It draws the cursor on the
-   glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone.
+3. **Optional: install [the add-on](#the-add-on)** for the cursor outside the Space and the Notifications page.
 4. **Plug in the glasses.** The Space opens on them, and the phone shows the trackpad.
 5. **On Samsung phones**, if touches at the screen's edges go missing (the scroll strip), turn on Good Lock's Edge Touch
    for the trackpad.
+
+### The add-on
+
+Some features need an accessibility service or notification access. In some countries Google Play Protect blocks
+installing any sideloaded app that asks for these ("This app can request access to sensitive data"). So they live in a
+second small app, the **Pocket XR add-on**, and Pocket XR itself installs everywhere. The Space, the trackpad and hand
+tracking in the Space all work without it.
+
+The add-on gives you:
+
+- **The Pocket XR pointer** (an accessibility service): the cursor on the glasses outside the Space, in flat DeX mode.
+  It draws the cursor and taps where you point. It does nothing on the phone's own screen and sends nothing off the
+  phone. Turn it on in Android's accessibility settings; Pocket XR's Hands screen has a button for it.
+- **Notification access**: your phone's notifications on the Space's Notifications page, and smooth video for windows
+  playing media. Pocket XR turns it on through Shizuku when you press Allow on that page.
+
+Get it from the [add-on releases](https://github.com/pocket-xr/pocket-xr/releases?q=addon&expanded=true)
+(`pocketxr-addon-x.y.apk`). It is signed with the same key as Pocket XR, and Pocket XR only talks to an add-on signed
+with that key. If Play Protect blocks the add-on, install it from a computer with `adb install pocketxr-addon-x.y.apk`,
+which the block does not cover, or turn off "Scan apps with Play Protect" in the Play Store for the install.
 
 ## Updates
 

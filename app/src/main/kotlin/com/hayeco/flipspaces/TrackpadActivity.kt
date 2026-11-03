@@ -1234,6 +1234,15 @@ class TrackpadActivity : Activity(), PadHost {
         applyMode()
     }
 
+    override fun hoverTestOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTestWanted
+
+    override fun hoverTestChosen(on: Boolean) {
+        com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTest(this, on)
+        screen.showToast(if (on) "Less blur test on. Windows stay put in front of you while the glasses hold them. Turn your head and look for less smear." else "Less blur test off. The glasses are back in follow.")
+    }
+
+    override fun hoverTestLine(): String = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverLine
+
     override fun turnDutyOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).turnDuty
 
     override fun turnDutyChosen(on: Boolean) {

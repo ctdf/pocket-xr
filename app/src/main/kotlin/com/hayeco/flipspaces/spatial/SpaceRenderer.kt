@@ -966,7 +966,10 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (!manualYaw.isFinite()) manualYaw = 0f
         // 0.5.10: input and hit tests use the pose at this frame's present time too.
         // 0.5.17: the tracking mode (Smooth Follow keeps the Space in front, [com.hayeco.flipspaces.core.spatial.FollowView]).
-        val tracked = HeadTracker.renderPose(presentNs)
+        // 1.1.0: while the hover duty test has the glasses hold the picture in the room, the Space draws head locked, so
+        // it is not moved twice (their anchor and the Space's own head tracking).
+        val hoverLocked = GlassesDisplayControl.hoverHeadLocked
+        val tracked = if (hoverLocked) null else HeadTracker.renderPose(presentNs)
         follow.mode = SpaceSession.follow
         follow.update(tracked, nowMs)
         var head = HeadView.pose(follow.relative(tracked), manualYaw)
@@ -1100,7 +1103,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 // 0.5.57: on the clock, the scene for the glasses refresh the coming frame is posed for.
                 val scenePresent = if (onClock) frameClock.plan(System.nanoTime(), clockBudgetNs())?.let { it.poseNs + glassesNs } ?: presentNs
                 else late.plan(System.nanoTime(), fence.lockNs)?.let { fence.snap(it.presentNs + fenceExtra(it)) + glassesNs } ?: presentNs
-                val sceneHead = HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
+                val sceneHead = if (hoverLocked) head else HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
                 this.head = sceneHead
                 eyeWarp.bindScene(slot.index)
                 if (seeThrough) GLES30.glClearColor(0f, 0f, 0f, 1f) else GLES30.glClearColor(0.05f, 0.06f, 0.08f, 1f)
@@ -1188,8 +1191,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // 0.5.21: not while the glasses warp: they warp each 32 row band to its own light time from the
         // one pose in the record, so a per-row pose here would be corrected twice.
         val rows = if (!warping && store.rowPoseFor(stereo == StereoMode.SIDE_BY_SIDE) && HeadTracker.tracking) rowTimingNow(periodNs) else null
-        val headTop = rows?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
-        val headBottom = rows?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
+        val headTop = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
+        val headBottom = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
         if (warpEyes) {
             // 0.5.25: the newest buffer turned onto the window by the newest pose, the top and the bottom row's when
             // the per-row pose is on (the row model at 60 Hz), each eye through its own homography.

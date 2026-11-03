@@ -54,7 +54,9 @@ enum class GlassesModel(
     ONE("XREAL One", "one", tested = true, camera = false, diagonalFovDeg = 50f, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
     ONE_PRO("XREAL One Pro", "onepro", tested = false, camera = false, diagonalFovDeg = 57f, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
     ONE_S("XREAL 1S", "1s", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
-    OTHER_XREAL("XREAL glasses", "xreal", tested = false, camera = false, diagonalFovDeg = null),
+    // 1.1.0: the One family's axes. Every XREAL with this head tracking link but the Aura has them, and the Aura's axes
+    // on a One family model turn the picture upside down (0.5.91).
+    OTHER_XREAL("XREAL glasses", "xreal", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT),
     UNKNOWN("Unknown glasses", "unknown", tested = false, camera = false, diagonalFovDeg = null);
 
     /**
@@ -99,7 +101,13 @@ enum class GlassesModel(
         /** Tan per pixel of a 1920 x 1080 picture whose diagonal spans [diagonalDeg]. */
         fun tanPerPx(diagonalDeg: Float): Float = tan(diagonalDeg * DEG / 2f) / (sqrt(1920f * 1920f + 1080f * 1080f) / 2f)
 
-        /** The model behind [id] (the display's EDID) or, without one, [usbProduct] on XREAL's vendor id. */
+        /**
+         * The model behind [id] (the display's EDID) or, when that names none, [usbProduct] on XREAL's vendor id.
+         *
+         * 1.1.0 (a One Pro on an Honor Magic V5: the picture upside down): the USB product decided only when the display
+         * had no name at all. A phone that names the glasses' display itself (not from the EDID) made them UNKNOWN, and
+         * UNKNOWN takes the Aura's axes. Now any glasses on XREAL's USB vendor id are at least [OTHER_XREAL].
+         */
         fun detect(id: GlassesId?, usbProduct: Int? = null): GlassesModel {
             val name = id?.name?.trim().orEmpty()
             val lower = name.lowercase()
@@ -108,9 +116,9 @@ enum class GlassesModel(
                 id?.productId == EDID_ONE || lower == "xreal one" -> ONE
                 lower.contains("one pro") -> ONE_PRO
                 lower.contains("1s") || lower.contains("one s") -> ONE_S
-                lower.contains("xreal") || lower.contains("nreal") -> OTHER_XREAL
-                name.isEmpty() && usbProduct == USB_AURA -> AURA
-                name.isEmpty() && usbProduct == USB_ONE -> ONE
+                usbProduct == USB_AURA -> AURA
+                usbProduct == USB_ONE -> ONE
+                lower.contains("xreal") || lower.contains("nreal") || usbProduct != null -> OTHER_XREAL
                 else -> UNKNOWN
             }
         }

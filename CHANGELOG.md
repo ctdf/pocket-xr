@@ -2,6 +2,18 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.0: the add-on, so Pocket XR installs everywhere
+
+- In some countries Google Play Protect blocks installing a sideloaded app that uses an accessibility service or
+  notification access. Pocket XR now uses neither. Both moved to a second, optional app: the Pocket XR add-on. Pocket XR
+  itself installs everywhere, and the Space, the trackpad and hand tracking in the Space work without the add-on.
+- The add-on gives you the cursor outside the Space (flat DeX mode) and the Notifications page. If you use either,
+  install the add-on from its own release and turn it on again: its pointer under Accessibility, and notification
+  access from the Notifications page. Pocket XR's Hands screen shows what's missing.
+- Glasses whose display name the phone shows differently (seen on an Honor Magic V5 with an XREAL One Pro) were taken
+  for unknown glasses, and the picture could be upside down. Pocket XR now also uses the glasses' USB id.
+- Updated build tools and libraries (Android Gradle Plugin 9.5, Gradle 9.8.2, Compose 1.12).
+
 ## 1.0.1: crash reports
 
 - If Pocket XR closes unexpectedly, the next time you open it, it offers to send a crash report: by email or as a

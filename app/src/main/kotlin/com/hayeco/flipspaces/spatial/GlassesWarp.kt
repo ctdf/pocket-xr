@@ -446,6 +446,14 @@ object GlassesWarp {
     /** 0.5.32: whether the warp holds (or is opening) the control link, so [GlassesDisplayControl] keeps off it. */
     val linkWanted: Boolean get() = synchronized(lock) { controller.wantsLink || link != null || opening }
 
+    /** 1.1.0: the glasses' duty as read while they warped the Space's frames (the motion blur test); null before. */
+    val dutyInWarp: Int? get() = controller.dutyInWarp
+
+    /** 1.1.0: the motion blur test's switch: the warp reads the duty in scene mode 1 while it is on. */
+    fun readDuty(on: Boolean) {
+        controller.readDuty = on
+    }
+
     /** Opens the link on the first route that answers; blocking, on its own thread. */
     private fun open() {
         val (opened, how, route) = openControl(app)
