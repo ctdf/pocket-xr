@@ -2,6 +2,11 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.7: level calibration for the One Pro
+
+- The level calibration now takes glasses tilted up to 40 degrees. The XREAL One Pro's is steeper than the Aura's, so
+  it was refused, and its windows sat too high or too low. Run the level calibration once after updating.
+
 ## 1.1.6: Developer settings you can find
 
 - The trackpad's Menu ends with a "Developer settings" switch. Before, the Developer card only opened with a hidden

@@ -227,8 +227,11 @@ class Fixes0516Test {
         assertTrue(LevelCalibration.plausible(0.5f, 14.3f))
         assertTrue(LevelCalibration.plausible(0f, -24f))
         assertTrue(!LevelCalibration.plausible(12f, 0f))
-        assertTrue(!LevelCalibration.plausible(0f, 26f))
-        assertEquals("pitch 26.0 degrees is more than 25", LevelCalibration.refusal(0f, 26f))
+        assertTrue(!LevelCalibration.plausible(0f, 41f))
+        assertEquals("pitch 41.0 degrees is more than 40", LevelCalibration.refusal(0f, 41f))
+        // 1.1.7 (issue 30): a One Pro's steeper frame, either way up.
+        assertEquals(null, LevelCalibration.refusal(0f, -30f))
+        assertEquals(null, LevelCalibration.refusal(0f, 30f))
         assertEquals("roll 12.0 degrees is more than 10", LevelCalibration.refusal(12f, 3f))
         // The IMU pitched 14.5 degrees in the frame, the display held level.
         val imuUp = LevelCalibration.mount(0.2f, 14.5f).rotate(Vec3.UP)

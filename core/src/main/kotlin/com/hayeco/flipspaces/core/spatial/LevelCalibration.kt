@@ -24,8 +24,10 @@ object LevelCalibration {
      * 0.5.16: the most a mount's pitch may be. The Aura's IMU sits about
      * 14.5 degrees pitched from the display's level line (Mike's three tries read 14.5, 14.5 and
      * 14.3, all refused by 0.5.15's 10), as a glasses frame's forward tilt puts it.
+     * 1.1.7 (issue 30, an XREAL One Pro: about 20 degrees off when level, and its level calibration refused): 40, for
+     * glasses whose optics sit steeper than the Aura's. A head bent further than that is still refused.
      */
-    const val MAX_PITCH_DEG = 25f
+    const val MAX_PITCH_DEG = 40f
 
     /** 0.5.15's single limit, for both. */
     const val MAX_DEG = MAX_ROLL_DEG

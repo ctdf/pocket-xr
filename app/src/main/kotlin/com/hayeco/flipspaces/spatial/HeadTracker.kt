@@ -675,7 +675,7 @@ object HeadTracker {
         val c = appContext
         val msg = when {
             r == null -> "Not saved: hold your head still for a moment first (gravity was not steady or the head was turning)."
-            // 0.5.16: pitch up to 25 degrees (the Aura's IMU sits about 14.5 pitched), roll up to 10.
+            // 0.5.16: pitch up to 25 degrees (the Aura's IMU sits about 14.5 pitched), roll up to 10. 1.1.7: pitch up to 40 (a One Pro).
             !com.hayeco.flipspaces.core.spatial.LevelCalibration.plausible(r.first, r.second) ->
                 "Not saved: the glasses read roll %.1f, pitch %.1f degrees: %s; is the line really on a level edge at eye height?".format(
                     java.util.Locale.ROOT, r.first, r.second, com.hayeco.flipspaces.core.spatial.LevelCalibration.refusal(r.first, r.second),
