@@ -83,9 +83,8 @@ The [Roadmap](https://github.com/pocket-xr/pocket-xr/issues/11) has the full lis
 
 ## Supported phones
 
-Pocket XR needs a phone whose USB-C port carries video (DisplayPort alt mode) and runs **Android 14 or later**. It
-installs on Android 11 to 13, but there it can't open app windows in the Space. It is developed on a **Samsung Galaxy
-Z Flip 7** with One UI. Other phones with video out should work; report what you find.
+Pocket XR needs a phone whose USB-C port carries video (DisplayPort alt mode) and runs Android 11 or later. It is
+developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video out should work; report what you find.
 
 ## Setup
 

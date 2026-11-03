@@ -23,7 +23,7 @@ Pocket XR turns an Android phone and a pair of XREAL glasses into a multi-window
 
 <b>What it needs</b>
 <ul>
-<li>A phone whose USB-C port carries video (DisplayPort alt mode), on Android 14 or later.</li>
+<li>A phone whose USB-C port carries video (DisplayPort alt mode), on Android 11 or later.</li>
 <li>XREAL glasses: the Aura and the One are tested; the One Pro and 1S are in community testing.</li>
 <li>Shizuku, to create a window for each app.</li>
 <li>Optional: the Pocket XR add-on, for the cursor outside the Space and the Notifications page. It holds the accessibility service and notification access, so Pocket XR itself needs neither.</li>

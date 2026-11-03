@@ -141,10 +141,10 @@ class PanelHostService : IPanelHost.Stub() {
     }
 
     override fun createDisplay(name: String, width: Int, height: Int, dpi: Int, flags: Int, surface: Surface, refreshRate: Float): Int =
-        create(name, width, height, dpi, flags, surface, refreshRate, onDevice = false)
+        create(name, width, height, dpi, flags, surface, refreshRate, asked = false)
 
     override fun createDisplayOnDevice(name: String, width: Int, height: Int, dpi: Int, flags: Int, surface: Surface, refreshRate: Float): Int =
-        create(name, width, height, dpi, flags, surface, refreshRate, onDevice = true)
+        create(name, width, height, dpi, flags, surface, refreshRate, asked = true)
 
     /**
      * 0.5.52 (Mike: "work on getting the window displays their own display group so the phone can sleep without closing my
@@ -195,12 +195,13 @@ class PanelHostService : IPanelHost.Stub() {
         .firstOrNull { it.contains("mPackageName='$SHELL_PACKAGE'") && it.contains(STREAMING_PROFILE) && !it.contains("mRevoked=true") }
         ?.let { Regex("mId=(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() }
 
-    private fun create(name: String, width: Int, height: Int, dpi: Int, flags: Int, surface: Surface, refreshRate: Float, onDevice: Boolean): Int = guard(-1) {
-        if (Build.VERSION.SDK_INT < 34) {
-            error = "App panels need Android 14 or newer (VirtualDisplayConfig)"
-            return@guard -1
-        }
-        val (made, sizeResult) = config(name, width, height, dpi, flags, surface, refreshRate)
+    private fun create(name: String, width: Int, height: Int, dpi: Int, flags: Int, surface: Surface, refreshRate: Float, asked: Boolean): Int = guard(-1) {
+        // 1.1.1 (an S20 FE on Android 11, a Retroid Nova on 13): panels below Android 14 too. The display goes on the
+        // shell's virtual device only on 14 and up; below, it is a plain virtual display, as with the switch off.
+        val onDevice = asked && Build.VERSION.SDK_INT >= 34
+        if (asked && !onDevice) logI("$name: no virtual device on Android ${Build.VERSION.SDK_INT}; a plain virtual display instead")
+        val (made, sizeResult) = if (Build.VERSION.SDK_INT >= 34) config(name, width, height, dpi, flags, surface, refreshRate)
+        else legacyConfig(name, width, height, dpi, flags, surface, refreshRate)
         val config: Any = made
         val binder = Binder()
         // The display's id is only known once it exists; a callback before that has no panel yet.
@@ -243,8 +244,16 @@ class PanelHostService : IPanelHost.Stub() {
         displayId.set(id)
         // Keep the keyboard on the phone: the Flip is the keyboard for every panel.
         runCatching {
-            method(windowManager, "setDisplayImePolicy") { it.parameterTypes.size == 2 }
-                .invoke(windowManager, id, PanelDisplays.IME_POLICY_FALLBACK_DISPLAY)
+            if (Build.VERSION.SDK_INT >= 31) {
+                method(windowManager, "setDisplayImePolicy") { it.parameterTypes.size == 2 }
+                    .invoke(windowManager, id, PanelDisplays.IME_POLICY_FALLBACK_DISPLAY)
+            } else if (com.hayeco.flipspaces.core.spatial.PanelDisplayCompat.trusted(flags)) {
+                // 1.1.1: Android 11's form: no keyboard on this display, so it shows on the phone.
+                method(windowManager, "setShouldShowIme") { it.parameterTypes.size == 2 }.invoke(windowManager, id, false)
+            } else {
+                // Android 11 refuses it for an untrusted display, and shows such a display's keyboard on the phone anyway.
+                logI("display $id: the keyboard shows on the phone (Android ${Build.VERSION.SDK_INT}, an untrusted display)")
+            }
         }.onFailure { logW("IME policy for display $id: ${describe(it)}") }
         // 0.5.22: Android's large screen rule on for the display, both ways.
         sizeResults[id] = sizeResult
@@ -290,6 +299,22 @@ class PanelHostService : IPanelHost.Stub() {
             }
         }
         return config to result
+    }
+
+    /**
+     * 1.1.1: [config] for Android 11 to 13. VirtualDisplayConfig and IDisplayManager.createVirtualDisplay(config, ...)
+     * are there since Android 11 (public only from 13), so the builder is reached by name. Its requested refresh rate is
+     * Android 14's, so these displays run at the rate Android gives them, and say so.
+     */
+    private fun legacyConfig(name: String, width: Int, height: Int, dpi: Int, flags: Int, surface: Surface, refreshRate: Float): Pair<Any, String> {
+        val builderClass = Class.forName("android.hardware.display.VirtualDisplayConfig\$Builder")
+        val builder = builderClass.getConstructor(String::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            .newInstance(name, width, height, dpi)
+        builderClass.getMethod("setFlags", Int::class.javaPrimitiveType).invoke(builder, flags)
+        builderClass.getMethod("setSurface", Surface::class.java).invoke(builder, surface)
+        val config = builderClass.getMethod("build").invoke(builder) ?: error("VirtualDisplayConfig.Builder.build returned null")
+        logI("$name: VirtualDisplayConfig made by name on Android ${Build.VERSION.SDK_INT}; the requested ${if (refreshRate > 0f) refreshRate else 60f} Hz is Android 14's, so it runs at Android's own rate")
+        return config to "not asked (Android ${Build.VERSION.SDK_INT})"
     }
 
     /** 0.5.22: what [config] did with ignore activity size restrictions, per display. */
@@ -539,9 +564,17 @@ class PanelHostService : IPanelHost.Stub() {
      */
     override fun focusDisplay(displayId: Int): String? = guardText {
         runCatching {
-            method(taskManager, "focusTopTask") { it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
-                .invoke(taskManager, displayId)
-        }.fold(onSuccess = { null }, onFailure = { "focusTopTask($displayId): ${describe(it)}" })
+            val top = taskManager.javaClass.methods.firstOrNull { it.name == "focusTopTask" && it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
+            if (top != null) {
+                top.invoke(taskManager, displayId)
+            } else {
+                // 1.1.1: Android 11 has no focusTopTask: setFocusedTask on the top task of the display's top stack.
+                val stack = rootTaskInfos(displayId)?.firstOrNull() ?: error("no task on display $displayId")
+                val taskId = (field(stack, "taskIds") as? IntArray)?.lastOrNull() ?: taskField(stack, "taskId") as? Int ?: error("no task id on display $displayId")
+                method(taskManager, "setFocusedTask") { it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
+                    .invoke(taskManager, taskId)
+            }
+        }.fold(onSuccess = { null }, onFailure = { "focus display $displayId: ${describe(it)}" })
     }
 
     /**
@@ -783,11 +816,10 @@ class PanelHostService : IPanelHost.Stub() {
 
     /** 0.5.19: the display's root tasks top first: id, mode, top activity, hidden ones marked. */
     private fun zOrder(displayId: Int): String = runCatching {
-        val infos = method(taskManager, "getAllRootTaskInfosOnDisplay") { it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
-            .invoke(taskManager, displayId) as? List<*> ?: return@runCatching "unknown"
+        val infos = rootTaskInfos(displayId) ?: return@runCatching "unknown"
         infos.filterNotNull().take(5).joinToString(" > ") { r ->
             val name = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { (field(r, it) as? android.content.ComponentName)?.shortClassName } ?: "empty"
-            "${field(r, "taskId")} ${modeName(windowingMode(r))} $name" + if (field(r, "isVisible") as? Boolean == false) " hidden" else ""
+            "${taskField(r, "taskId")} ${modeName(windowingMode(r))} $name" + if (taskField(r, "isVisible") as? Boolean == false) " hidden" else ""
         }.ifEmpty { "none" }
     }.getOrElse { "unknown (${describe(it)})" }
 
@@ -993,9 +1025,8 @@ class PanelHostService : IPanelHost.Stub() {
 
     /** The top root task's id on [displayId] (getAllRootTaskInfosOnDisplay lists the top first), or null. */
     private fun topRootTaskId(displayId: Int): Int? = runCatching {
-        val infos = method(taskManager, "getAllRootTaskInfosOnDisplay") { it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
-            .invoke(taskManager, displayId) as? List<*>
-        infos?.firstOrNull()?.let { field(it, "taskId") as? Int }
+        val infos = rootTaskInfos(displayId)
+        infos?.firstOrNull()?.let { taskField(it, "taskId") as? Int }
     }.getOrNull()
 
     /**
@@ -1129,6 +1160,25 @@ class PanelHostService : IPanelHost.Stub() {
 
     private fun field(o: Any, name: String): Any? = runCatching { o.javaClass.getField(name).get(o) }.getOrNull()
 
+    /**
+     * 1.1.1: the display's root tasks, top first: IActivityTaskManager.getAllRootTaskInfosOnDisplay (RootTaskInfo, Android
+     * 12 and up), else Android 11's getAllStackInfosOnDisplay (ActivityManager.StackInfo). Null when neither is there.
+     */
+    private fun rootTaskInfos(displayId: Int): List<*>? {
+        val name = taskManager.javaClass.methods.firstOrNull { m ->
+            (m.name == "getAllRootTaskInfosOnDisplay" || m.name == "getAllStackInfosOnDisplay") &&
+                m.parameterTypes.size == 1 && m.parameterTypes[0] == Int::class.javaPrimitiveType
+        } ?: throw NoSuchMethodException("IActivityTaskManager has no root task or stack list for a display (Android ${Build.VERSION.SDK_INT})")
+        return name.invoke(taskManager, displayId) as? List<*>
+    }
+
+    /** 1.1.1: [field] of a RootTaskInfo, or the same thing in Android 11's StackInfo (stackId, visible). */
+    private fun taskField(o: Any, name: String): Any? = field(o, name) ?: when (name) {
+        "taskId" -> field(o, "stackId")
+        "isVisible" -> field(o, "visible")
+        else -> null
+    }
+
     override fun secureWindows(displayId: Int): Array<String> = guard(emptyArray()) {
         val process = ProcessBuilder("dumpsys", "window", "windows").redirectErrorStream(true).start()
         val dump = process.inputStream.bufferedReader().readText()
@@ -1142,10 +1192,10 @@ class PanelHostService : IPanelHost.Stub() {
      * fields are read by reflection, so a field this Android lacks is left out, not guessed.
      */
     override fun displayTasks(displayId: Int): IntArray? = guard(null) {
-        val infos = method(taskManager, "getAllRootTaskInfosOnDisplay") { it.parameterTypes.size == 1 && it.parameterTypes[0] == Int::class.javaPrimitiveType }
-            .invoke(taskManager, displayId) as? List<*> ?: return@guard null
-        val visible = infos.count { info -> info != null && (field(info, "isVisible") as? Boolean ?: true) }
-        val top = infos.firstOrNull()?.let { field(it, "numActivities") as? Int } ?: 0
+        val infos = rootTaskInfos(displayId) ?: return@guard null
+        val visible = infos.count { info -> info != null && (taskField(info, "isVisible") as? Boolean ?: true) }
+        // 1.1.1: Android 11's StackInfo has no activity count: 2, "more than one", so Back is never taken for the last.
+        val top = infos.firstOrNull()?.let { taskField(it, "numActivities") as? Int } ?: if (infos.isEmpty()) 0 else 2
         intArrayOf(infos.size, visible, top)
     }
 
