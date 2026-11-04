@@ -724,3 +724,18 @@ class SpaceControlPanel {
         const val GAP = 1.2f
     }
 }
+
+/**
+ * 1.1.10 (issue 35): Spatial Mouse's aim held still while one finger scrolls. The dot is the phone's turn since the
+ * reference ([SpatialPointer]'s recentre), so moving the reference with the phone keeps the dot where it is: a hand
+ * that sways as a thumb slides along the pad no longer carries the dot off what it scrolls. After the scroll the phone
+ * aims on from where the dot was left, with no jump.
+ */
+object AimHold {
+    /**
+     * The reference's phone yaw and pitch ([refYaw], [refPitch]) slid by the phone's turn from ([lastYaw], [lastPitch]) to
+     * ([yaw], [pitch]), so the aim (phone minus reference) stays the same. Yaw wraps at 180 degrees.
+     */
+    fun slide(refYaw: Float, refPitch: Float, lastYaw: Float, lastPitch: Float, yaw: Float, pitch: Float): Pair<Float, Float> =
+        Pair(wrapDegrees(refYaw + wrapDegrees(yaw - lastYaw)), refPitch + (pitch - lastPitch))
+}

@@ -146,6 +146,12 @@ class TrackpadActivity : Activity(), PadHost {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 1.1.10: after Exit Pocket XR, nothing opens the trackpad by itself; the user opening it brings Pocket XR back.
+        if (AppExit.exited && intent?.getBooleanExtra(EXTRA_AUTO, false) == true) {
+            finish()
+            return
+        }
+        AppExit.reopened(this)
         // The phone's screen stays on while it is the trackpad, so it never dims under a resting thumb.
         // 0.5.17 cover screen: over the lock screen, waking the screen it starts on (the manifest
         // says so too), and drawn into the cutout area so core's layout places around the cameras.
@@ -203,7 +209,7 @@ class TrackpadActivity : Activity(), PadHost {
             prefs.introShown = true
             val plugged = pluggedGlasses()
             plugged?.let { glassesSeen(it) }
-            screen.showIntro(com.hayeco.flipspaces.core.pointer.IntroPages.firstRun(plugged, prefs.landscapeDevice, rotation != null))
+            screen.showIntro(com.hayeco.flipspaces.core.pointer.IntroPages.firstRun(plugged, prefs.landscapeDevice, rotation != null, settings.oneFingerScroll))
         }
     }
 
@@ -361,6 +367,7 @@ class TrackpadActivity : Activity(), PadHost {
         pad.cursorSpeed = settings.cursorSpeed
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
+        pad.oneFingerScroll = settings.oneFingerScroll
         pad.stripSide = settings.stripSide
         pad.stripAllowed = !cover
         // Spatial Mouse and Vertical lock portrait, Horizontal landscape (0 or 8 by its direction);
@@ -822,6 +829,15 @@ class TrackpadActivity : Activity(), PadHost {
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
     }
 
+    /** 1.1.10 (issue 35): the Menu's "One-finger scroll on Spatial Mouse". */
+    override fun oneFingerScrollChosen(on: Boolean) {
+        if (touching) send(pad.cancel())
+        settings = prefs.update { it.copy(oneFingerScroll = on) }
+        pad.oneFingerScroll = on
+        screen.configure(settings, cover, coverLayout)
+        Log.i(TAG, "one finger scroll on Spatial Mouse ${if (on) "on" else "off"} (${if (cover) "cover" else "main"} screen)")
+    }
+
     override fun stripSpeedChanged(speed: Int) {
         settings = prefs.update { it.copy(stripSpeed = speed) }
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
@@ -852,6 +868,7 @@ class TrackpadActivity : Activity(), PadHost {
         pad.cursorSpeed = settings.cursorSpeed
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
+        pad.oneFingerScroll = settings.oneFingerScroll
         pad.stripSide = settings.stripSide
         if (settings.mode == PadMode.HORIZONTAL && !cover) requestedOrientation = settings.direction.screenOrientation
         coverLayout = null
@@ -880,7 +897,7 @@ class TrackpadActivity : Activity(), PadHost {
     }.getOrNull()
 
     override fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage> =
-        com.hayeco.flipspaces.core.pointer.IntroPages.trackpad(prefs.landscapeDevice, rotation != null)
+        com.hayeco.flipspaces.core.pointer.IntroPages.trackpad(prefs.landscapeDevice, rotation != null, settings.oneFingerScroll)
 
     /** The glasses plugged in, else the ones the Space last ran on (the model from their display's EDID). */
     override fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage? =
@@ -1454,6 +1471,10 @@ class TrackpadActivity : Activity(), PadHost {
     }
 
     /** Unlock the phone where Android allows it: the keyguard's own prompt (its PIN on the cover screen if it is secure). */
+    override fun exitApp() {
+        AppExit.exit(this, "the trackpad Menu")
+    }
+
     override fun unlockPhone() {
         val keyguard = getSystemService(KeyguardManager::class.java)
         if (keyguard == null || !keyguard.isKeyguardLocked) {

@@ -223,6 +223,11 @@ object GlassesAutoOpen {
             Log.w(TAG, "plug-in check before the watcher started; skipped")
             return
         }
+        // 1.1.10: after Exit Pocket XR nothing opens on a plug-in until Pocket XR is opened again.
+        if (AppExit.exited) {
+            log("plug-in check: Pocket XR was exited; not opening anything until it is opened again")
+            return
+        }
         // 0.5.9: the plain display session switches DeX off and on; its display changes are its own.
         if (PlainDisplaySession.busy) {
             log("plug-in check: the plain display session is ${PlainDisplaySession.stage.name.lowercase().replace('_', ' ')}; not opening anything meanwhile")

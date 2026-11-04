@@ -131,6 +131,13 @@ object PadCurve {
  *
  * Scrolls and pinches into apps start ([Phase.BEGIN]) only after [START_TRAVEL] 0.03 units of
  * travel, so a two finger tap never injects a drag before its right click.
+ *
+ * - 1.1.10 (issue 35: "scroll on the trackpad with a single finger on the Spatial Mouse"), with [oneFingerScroll] on
+ *   Spatial Mouse: the phone aims, so one finger had nothing to move. Once it is past the tap's slop (the move flag:
+ *   [MOVE_LIMIT], or the safe-down filter's quick [SAFE_DOWN_MOVE]) and not held by the long press, it scrolls
+ *   ([PadSignal.Scroll] with oneFinger) the same way, at the same speed ([scrollFactor]) and by the same path as two
+ *   fingers, measured from where the scroll was decided so the page does not jump by the slop. A tap still clicks and a
+ *   still hold still presses and drags: neither ever passes the slop.
  */
 class TrackpadInterpreter(
     var mode: PadMode = PadMode.VERTICAL,
@@ -141,7 +148,10 @@ class TrackpadInterpreter(
     var scrollFactor = 1f
     var stripFactor = 1f
 
-    private enum class One { UNDECIDED_STRIP, STRIP, CURSOR, THIN }
+    /** 1.1.10 (issue 35): one finger scrolls on Spatial Mouse (the Menu's "One-finger scroll on Spatial Mouse", on by default). */
+    var oneFingerScroll = false
+
+    private enum class One { UNDECIDED_STRIP, STRIP, CURSOR, THIN, MOUSE_SCROLL }
     private enum class Two { UNDECIDED, SCROLL, PINCH }
 
     private val touches = linkedMapOf<Int, PadTouch>()
@@ -157,6 +167,7 @@ class TrackpadInterpreter(
     private var swiped = false
     private var held = false
     private var stripStartY = 0f
+    private var mouseScrollFrom = Pair(0f, 0f)
     private var lastStripMs = Long.MIN_VALUE / 2
 
     // Two fingers.
@@ -296,7 +307,15 @@ class TrackpadInterpreter(
                     one = if (dx * dx > dy * dy) One.CURSOR else One.STRIP
                     if (one == One.STRIP) out += PadSignal.Scroll(0f, 0f, 0f, 0f, Phase.BEGIN, strip = true)
                 }
+                // 1.1.10 (issue 35): on Spatial Mouse a finger past the tap's slop, not held, scrolls from here on.
+                if (one == One.CURSOR && swiped && !held && mouseScrolls()) {
+                    one = One.MOUSE_SCROLL
+                    mouseScrollFrom = Pair(t.x, t.y)
+                    out += PadSignal.Scroll(0f, 0f, 0f, 0f, Phase.BEGIN, oneFinger = true)
+                    return out
+                }
                 when (one) {
+                    One.MOUSE_SCROLL -> out += mouseScroll(t, Phase.UPDATE)
                     One.THIN -> thinMove(dy, nowMs, out)
                     One.STRIP -> {
                         lastStripMs = nowMs
@@ -351,6 +370,7 @@ class TrackpadInterpreter(
                         held -> out += PointerSignal.Up()
                         one == One.THIN -> thinLift(nowMs, out)
                         one == One.STRIP -> out += PadSignal.Scroll(0f, 0f, 0f, touches.values.first().y - stripStartY, Phase.END, strip = true)
+                        one == One.MOUSE_SCROLL -> out += mouseScroll(touches.values.first(), Phase.END)
                         one == One.CURSOR && fingers == 1 && !swiped && nowMs - startMs <= TAP_MAX_MS && (travel[id] ?: 0f) <= moveLimit * TAP_TRAVEL_SHARE -> {
                             out += PointerSignal.Down(pad = true)
                             out += PointerSignal.Up()
@@ -384,6 +404,7 @@ class TrackpadInterpreter(
         if (twoActive) endTwo(out)
         if (one == One.STRIP && touches.isNotEmpty()) out += PadSignal.Scroll(0f, 0f, 0f, 0f, Phase.END, strip = true)
         if (one == One.THIN && touches.isNotEmpty()) out += thinScroll(Phase.END)
+        if (one == One.MOUSE_SCROLL && touches.isNotEmpty()) out += mouseScroll(touches.values.first(), Phase.END)
         stopCoast(out)
         val wasHeld = held
         touches.clear()
@@ -437,8 +458,19 @@ class TrackpadInterpreter(
         }
         if (one == One.STRIP) out += PadSignal.Scroll(0f, 0f, 0f, 0f, Phase.END, strip = true)
         if (one == One.THIN) out += thinScroll(Phase.END)
+        // The first finger is the one that was scrolling.
+        if (one == One.MOUSE_SCROLL) touches.values.firstOrNull()?.let { out += mouseScroll(it, Phase.END) }
         one = One.CURSOR
     }
+
+    // ---- 1.1.10 (issue 35): Spatial Mouse's one finger scroll ----
+
+    /** True while one finger may scroll: [oneFingerScroll] on Spatial Mouse. */
+    private fun mouseScrolls(): Boolean = oneFingerScroll && mode == PadMode.SPATIAL_MOUSE
+
+    /** The finger's travel since the scroll was decided, as two fingers' midpoint ([scroll]). */
+    private fun mouseScroll(t: PadTouch, phase: Phase): PadSignal.Scroll =
+        scroll(t.x - mouseScrollFrom.first, t.y - mouseScrollFrom.second, phase).copy(oneFinger = true)
 
     // ---- 0.5.21: the thin scroll strip ----
 

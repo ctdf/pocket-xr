@@ -18,6 +18,8 @@ class FlipSpacesApp : Application() {
         super.onCreate()
         // 1.0.1: a crash is kept and offered the next time the app opens ([CrashCatcher]); first, so it catches the rest.
         CrashCatcher.install(this)
+        // 1.1.10: the open screens, so Exit Pocket XR can finish each one.
+        AppExit.track(this)
         // 0.5.28: the app's own rotating log file, before anything logs.
         AppLogFile.start(this)
         // 0.5.68: the bundled font, before the Space or the trackpad paints any text.

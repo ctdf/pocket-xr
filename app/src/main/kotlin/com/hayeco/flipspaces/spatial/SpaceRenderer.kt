@@ -198,6 +198,9 @@ private class PanelGl(var panel: SpacePanel, private val frames: PanelDrain, bro
     /** 1.1.9: the window this one's app moved to when it went empty ([com.hayeco.flipspaces.core.spatial.SingleWindowApp]), else null. */
     var movedTo: Int? = null
 
+    /** 1.1.10: whether the Menu's Open a new instance was on when this window's app moved ([com.hayeco.flipspaces.core.spatial.SingleWindowApp.card]). */
+    var movedSwitchOn = false
+
     /** 1.1.9: this window for [com.hayeco.flipspaces.core.spatial.SingleWindowApp]. */
     fun window(): com.hayeco.flipspaces.core.spatial.SingleWindowApp.Window {
         val showing = state as? PanelState.Showing
@@ -3012,7 +3015,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     private fun cardOf(p: PanelGl): PanelCard? {
         if ((p.state as? PanelState.Showing)?.appClosed != true) return p.ask ?: p.switcher
         val crash = crashes[p.panel.id]
-        return if (crash == null && p.movedTo != null) PanelCard.MovedToNewerWindow(p.panel.label) else PanelCard.AppClosed(p.panel.label, crash)
+        return if (crash == null && p.movedTo != null) com.hayeco.flipspaces.core.spatial.SingleWindowApp.card(p.panel.label, p.movedSwitchOn) else PanelCard.AppClosed(p.panel.label, crash)
     }
 
     /** 0.5.19: how each panel's app ended when its exit record was a crash, for its card. */
@@ -3091,28 +3094,40 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
+    /** The App closed card's Reopen: the app started again in [p]'s window, as a new instance there ([PanelHost.relaunch]). */
+    private fun reopen(p: PanelGl) {
+        val label = p.panel.label
+        val showing = p.state as? PanelState.Showing ?: return
+        val now = SystemClock.uptimeMillis()
+        // 0.5.19: Mike asked for it again: the crash is forgotten.
+        crashes.remove(p.panel.id)
+        SpaceSession.crashedApps.remove(p.panel.packageName)
+        p.state = showing.copy(appClosed = false)
+        p.empty.launched(now)
+        p.tasksCheckedMs = now
+        // 0.5.24: an app that closed is reopened at a sane size.
+        val (capped, why) = com.hayeco.flipspaces.core.spatial.ReopenCap.cap(p.panel, wideView.isOn(p.panel.packageName), appDensity.smallestDp(p.panel.packageName))
+        if (why != null) {
+            Log.i(PANEL_TAG, "panel ${p.panel.id} $label: $why")
+            setLayout(layout.replace(capped), commit = true)
+        }
+        PanelHost.relaunch(showing.displayId, label, p.panel.packageName, p.panel.activityName) { err ->
+            if (err != null) onGl { problem = "Reopening $label: $err" }
+        }
+    }
+
     /** A press on a card's button (or beside it). */
     private fun onCard(p: PanelGl, card: PanelCard, action: CardAction?, button: com.hayeco.flipspaces.core.spatial.CardButton? = null) {
         val label = p.panel.label
         when (action) {
-            CardAction.REOPEN -> {
-                val showing = p.state as? PanelState.Showing ?: return
-                val now = SystemClock.uptimeMillis()
-                // 0.5.19: Mike asked for it again: the crash is forgotten.
-                crashes.remove(p.panel.id)
-                SpaceSession.crashedApps.remove(p.panel.packageName)
-                p.state = showing.copy(appClosed = false)
-                p.empty.launched(now)
-                p.tasksCheckedMs = now
-                // 0.5.24: an app that closed is reopened at a sane size.
-                val (capped, why) = com.hayeco.flipspaces.core.spatial.ReopenCap.cap(p.panel, wideView.isOn(p.panel.packageName), appDensity.smallestDp(p.panel.packageName))
-                if (why != null) {
-                    Log.i(PANEL_TAG, "panel ${p.panel.id} $label: $why")
-                    setLayout(layout.replace(capped), commit = true)
-                }
-                PanelHost.relaunch(showing.displayId, label, p.panel.packageName, p.panel.activityName) { err ->
-                    if (err != null) onGl { problem = "Reopening $label: $err" }
-                }
+            CardAction.REOPEN -> reopen(p)
+            CardAction.TURN_ON_AND_REOPEN -> {
+                // 1.1.10: the Menu's Open a new instance turned on, then the app reopened here as a new instance.
+                store.newInstance = true
+                PanelHost.newInstance = true
+                com.hayeco.flipspaces.SpacesState.setNewInstance(true)
+                Log.i(PANEL_TAG, "panel ${p.panel.id} $label: Open a new instance turned on from its card; reopening")
+                reopen(p)
             }
             CardAction.CLOSE_PANEL -> {
                 Log.i(PANEL_TAG, "panel ${p.panel.id} $label: closed from its card")
@@ -3257,8 +3272,16 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 val closed = (p.state as? PanelState.Showing)?.appClosed == true
                 if (p.removed || q.removed || !closed || tasks == null || tasks.empty) return@onGl
                 p.movedTo = newerId
-                Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks); one window only, so Close is offered, not Reopen")
-                problem = "${p.panel.label} can only show one window on this phone. It moved to your newest window."
+                // 1.1.10: with Open a new instance off, the second window reused the app's task: the card names the switch.
+                val switchOn = store.newInstance
+                p.movedSwitchOn = switchOn
+                if (switchOn) {
+                    Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks) with Open a new instance on; one window only, so Close is offered, not Reopen")
+                    problem = "${p.panel.label} can only show one window on this phone. It moved to your newest window."
+                } else {
+                    Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks) with Open a new instance off; Turn on and reopen is offered")
+                    problem = "${p.panel.label} moved to your newer window. To keep both, turn on Open a new instance."
+                }
             }
         }
     }

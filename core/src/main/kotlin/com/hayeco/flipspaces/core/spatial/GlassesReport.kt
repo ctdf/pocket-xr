@@ -22,7 +22,13 @@ data class GlassesReport(
     val timeUtc: String,
 ) {
     data class Display(val name: String, val productId: String?, val modes: List<String>, val current: String)
-    data class Usb(val vendorId: Int, val productId: Int, val name: String, val interfaces: List<String>)
+    /**
+     * 1.1.10: [ifaces] keeps each interface's class too (a HID interface often has no name, so the names alone missed it);
+     * [infos] falls back to the names for a report built without them.
+     */
+    data class Usb(val vendorId: Int, val productId: Int, val name: String, val interfaces: List<String>, val ifaces: List<UsbInterfaceInfo> = emptyList()) {
+        val infos: List<UsbInterfaceInfo> get() = ifaces.ifEmpty { interfaces.map(UsbInterfaceInfo::named) }
+    }
 
     /** The model, from the first display that names one, else from the USB product. */
     val model: GlassesModel
@@ -53,7 +59,9 @@ data class GlassesReport(
         val xreal = usb.filter { it.vendorId == XREAL_VENDOR }
         if (xreal.isEmpty()) appendLine("- none")
         xreal.forEach { u ->
-            appendLine("- %04X:%04X \"%s\": %s".format(java.util.Locale.ROOT, u.vendorId, u.productId, u.name, u.interfaces.joinToString(", ").ifEmpty { "no interfaces listed" }))
+            appendLine("- %04X:%04X \"%s\": %s".format(java.util.Locale.ROOT, u.vendorId, u.productId, u.name, u.infos.joinToString(", ") { it.label() }.ifEmpty { "no interfaces listed" }))
+            // 1.1.10: how these glasses carry head tracking, so a report from HID glasses says so at once.
+            appendLine("  Head tracking link: ${HeadImuTransport.choose(u.vendorId, u.productId, u.infos).label}")
         }
         appendLine()
         appendLine("What worked:")

@@ -111,6 +111,26 @@ object SingleWindowApp {
             .filter { it.id != empty.id && it.packageName == empty.packageName && it.showing && (it.launchedMs ?: Long.MAX_VALUE) > since }
             .maxByOrNull { it.launchedMs ?: Long.MAX_VALUE }
     }
+
+    /**
+     * 1.1.10 (Mike's onboarding rule: say which setting fixes it): the card for a window whose app moved to a newer window.
+     * With the Menu's [NewInstanceSwitch] off ([newInstanceOn] false, as it was when the app moved), the second window
+     * reused the app's one task, so the card names the switch and offers to turn it on and reopen. Only with it on, when
+     * the app still moved, does the card say the app can only show one window on this phone.
+     */
+    fun card(label: String, newInstanceOn: Boolean): PanelCard =
+        if (newInstanceOn) PanelCard.MovedToNewerWindow(label) else PanelCard.MovedSwitchOff(label)
+}
+
+/** 1.1.10: the Menu's switch for a second window of an app already open ([SingleWindowApp.card]). */
+object NewInstanceSwitch {
+    /** The switch's name, as the Menu row and the card say it. */
+    const val NAME = "Open a new instance"
+
+    const val LABEL = "$NAME if the app is already running"
+
+    /** The Menu row's quieter line under [LABEL]. */
+    const val SUBTITLE = "Lets you open two windows of the same app, like two Chrome windows"
 }
 
 /** What the `<` button or a three finger swipe does on a panel (0.4.2). */
@@ -157,7 +177,12 @@ data class CardButton(
     fun contains(u: Float, v: Float): Boolean = u in u0..u1 && v in v0..v1
 }
 
-enum class CardAction { REOPEN, CLOSE_PANEL, BACK_ANYWAY, KEEP, SWITCH_TO, ALL_APPS }
+enum class CardAction {
+    REOPEN, CLOSE_PANEL, BACK_ANYWAY, KEEP, SWITCH_TO, ALL_APPS,
+
+    /** 1.1.10: turn the Menu's [NewInstanceSwitch] on, then reopen the app in this window as a new instance. */
+    TURN_ON_AND_REOPEN,
+}
 
 /**
  * A card over a panel (0.4.2): App closed covers the whole panel with Reopen and Close; the
@@ -230,6 +255,26 @@ sealed interface PanelCard {
         override val v0 = 0f
         override val buttons = listOf(
             CardButton(CardAction.CLOSE_PANEL, "Close this window", 0.33f, 0.60f, 0.67f, 0.72f, primary = true),
+        )
+        override val titleV = 0.38f
+        override val titleH = 0.085f
+        override val detailV = 0.47f
+        override val detailH = 0.05f
+        override val wholeWindow: Boolean get() = true
+        override val titleScale: Float get() = fitScale(title)
+        override val detailScale: Float get() = fitScale(detail.orEmpty())
+    }
+
+    /**
+     * 1.1.10: as [MovedToNewerWindow], but the Menu's [NewInstanceSwitch] was off, so the second window reused the app's
+     * one task. The card names the switch, and Turn on and reopen turns it on and opens the app here as a new instance.
+     */
+    data class MovedSwitchOff(val label: String) : PanelCard {
+        override val lines = listOf("$label moved to your newer window.", "To keep both, turn on ${NewInstanceSwitch.NAME}.")
+        override val v0 = 0f
+        override val buttons = listOf(
+            CardButton(CardAction.TURN_ON_AND_REOPEN, "Turn on and reopen", 0.21f, 0.60f, 0.49f, 0.72f, primary = true),
+            CardButton(CardAction.CLOSE_PANEL, "Close this window", 0.51f, 0.60f, 0.79f, 0.72f, danger = true),
         )
         override val titleV = 0.38f
         override val titleH = 0.085f

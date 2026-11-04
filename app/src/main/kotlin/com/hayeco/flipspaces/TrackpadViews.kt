@@ -51,6 +51,10 @@ private const val TEXT_80 = 0x80FFFFFF.toInt()
 private const val DIVIDER_1A = 0x1AFFFFFF
 private const val DIVIDER_33 = 0x33FFFFFF
 private const val MASK = 0x80000000.toInt()
+
+/** The Spatial Mouse page's hint (1.1.10, issue 35: after the one finger scroll's line while it is on). */
+private const val LASER_TIP = "Lost the dot? Hold Home to bring it in front of you"
+
 // 0.5.73 ("Light on glass", docs/VISUAL-DIRECTION.md): the page and the pad in the design tokens, as the glasses' Space.
 private const val BACKGROUND = com.hayeco.flipspaces.core.Look.PAGE
 private const val PAD_FILL = com.hayeco.flipspaces.core.Look.PAD
@@ -677,6 +681,9 @@ interface PadHost {
     /** 0.5.83: the Menu's scroll speed sliders, 0..100. */
     fun scrollSpeedChanged(speed: Int)
     fun stripSpeedChanged(speed: Int)
+
+    /** 1.1.10 (issue 35): the Menu's "One-finger scroll on Spatial Mouse". */
+    fun oneFingerScrollChosen(on: Boolean)
     fun stripChosen(side: StripSide)
     fun directionChosen(direction: PadDirection)
     fun followChosen(mode: FollowMode)
@@ -706,6 +713,9 @@ interface PadHost {
 
     /** Unlock the phone (a keyguard dismiss, its PIN on the cover where it is secure). */
     fun unlockPhone()
+
+    /** 1.1.10: Exit Pocket XR ([AppExit]): the Space, the services and every screen closed. */
+    fun exitApp()
 
     /** The cover's text field: its text went from [old] to [new]; Enter; the field opened or closed. */
     fun textChanged(old: String, new: String)
@@ -1030,7 +1040,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     // 0.5.32 (Mike: a way to recenter the Spatial Mouse's dot): a tip that stays on the page, above the Home it names,
     // rather than one shown once in the intro and forgotten.
-    private val laserTip = context.padText("Lost the dot? Hold Home to bring it in front of you", 12f, TEXT_80).apply { visibility = View.GONE }
+    private val laserTip = context.padText(LASER_TIP, 12f, TEXT_80).apply { visibility = View.GONE }
 
     // The portrait Back and Home bar.
     private val barBackIcon = ImageView(context).apply { setImageResource(R.drawable.ic_back) }
@@ -1284,6 +1294,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         selectorLabel.text = s.mode.label
         bar.visibility = if (landscape) View.GONE else View.VISIBLE
         laserTip.visibility = if (!cover && s.mode == PadMode.SPATIAL_MOUSE) View.VISIBLE else View.GONE
+        // 1.1.10 (issue 35): the Spatial Mouse page's hint names the one finger scroll while it is on.
+        laserTip.text = if (s.oneFingerScroll) "${com.hayeco.flipspaces.core.pointer.IntroPages.ONE_FINGER_SCROLL_LINE}. $LASER_TIP" else LASER_TIP
         // 0.5.17 cover screen: its own buttons take the place of the selector, the drawer button and the corner buttons.
         sideBack.visibility = if (landscape && !cover) View.VISIBLE else View.GONE
         sideHome.visibility = if (landscape && !cover) View.VISIBLE else View.GONE
@@ -1738,6 +1750,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         s.addView(speedRow("Two-finger scroll speed", settings.scrollSpeed) { host.scrollSpeedChanged(it) })
         s.addView(c.divider(20f))
         s.addView(speedRow("Scroll strip speed", settings.stripSpeed) { host.stripSpeedChanged(it) })
+        // 1.1.10 (issue 35): one finger scrolls on Spatial Mouse, on by default.
+        s.addView(c.divider(20f))
+        val oneFinger = settings.oneFingerScroll
+        s.addView(row(R.drawable.ic_scroll_right, "One-finger scroll on Spatial Mouse: ${if (oneFinger) "ON" else "OFF"}", tick = oneFinger) {
+            host.oneFingerScrollChosen(!oneFinger)
+            buildDrawer()
+        })
         // 0.5.21: the thin scroll strip's side, on every main screen page (the old wide strip's side
         // choice, now for the thin strip); the cover's strip goes opposite its window buttons.
         if (!cover) {
@@ -1810,7 +1829,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 buildDrawer()
             })
         }
-        // 0.5.37 (Mike: a setting for window snapping; the "Open a new instance" switch in the Menu).
+        // 0.5.37 (Mike: a setting for window snapping; the "Open a new instance" switch in the Menu). 1.1.10: its subtitle
+        // says what it is for, as a window whose app moved away names it.
         space.addView(c.divider(20f))
         val snapOn = host.snapWindowsOn()
         space.addView(row(R.drawable.ic_arrange, "Snap windows: ${if (snapOn) "ON" else "OFF"}", tick = snapOn) {
@@ -1819,7 +1839,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         })
         space.addView(c.divider(20f))
         val newOn = host.newInstanceOn()
-        space.addView(row(R.drawable.ic_arrange, "Open a new instance if the app is already running: ${if (newOn) "ON" else "OFF"}", tick = newOn) {
+        space.addView(row(R.drawable.ic_arrange, "${com.hayeco.flipspaces.core.spatial.NewInstanceSwitch.LABEL}: ${if (newOn) "ON" else "OFF"}", tick = newOn, subtitle = com.hayeco.flipspaces.core.spatial.NewInstanceSwitch.SUBTITLE) {
             host.newInstanceChosen(!newOn)
             buildDrawer()
         })
@@ -2023,6 +2043,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             host.frameClockState()?.let { dev.addView(c.padText(it, 12f, WHITE)) }
             drawerBody.addView(dev, cardParams(12f))
         }
+        // 1.1.10 (a tester: "an exit app button would be nice, as it stays active in the notification bar"): the Menu's
+        // last row quits Pocket XR. The tutorial's last page says it is here (IntroPages.EXIT_NOTE).
+        val exit = card()
+        exit.addView(row(R.drawable.ic_close, com.hayeco.flipspaces.core.pointer.IntroPages.EXIT_LABEL) {
+            closeDrawer()
+            host.exitApp()
+        })
+        drawerBody.addView(exit, cardParams(30f).apply { bottomMargin = c.dp(30f) })
     }
 
     /** 0.5.30: the hidden Developer card is shown (a long press on the wordmark); not kept past the Menu's view. */
@@ -2128,21 +2156,29 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     private fun cardParams(topDp: Float) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = context.dp(topDp) }
 
-    /** A 60 tall row: a 20 icon, a 14 sp label, then the right chevron (or a tick). */
-    private fun row(iconRes: Int, label: String, tick: Boolean? = null, enabled: Boolean = true, onClick: () -> Unit): View = LinearLayout(context).apply {
+    /**
+     * A 60 tall row: a 20 icon, a 14 sp label, then the right chevron (or a tick). 1.1.10: a [subtitle] is a quieter
+     * 12 sp line under the label, and the row grows to fit it.
+     */
+    private fun row(iconRes: Int, label: String, tick: Boolean? = null, enabled: Boolean = true, subtitle: String? = null, onClick: () -> Unit): View = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(context.dp(20f), 0, context.dp(20f), 0)
+        setPadding(context.dp(20f), if (subtitle != null) context.dp(10f) else 0, context.dp(20f), if (subtitle != null) context.dp(10f) else 0)
         minimumHeight = context.dp(60f)
         alpha = if (enabled) 1f else 0.4f
         addView(context.icon(iconRes, 20f))
-        addView(context.padText(label, 14f, TEXT_B3), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(10f) })
+        val text: View = if (subtitle == null) context.padText(label, 14f, TEXT_B3) else LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(context.padText(label, 14f, TEXT_B3))
+            addView(context.padText(subtitle, 12f, TEXT_80), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = context.dp(2f) })
+        }
+        addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(10f) })
         when (tick) {
             null -> addView(ImageView(context).apply { setImageResource(R.drawable.ic_right_arrow) }, LinearLayout.LayoutParams(context.dp(8f), context.dp(14f)))
             true -> addView(context.icon(R.drawable.ic_scroll_checked, 20f))
             false -> addView(context.icon(R.drawable.ic_scroll_unchecked, 20f))
         }
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(60f))
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, if (subtitle != null) ViewGroup.LayoutParams.WRAP_CONTENT else context.dp(60f))
         if (enabled) {
             pressLight(this, 0f)
             setOnClickListener { tick(this); onClick() }

@@ -79,6 +79,8 @@ data class TrackpadSettings(
      */
     val scrollSpeed: Int = DEFAULT_SCROLL_SPEED,
     val stripSpeed: Int = DEFAULT_STRIP_SPEED,
+    /** 1.1.10 (issue 35): one finger on the pad scrolls on Spatial Mouse ([TrackpadInterpreter.oneFingerScroll]); on by default. */
+    val oneFingerScroll: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_SCROLL_SPEED = 35

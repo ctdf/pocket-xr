@@ -76,6 +76,9 @@ fun HeadTrackingScreen(
     /** 0.5.25: the per-eye late warp in side by side 3D. */
     lateWarpSbs: Boolean = true,
     onLateWarp: (Boolean) -> Unit = {},
+    /** 1.1.10: the whole screen as text ([com.hayeco.flipspaces.core.spatial.HeadDiagnosticsText]), copied or shared in full. */
+    onCopyAll: () -> Unit = {},
+    onShare: () -> Unit = {},
 ) {
     Scaffold { padding ->
         LazyColumn(
@@ -107,6 +110,11 @@ fun HeadTrackingScreen(
                             OutlinedButton(onClick = onRecentre, enabled = ok) { Text("Recentre") }
                             OutlinedButton(onClick = onRetry) { Text("Try again") }
                         }
+                        // 1.1.10 (a tester could copy only the start of one line): everything on this screen, in full.
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onCopyAll) { Text("Copy all") }
+                            OutlinedButton(onClick = onShare) { Text("Share") }
+                        }
                     }
                 }
             }
@@ -115,6 +123,8 @@ fun HeadTrackingScreen(
                     "1. Glasses USB network",
                     when (status) {
                         is HeadTrackingStatus.NoNetwork -> "Not found."
+                        // 1.1.10: these glasses have no USB network for head tracking; nothing is missing.
+                        is HeadTrackingStatus.HidGlasses -> "Not used: these glasses send head tracking over USB HID."
                         HeadTrackingStatus.Searching, HeadTrackingStatus.Off -> "Looking."
                         else -> "Found."
                     },

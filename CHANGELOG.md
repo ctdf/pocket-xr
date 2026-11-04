@@ -2,6 +2,26 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.10: one-finger scroll, Exit, clearer head tracking diagnostics
+
+- One-finger scroll on Spatial Mouse: slide one finger on the pad to scroll the window under the dot, and the dot holds
+  still while you scroll. A tap still clicks and press and hold still drags. It's on by default, with a switch in the
+  Menu, and the tutorial and the hint mention it. (#35)
+- Exit Pocket XR: a new Exit action on the Pocket XR notification and an Exit Pocket XR row at the end of the trackpad
+  Menu. It closes the Space, hand and head tracking and the notification, and nothing opens by itself again until you
+  open Pocket XR. The tutorial's last page says where it is.
+- Head tracking diagnostics now has Copy all and Share buttons that copy or share the whole screen as text, not just
+  one line.
+- Glasses that send head tracking over USB HID (like XREAL's Air family, and the newer XREAL-made glasses on USB
+  3318:0442) are now named as such in the diagnostics and the Glasses report, instead of blaming a missing USB network.
+  Pocket XR does not read head tracking over HID yet, so on these glasses the Space stays head locked.
+- The "no USB network" line names the phone's own system: One UI only on Samsung phones, Android on others.
+- The Glasses report lists each USB interface with its type (HID, CDC NCM, audio and so on), and says which head
+  tracking link the glasses use.
+- When a second window of an app (like Chrome) takes the app from your first window while Menu, Open a new instance
+  is off, the first window now says so and offers Turn on and reopen, instead of saying the app can only show one
+  window. That message now shows only when the switch is already on. The Menu row explains what the switch is for.
+
 ## 1.1.9: easier setup, Spatial Mouse on the Retroid Nova, head tracking on Android 11
 
 - Spatial Mouse now aims with the top edge of the screen as you hold it, whichever way the system turned the screen.
