@@ -45,6 +45,7 @@ class TrackpadPrefs(context: Context) {
             coverControls = TrackpadSettings.stripOf(prefs.getInt(KEY_COVER_CONTROLS, -1)),
             scrollSpeed = TrackpadSettings.scrollSpeedOf(prefs.getInt(KEY_SCROLL_SPEED, -1), TrackpadSettings.DEFAULT_SCROLL_SPEED),
             stripSpeed = TrackpadSettings.scrollSpeedOf(prefs.getInt(KEY_STRIP_SPEED, -1), TrackpadSettings.DEFAULT_STRIP_SPEED),
+            oneFingerScroll = prefs.getBoolean(KEY_ONE_FINGER_SCROLL, true),
         )
         set(value) {
             prefs.edit()
@@ -56,6 +57,7 @@ class TrackpadPrefs(context: Context) {
                 .putInt(KEY_COVER_CONTROLS, TrackpadSettings.storedOf(value.coverControls))
                 .putInt(KEY_SCROLL_SPEED, value.scrollSpeed.coerceIn(0, 100))
                 .putInt(KEY_STRIP_SPEED, value.stripSpeed.coerceIn(0, 100))
+                .putBoolean(KEY_ONE_FINGER_SCROLL, value.oneFingerScroll)
                 .apply()
         }
 
@@ -132,5 +134,8 @@ class TrackpadPrefs(context: Context) {
         /** 0.5.83: the two finger scroll's and the thin strip's speeds. */
         private const val KEY_SCROLL_SPEED = "ScrollSpeed"
         private const val KEY_STRIP_SPEED = "StripSpeed"
+
+        /** 1.1.10 (issue 35): one finger scrolls on Spatial Mouse. */
+        private const val KEY_ONE_FINGER_SCROLL = "OneFingerScroll"
     }
 }

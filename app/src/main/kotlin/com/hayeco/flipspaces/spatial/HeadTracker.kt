@@ -25,6 +25,8 @@ import com.hayeco.flipspaces.core.spatial.GlassesReach
 import com.hayeco.flipspaces.core.spatial.HeadRetryBackoff
 import com.hayeco.flipspaces.core.spatial.HeadRouteKind
 import com.hayeco.flipspaces.core.spatial.HeadView
+import com.hayeco.flipspaces.core.spatial.HeadImuTransport
+import com.hayeco.flipspaces.core.spatial.PhoneSystem
 import com.hayeco.flipspaces.core.spatial.HeadRoutePlan
 import com.hayeco.flipspaces.core.spatial.HeadTrackingStatus
 import com.hayeco.flipspaces.core.spatial.ImuReportType
@@ -89,6 +91,9 @@ object HeadTracker {
 
     /** 0.5.6: how often a wait looks again at the glasses' network, to retry at once when it changes. */
     private const val NETWORK_LOOK_MS = 3000L
+
+    /** 1.1.10: how often the USB list is read again while HID glasses are plugged in. */
+    private const val HID_RECHECK_MS = 10_000L
 
     private val _status = MutableStateFlow<HeadTrackingStatus>(HeadTrackingStatus.Off)
     val status: StateFlow<HeadTrackingStatus> = _status.asStateFlow()
@@ -279,6 +284,14 @@ object HeadTracker {
         } else if (users == 0) {
             stop()
         }
+    }
+
+    /** 1.1.10: Exit Pocket XR ([com.hayeco.flipspaces.AppExit]): stops now, whoever holds the tracker, with no grace. */
+    @Synchronized
+    fun stopForExit() {
+        users = 0
+        graceHandler.removeCallbacks(stopAfterGrace)
+        stop()
     }
 
     @Synchronized
@@ -538,6 +551,18 @@ object HeadTracker {
                 backoff.reset()
                 noRoute.clear()
             }
+            // 1.1.10 (USB 3318:0442 on a Pixel 8a: "No USB network to the glasses ... One UI may not bring up the glasses'
+            // NCM or ECM interface"): glasses whose IMU is on USB HID have no USB network to find. Nothing is opened on
+            // them; the status says so, and the USB list is read again every [HID_RECHECK_MS] or on a kick (plug-in).
+            val hid = HeadImuTransport.hidGlasses(GlassesUsbList.read(context))
+            if (hid != null) {
+                val st = HeadTrackingStatus.HidGlasses(hid.vendorId, hid.productId, hid.infos.map { it.label() })
+                if (_status.value != st) Log.i(TAG, "head tracking: ${st.summary}")
+                _status.value = st
+                _answer.value = null
+                if (!waitFor(HID_RECHECK_MS, GlassesNetwork.scan(context).fingerprint, context)) return
+                continue
+            }
             if (backoff.failures == 0) _status.value = HeadTrackingStatus.Searching
             var scan = GlassesNetwork.scan(context)
             if (scan.empty && !ethernetTried) {
@@ -555,7 +580,7 @@ object HeadTracker {
             lastPrint = scan.fingerprint
             _networks.value = scan.seen
             if (scan.empty) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }
@@ -576,7 +601,7 @@ object HeadTracker {
             val shizuku = ShizukuBridge.status(context)
             val routes = scan.routes(shizuku == ShizukuStatus.READY, refusedDirect).filter { it.iface in reachable }
             if (routes.isEmpty()) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }

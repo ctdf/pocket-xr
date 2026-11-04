@@ -14,11 +14,27 @@ sealed interface HeadTrackingStatus {
         override val summary = "Looking for the glasses' USB network."
     }
 
-    /** No Android network reaches the glasses. [networks] lists what Android does have. */
-    data class NoNetwork(val networks: List<String>) : HeadTrackingStatus {
+    /**
+     * No Android network reaches the glasses. [networks] lists what Android does have.
+     *
+     * 1.1.10 (a Pixel 8a's diagnostics said "One UI may not bring up..."): [system] is the phone's own system
+     * ([PhoneSystem.name]): One UI only on a Samsung, else Android.
+     */
+    data class NoNetwork(val networks: List<String>, val system: String = "Android") : HeadTrackingStatus {
         override val summary =
             "No USB network to the glasses. Android lists: " + (networks.ifEmpty { listOf("no networks") }.joinToString("; ")) +
-                ". One UI may not bring up the glasses' NCM or ECM interface."
+                ". $system may not have brought up the glasses' NCM or ECM interface."
+    }
+
+    /**
+     * 1.1.10 (USB 3318:0442 on a Pixel 8a): the glasses carry their IMU over USB HID ([ImuTransport.USB_HID]), not a USB
+     * network, so no network is looked for and none is blamed. The app has no HID IMU reader yet.
+     */
+    data class HidGlasses(val vendorId: Int, val productId: Int, val interfaces: List<String>) : HeadTrackingStatus {
+        override val summary =
+            "These glasses (USB %04X:%04X) send head tracking over USB HID, like XREAL's Air family, not over a USB network. ".format(java.util.Locale.ROOT, vendorId, productId) +
+                "Pocket XR reads only the One family's network stream, so head tracking is not available on them yet; the Space stays head locked. " +
+                "USB interfaces: " + interfaces.ifEmpty { listOf("none listed") }.joinToString(", ") + "."
     }
 
     data class Connecting(val network: String) : HeadTrackingStatus {

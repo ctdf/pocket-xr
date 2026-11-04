@@ -3,7 +3,6 @@ package com.hayeco.flipspaces.spatial
 import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
-import android.hardware.usb.UsbManager
 import android.util.Log
 import android.view.Display
 import com.hayeco.flipspaces.core.hands.ProviderStatus
@@ -37,11 +36,8 @@ object GlassesReportFile {
                     current = d.mode.let { m -> "${m.physicalWidth}x${m.physicalHeight}@${m.refreshRate.toInt()}" },
                 )
             }
-        val usb = runCatching {
-            context.getSystemService(UsbManager::class.java).deviceList.values.map { u ->
-                GlassesReport.Usb(u.vendorId, u.productId, u.productName.orEmpty(), (0 until u.interfaceCount).mapNotNull { u.getInterface(it).name })
-            }
-        }.getOrDefault(emptyList())
+        // 1.1.10: with each interface's class, so a HID interface without a name is listed too.
+        val usb = GlassesUsbList.read(context)
         val head = HeadTracker.status.value
         val hands = when (val s = GlassesCameraProvider.status.value) {
             is ProviderStatus.Unavailable -> "not available: ${s.reason}"

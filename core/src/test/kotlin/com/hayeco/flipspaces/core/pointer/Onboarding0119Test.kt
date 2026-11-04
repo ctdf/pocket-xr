@@ -82,7 +82,8 @@ class Onboarding0119Test {
     @Test fun noSpatialMousePageWithoutTheSensor() {
         val pages = IntroPages.firstRun(GlassesModel.ONE, landscapeHandheld = true, spatialMouse = false)
         assertEquals(listOf("Set up your XREAL One", "Point and click", "Scroll and zoom", "Three fingers"), pages.map { it.title })
-        assertEquals(IntroPages.GESTURES, IntroPages.trackpad(landscapeHandheld = false, spatialMouse = false))
+        // 1.1.10: the same pages as the gestures, the last one with where Exit is.
+        assertEquals(IntroPages.GESTURES.map { it.title }, IntroPages.trackpad(landscapeHandheld = false, spatialMouse = false).map { it.title })
     }
 
     @Test fun everyPageIsShortEnoughForAShortLandscapeScreen() {

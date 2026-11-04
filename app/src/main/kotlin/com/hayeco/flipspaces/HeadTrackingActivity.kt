@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.util.Log
+import com.hayeco.flipspaces.spatial.HeadDiagnosticsFile
 import com.hayeco.flipspaces.spatial.HeadTracker
 import com.hayeco.flipspaces.spatial.SpaceSession
 import com.hayeco.flipspaces.spatial.SpaceStore
@@ -136,6 +137,14 @@ class HeadTrackingActivity : ComponentActivity() {
                         store.lateWarpSbs = on
                         Log.i("FlipSpaces/Head", "late warp in side by side ${if (on) "on" else "off"} (set on the head tracking screen)")
                         settingsVersion++
+                    },
+                    onCopyAll = {
+                        val text = HeadDiagnosticsFile.text(this, facts.soc, facts.dynamicSensors, SpaceSession.timingLine)
+                        val ok = HeadDiagnosticsFile.copy(this, text)
+                        android.widget.Toast.makeText(this, if (ok) "Copied all of it (${text.lines().size} lines)" else "Android did not allow the copy; try Share", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    onShare = {
+                        HeadDiagnosticsFile.share(this, HeadDiagnosticsFile.text(this, facts.soc, facts.dynamicSensors, SpaceSession.timingLine))
                     },
                     onRetry = {
                         HeadTracker.release()

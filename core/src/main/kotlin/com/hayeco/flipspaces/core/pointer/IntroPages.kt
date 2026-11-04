@@ -38,9 +38,10 @@ object IntroPages {
     /**
      * Spatial Mouse, held the way the device is: a phone upright, a landscape handheld ([TrackpadSettings.landscapeHandheld])
      * sideways like a game controller, its top edge tilted up and down to aim (it aims with the top edge at any rotation,
-     * 1.1.9).
+     * 1.1.9). 1.1.10 (issue 35): one short line on the one finger scroll while it is on ([ONE_FINGER_SCROLL_LINE]), as the
+     * page's note: a short landscape card holds three steps.
      */
-    fun spatialMouse(landscapeHandheld: Boolean): IntroPage = if (landscapeHandheld) {
+    fun spatialMouse(landscapeHandheld: Boolean, oneFingerScroll: Boolean = true): IntroPage = (if (landscapeHandheld) {
         IntroPage(
             SPATIAL_MOUSE_TITLE,
             listOf(
@@ -60,17 +61,38 @@ object IntroPages {
             ),
             IntroArt.AIM_PHONE,
         )
-    }
+    }).let { if (oneFingerScroll) it.copy(note = ONE_FINGER_SCROLL_LINE) else it }
+
+    /** 1.1.10 (issue 35): the tutorial's and the Spatial Mouse page's line for the one finger scroll. */
+    const val ONE_FINGER_SCROLL_LINE = "Slide one finger on the pad to scroll"
 
     /** The glasses setup page for [model], or null when there is nothing to set on them. */
     fun glassesSetup(model: GlassesModel?): IntroPage? =
         GlassesSetup.forModel(model)?.let { IntroPage(it.title, it.steps, IntroArt.GLASSES_MENU, note = it.check) }
 
-    /** The Menu's "How to use the trackpad": the gestures, and Spatial Mouse where the phone can aim ([spatialMouse]). */
-    fun trackpad(landscapeHandheld: Boolean, spatialMouse: Boolean): List<IntroPage> =
-        if (spatialMouse) GESTURES + spatialMouse(landscapeHandheld) else GESTURES
+    /** 1.1.10: the label of the quit action, on the Menu's last row and on the ongoing notification. */
+    const val EXIT_LABEL = "Exit Pocket XR"
+
+    /**
+     * 1.1.10 (a tester: "an exit app button would be nice, as it stays active in the notification bar"): the tutorial's
+     * last page says where Exit is (Mike's onboarding rule: a new control is named where the tutorial ends).
+     */
+    const val EXIT_NOTE = "To quit, open the Menu and tap $EXIT_LABEL at the end, or tap Exit on the Pocket XR notification."
+
+    /** 1.1.10: [EXIT_NOTE] in short, for under a page's own note (the one finger scroll line), so the note stays three lines. */
+    const val EXIT_NOTE_SHORT = "To quit, tap $EXIT_LABEL at the end of the Menu or on the notification."
+
+    /**
+     * The Menu's "How to use the trackpad": the gestures, and Spatial Mouse where the phone can aim ([spatialMouse]).
+     * 1.1.10: the last page carries [EXIT_NOTE] ([EXIT_NOTE_SHORT] under its own note, if it has one).
+     */
+    fun trackpad(landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> {
+        val pages = if (spatialMouse) GESTURES + spatialMouse(landscapeHandheld, oneFingerScroll) else GESTURES
+        val last = pages.last()
+        return pages.dropLast(1) + last.copy(note = last.note?.let { "$it. $EXIT_NOTE_SHORT" } ?: EXIT_NOTE)
+    }
 
     /** First run: the plugged-in glasses' setup first (if they have one), then [trackpad]. */
-    fun firstRun(plugged: GlassesModel?, landscapeHandheld: Boolean, spatialMouse: Boolean): List<IntroPage> =
-        listOfNotNull(glassesSetup(plugged)) + trackpad(landscapeHandheld, spatialMouse)
+    fun firstRun(plugged: GlassesModel?, landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> =
+        listOfNotNull(glassesSetup(plugged)) + trackpad(landscapeHandheld, spatialMouse, oneFingerScroll)
 }
