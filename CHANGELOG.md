@@ -2,6 +2,14 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.8: Follow mode on the One, Spatial Mouse on landscape handhelds
+
+- On XREAL One glasses, the hint now says to use Follow mode (not Anchor) with Stabilizer off. In Anchor mode the
+  glasses hold the picture still themselves, on top of Pocket XR's head tracking, so windows moved the wrong way on
+  each turn. (#31)
+- On handhelds whose screen is landscape by nature, like the Retroid Nova, Spatial Mouse now stays landscape and aims
+  with the top edge. Before, it turned the screen to portrait and aimed with the side edge. Phones work as before. (#33)
+
 ## 1.1.7: level calibration for the One Pro
 
 - The level calibration now takes glasses tilted up to 40 degrees. The XREAL One Pro's is steeper than the Aura's, so

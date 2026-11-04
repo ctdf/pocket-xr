@@ -109,6 +109,27 @@ data class TrackpadSettings(
         fun landscapeByNature(width: Int, height: Int, rotation: Int): Boolean =
             if (rotation % 2 == 0) width > height else height > width
 
+        /**
+         * Whether [mode]'s page is laid out landscape on the open phone. 1.1.8 (issue 33, a Retroid Nova: "Gesture seems to
+         * expect a portrait orientation"): Spatial Mouse on a [landscapeDevice] too, as it stays the way the screen is by
+         * nature ([screenOrientation]).
+         */
+        fun landscapePage(mode: PadMode, landscapeDevice: Boolean): Boolean =
+            mode == PadMode.HORIZONTAL || (mode == PadMode.SPATIAL_MOUSE && landscapeDevice)
+
+        /**
+         * The Android screen orientation [mode]'s page locks on the open phone (0 landscape, 1 portrait, 8 landscape turned).
+         * The Horizontal Trackpad takes its [direction]; the Vertical Trackpad is portrait. 1.1.8 (issue 33): Spatial Mouse
+         * keeps the screen's natural way up, portrait on a phone and landscape on a [landscapeDevice], because the phone
+         * aims with the sensor's +y ([com.hayeco.flipspaces.core.spatial.PhoneAim]), the top edge only that way up. Forced
+         * to portrait, a Retroid turned its screen on its side and aimed with its side edge.
+         */
+        fun screenOrientation(mode: PadMode, direction: PadDirection, landscapeDevice: Boolean): Int = when {
+            mode == PadMode.HORIZONTAL -> direction.screenOrientation
+            mode == PadMode.SPATIAL_MOUSE && landscapeDevice -> 0
+            else -> 1
+        }
+
         fun storedOf(mode: PadMode): Int = mode.pageType
 
         /** Scrollbar side stored -1 / 0 / 1: 0 is left, anything else (unset included) right. */

@@ -113,9 +113,10 @@ class SpaceStore(context: Context) {
         set(value) = prefs.edit().putString(perModel(KEY_AXES), value.name).apply()
 
     /** 0.5.95: how many sessions the model's setup hint ([com.hayeco.flipspaces.core.spatial.GlassesModel.setupHint]) was said in. */
+    // 1.1.8 (issue 31): a new key, so the hint that now names Follow mode is said again on glasses that heard the old one.
     var setupHintSaid: Int
-        get() = prefs.getInt("setup_hint_said_" + model.key, 0)
-        set(value) = prefs.edit().putInt("setup_hint_said_" + model.key, value).apply()
+        get() = prefs.getInt("setup_hint2_said_" + model.key, 0)
+        set(value) = prefs.edit().putInt("setup_hint2_said_" + model.key, value).apply()
 
     /** 0.5.91: [key] for the glasses' model: the Aura keeps the key it always had, every other model has its own. */
     private fun perModel(key: String): String {

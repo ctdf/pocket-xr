@@ -161,6 +161,7 @@ class TrackpadActivity : Activity(), PadHost {
         rotation = sensors?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
         if (settings.mode == PadMode.SPATIAL_MOUSE && rotation == null) settings = settings.copy(mode = PadMode.VERTICAL)
         screen = PadScreen(this, this)
+        screen.landscapeDevice = prefs.landscapeDevice
         // 0.5.55: the pad drawn at the panel's own pixels where Samsung's size compatibility
         // makes the window 1.5 times the cover ([NativeFrame]); the screen itself is laid out and touched as before.
         frame = NativeFrame(this, screen, ::bufferFor) { b, drawn, why ->
@@ -356,12 +357,9 @@ class TrackpadActivity : Activity(), PadHost {
         pad.stripSide = settings.stripSide
         pad.stripAllowed = !cover
         // Spatial Mouse and Vertical lock portrait, Horizontal landscape (0 or 8 by its direction);
-        // the cover screen keeps its own.
-        requestedOrientation = when {
-            cover -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            settings.mode == PadMode.HORIZONTAL -> settings.direction.screenOrientation
-            else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        // the cover screen keeps its own. 1.1.8 (issue 33): Spatial Mouse on a landscape handheld stays landscape.
+        requestedOrientation = if (cover) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else TrackpadSettings.screenOrientation(settings.mode, settings.direction, prefs.landscapeDevice)
         // 0.5.17 cover screen: the whole Flex Window, no status bar over the top row (a swipe shows it).
         window.insetsController?.let { c ->
             if (cover) {

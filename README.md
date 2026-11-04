@@ -59,7 +59,7 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 | Glasses | Status | Hand tracking |
 | --- | --- | --- |
 | XREAL Aura | Tested | Yes |
-| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Turn **Stabilizer off** in the glasses' menu. |
+| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Use **Follow mode** (not Anchor) with **Stabilizer off** in the glasses' menu. |
 | XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) |
 | XREAL 1S | Community testing | No |
 | Other glasses | Help wanted | No |
