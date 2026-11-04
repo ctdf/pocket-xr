@@ -45,15 +45,38 @@ developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video 
 
 ## Setup
 
-1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases) page.
+1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases) page, or through
+   [Obtainium](#updates). If Play Protect stops the install, see [If Play Protect blocks the install](#if-play-protect-blocks-the-install).
 2. **Install and start [Shizuku](https://shizuku.rikka.app/)**, and allow Pocket XR in it. Pocket XR uses it to
    create a window for each app and to start the Space on the glasses. Without Shizuku, apps open as ordinary desktop
    windows instead.
 3. **Turn on the Pocket XR pointer** in Android's accessibility settings when the app asks. It draws the cursor on the
-   glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone.
+   glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone. If the
+   switch is greyed out ("Restricted setting"), open Pocket XR's App info, tap the three dot menu, choose "Allow
+   restricted settings", and try again. The same goes for notification access (the Control Center's Notifications page).
 4. **Plug in the glasses.** The Space opens on them, and the phone shows the trackpad.
 5. **On Samsung phones**, if touches at the screen's edges go missing (the scroll strip), turn on Good Lock's Edge Touch
    for the trackpad.
+
+### If Play Protect blocks the install
+
+On some phones Google Play Protect stops the install with "App blocked to protect your device: This app can request
+access to sensitive data" (in German: "Diese App kann Zugriff auf vertrauliche Daten anfordern"). This is Play
+Protect's fraud protection for apps installed from a browser, a messaging app or a file manager. It blocks any such app that declares an accessibility service or a
+notification listener, whatever the app does with them. Pocket XR declares both: the accessibility service is the
+pointer (the cursor on the glasses and its taps), and the notification listener is the Control Center's Notifications
+page and what's playing. It does not record the phone's screen: Record the glasses saves the Space's own picture, and
+Pocket XR has no screen capture permission.
+
+Ways to install it anyway:
+
+- **Obtainium** (see [Updates](#updates)) installs from the GitHub release itself rather than through a browser or
+  file manager, which Play Protect may let through.
+- **Pause Play Protect for the install**: in the Play Store, tap your profile picture, then Play Protect, the gear,
+  and turn off "Scan apps with Play Protect". Install Pocket XR, then turn scanning back on.
+- **adb**: `adb install pocketxr-x.y.z.apk` from a computer.
+
+Check the release key's fingerprint (below) if you want to be sure the APK is the official one.
 
 ## Updates
 
