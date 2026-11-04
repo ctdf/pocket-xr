@@ -65,6 +65,7 @@ object GlassesReportFile {
             calibration = GlassesCalibrationStore.reportLine(context),
             hands = hands,
             timeUtc = utc,
+            tracking = HeadTracker.lastTrackingLine,
         )
     }
 

@@ -36,6 +36,10 @@ object UsbPrompt {
         override fun onReceive(context: Context, intent: Intent) {
             val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java) ?: return
             if (!GlassesUsb.isXreal(device.vendorId) && !GlassesUsbAccess.hasVideo(device)) return
+            // 1.0.1: Air family glasses stream head tracking over USB: the tracker looks at once.
+            if (com.hayeco.flipspaces.core.spatial.AirImuProtocol.isAir(device.vendorId, device.productId)) {
+                com.hayeco.flipspaces.spatial.HeadTracker.kick("Air family glasses plugged in on USB")
+            }
             attached(device.deviceName)
         }
     }

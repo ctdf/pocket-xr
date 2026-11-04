@@ -2,6 +2,16 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- Head tracking on the XREAL Air, Air 2, Air 2 Pro and Air 2 Ultra (not yet tested on these glasses). These models send
+  their motion sensor over USB HID, not over the USB network the One family uses, so 1.0.0 never found it: Body Anchor
+  still said 3DoF, but the Space stayed head locked and windows turned with your head. Pocket XR now asks for USB
+  access to Air glasses and reads their sensor directly.
+- A `PocketXR-Tracking` log line every second while head tracking runs: the glasses found, where the head pose comes
+  from, the tracking mode, the sensor rate, the pose, and in plain words what is wrong when there is no pose. The
+  Glasses report includes the newest line.
+
 ## 1.0.0 (2 November 2026): the first public release
 
 Pocket XR was developed privately through 107 test versions on a Galaxy Z Flip 7 with XREAL Aura and One glasses. This
