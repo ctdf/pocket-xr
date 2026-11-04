@@ -3245,8 +3245,9 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     /**
-     * 1.1.9 (John's S20 FE, Android 11): [p] went empty while a newer window of its app, [newerId], still shows it. Its
-     * display's task list is read once more; with the app's task there, [p]'s card says the app moved and offers only Close.
+     * 1.1.9 (a Galaxy S20 FE on Android 11): [p] went empty while a newer window of its app, [newerId], still shows
+     * it. Its display's task list is read once more; with the app's task there, [p]'s card says the app moved and
+     * offers only Close.
      */
     private fun checkMovedTo(p: PanelGl, newerId: Int) {
         val q = panels[newerId] ?: return

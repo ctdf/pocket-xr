@@ -91,7 +91,7 @@ class EmptyPanelDetector(private val graceMs: Long = 3000, private val confirmCh
 }
 
 /**
- * 1.1.9 (John's S20 FE on Android 11: a second Chrome window, and the first said "Reopen / Close"; Reopen only moved
+ * 1.1.9 (a Galaxy S20 FE on Android 11: a second Chrome window, and the first said "Reopen / Close"; Reopen only moved
  * Chrome back and emptied the other): an app that keeps one task (Chrome on Android 11) moves to the newest window it is
  * started on, and the window it left goes empty. A window that went empty while a newer window of the same app is still
  * showing is taken as that, so its card says so and offers only Close.

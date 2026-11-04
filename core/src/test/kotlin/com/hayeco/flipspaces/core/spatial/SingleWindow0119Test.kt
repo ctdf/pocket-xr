@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 1.1.9 (John's S20 FE on Android 11): Chrome keeps one task and moves to the newest window it is started on; the window
- * it left says so and offers only Close, instead of Reopen / Close that flipped Chrome between the two.
+ * 1.1.9 (a Galaxy S20 FE on Android 11): Chrome keeps one task and moves to the newest window it is started on; the
+ * window it left says so and offers only Close, instead of Reopen / Close that flipped Chrome between the two.
  */
 class SingleWindow0119Test {
     private fun w(id: Int, pkg: String = CHROME, launched: Long? = 0L, showing: Boolean = true) = SingleWindowApp.Window(id, pkg, launched, showing)

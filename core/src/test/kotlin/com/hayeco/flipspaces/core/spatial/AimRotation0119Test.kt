@@ -94,7 +94,7 @@ class AimRotation0119Test {
         val leftUp = floatArrayOf(-c, 0f, s)
         val leftLifted = matrix(north, leftUp, floatArrayOf(s, 0f, c))
         assertEquals(0f, PhoneAim.angles(leftLifted, 1)!!.second, 0.01f)
-        assertEquals(30f, PhoneAim.angles(leftLifted)!!.second, 0.01f) // 1.1.8: what thejoeba saw
+        assertEquals(30f, PhoneAim.angles(leftLifted)!!.second, 0.01f) // 1.1.8: what issue 33 reported
         assertEquals(-90f, PhoneAim.angles(held(1, east, north, sky))!!.first, 0.01f) // and it aimed to the west
 
         // Reverse landscape (ROTATION_270): the same front tilt aims up.

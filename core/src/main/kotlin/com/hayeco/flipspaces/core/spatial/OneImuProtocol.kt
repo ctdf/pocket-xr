@@ -24,7 +24,7 @@ object OneImuProtocol {
     /**
      * 1.1.8: the glasses on their second USB link (CDC ECM, the phone at 169.254.1.10/24 by DHCP from this address;
      * seen in the Flip's 0.4.8 log). [HOST] is on the NCM link. A phone whose kernel brings up only the
-     * ECM link (John's S20 FE on Android 11: one eth0, "No route to 169.254.2.1") has no way to [HOST] at all.
+     * ECM link (a Galaxy S20 FE on Android 11: one eth0, "No route to 169.254.2.1") has no way to [HOST] at all.
      */
     const val ECM_HOST = "169.254.1.1"
     const val STREAM_PORT = 52998
