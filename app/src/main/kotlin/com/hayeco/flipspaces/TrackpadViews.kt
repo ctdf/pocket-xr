@@ -856,6 +856,12 @@ internal fun coverIcon(b: CoverButton): Int = when (b) {
 internal class PadScreen(context: Context, private val host: PadHost) : ViewGroup(context) {
     private var settings = TrackpadSettings()
     private var cover = false
+
+    /** 1.1.8 (issue 33): the phone's screen is landscape by nature, so Spatial Mouse's page is landscape too. */
+    var landscapeDevice = false
+
+    /** The open phone's page is laid out landscape ([TrackpadSettings.landscapePage]), or the cover screen's. */
+    private val landscapeLayout: Boolean get() = cover || TrackpadSettings.landscapePage(settings.mode, landscapeDevice)
     private val rects = HashMap<View, IntArray>()
 
     val pad = PadArtView(context) { e, w, h -> host.padTouch(e, w, h) }
@@ -1164,7 +1170,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         settings = s
         cover = onCover
         coverLayout = layout
-        val landscape = cover || s.mode == PadMode.HORIZONTAL
+        val landscape = landscapeLayout
         pad.landscape = landscape
         pad.cover = cover
         // 0.5.21: the thin scroll strip on every page and on the cover takes the place of the old
@@ -1268,7 +1274,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private fun dp(v: Float) = context.dp(v)
 
     private fun place(w: Int, h: Int) {
-        val landscape = cover || settings.mode == PadMode.HORIZONTAL
+        val landscape = landscapeLayout
         val (sw, sh) = wrap(selector, w)
         var selectorBottom: Int
         if (cover) {
@@ -1324,6 +1330,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             put(curveKey, kx, ky, dp(70f), dp(54f))
             mainKeys[CoverButton.KEYBOARD]?.let { put(it, kx - dp(8f) - dp(70f), ky, dp(70f), dp(54f)) }
             mainKeys[CoverButton.RECENTRE]?.let { put(it, kx + dp(70f) + dp(8f), ky, dp(70f), dp(54f)) }
+            // 1.1.8 (issue 33): Spatial Mouse's recentre tip over the keys, on a landscape handheld.
+            if (laserTip.visibility == View.VISIBLE) wrap(laserTip, w).let { (tw, th) -> put(laserTip, (w - tw) / 2, ky - dp(8f) - th, tw, th) }
         } else {
             // Portrait: the drawer button 7 / 48, the selector centred on it, the pad from 34 below
             // the selector to 10 above the bar, the 80 tall bar 20 from the bottom and the sides.
@@ -1559,7 +1567,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private fun buildDrawer() {
         val c = context
         drawerBody.removeAllViews()
-        val landscape = cover || settings.mode == PadMode.HORIZONTAL
+        val landscape = landscapeLayout
         // The wordmark: the app's own name at the drawer's top (64 x 14).
         // 1.1.6 (issue 26: "there's no Developer settings"): the Developer card has its own switch at the Menu's end; the
         // wordmark's hidden long press (0.5.30) is gone.

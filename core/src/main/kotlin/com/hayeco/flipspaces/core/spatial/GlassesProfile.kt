@@ -10,8 +10,14 @@ import kotlin.math.tan
  * it off"): the One steadies its own picture against the head when its Stabilizer is on, on top of the Space's
  * head tracking, so the two fight and the picture glides back after each turn. Taken as the same on the One Pro
  * and 1S (the same family's menu), not confirmed.
+ *
+ * 1.1.8 (issue 31, a One Pro on a Retroid Nova and a Galaxy S24: body tracked windows "move the opposite direction at a
+ * 1:1 rate" on each turn and nod, while "the Level locks in place"): the glasses were in their own Anchor mode. The level
+ * line is drawn fixed to the display (SpaceRenderer.drawLevelCheck), so only the glasses moving the whole picture can
+ * hold it still in the room; the windows, which the Space already turns against the head, then move twice. The hint
+ * said only Stabilizer, so it names Follow mode too.
  */
-const val ONE_STABILIZER = "Turn Stabilizer off in the glasses' own menu, or windows glide after each head turn"
+const val ONE_STABILIZER = "Use Follow mode (not Anchor) with Stabilizer off on the glasses, or windows won't stay put"
 
 /**
  * 0.5.91 (support for the One, One Pro and 1S): what the app knows of each XREAL
