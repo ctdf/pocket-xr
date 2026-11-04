@@ -33,8 +33,16 @@ Found by Mike on his One on 30 October 2026: "it was the xreal ones Stabilizer s
 because it was on. i turned it off". The One Pro and 1S have the same menu; that they need the same setting is
 assumed, not yet confirmed.
 
-The app cannot read or change these settings. It says it on the glasses for the first three sessions on a One-family
-pair, and the Glasses report lists it under "Check on the glasses".
+The app cannot change these settings. It shows a Glasses setup page on the phone (`GlassesSetup` in
+`core/.../spatial/GlassesSetup.kt`): first in the first-run tutorial when One-family glasses are plugged in, by itself
+the first time a new model is plugged in, and from the trackpad's Menu under **Glasses setup**. It also says it on the
+glasses for the first three sessions, and the Glasses report lists it under "Check on the glasses".
+
+The app cannot read the mode either. The one hint it has is the panel duty the glasses answer when the control link opens
+(10065, already read for Sharper turns): about 90 % in head lock, and 16 to 32 % in the glasses' own world lock modes
+(measured on the Aura). A One-family pair that answers 40 % or less is taken as likely in Anchor mode, and the trackpad
+shows a card with one tap to the Glasses setup page, once per run of the app. That a One in Anchor mode reads low is
+inferred, not measured, so the card says "may be". No other control message is sent to find out.
 
 ### 3D mode
 

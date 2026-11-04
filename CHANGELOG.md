@@ -2,6 +2,22 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.9: easier setup, Spatial Mouse on the Retroid Nova, head tracking on Android 11
+
+- Spatial Mouse now aims with the top edge of the screen as you hold it, whichever way the system turned the screen.
+  On the Retroid Nova, 1.1.8 still went portrait and tilting the left side moved the dot up and down. Now it stays
+  landscape and tilting the top edge does. (#33)
+- Head tracking now also works on phones that reach the glasses over their other USB network link, as some Android 11
+  phones do.
+- New users now get set up as they go. On XREAL One glasses (One, One Pro, 1S), the first-run tutorial starts with a
+  short Glasses setup page: use Follow mode, turn Stabilizer off, then look left and right to check. It also shows the
+  first time a new model is plugged in, and any time from Menu, Glasses setup. If the glasses look like they're in
+  Anchor mode, a card offers that page in one tap. (#31)
+- The tutorial has a Spatial Mouse page that shows how to hold your device: upright on a phone, sideways like a
+  controller on a landscape handheld. (#33)
+- Apps that can only show one window, like Chrome on Android 11, no longer leave a window saying Reopen / Close. It now
+  says the app moved to your newest window, with one button to close the old one.
+
 ## 1.1.8: Follow mode on the One, Spatial Mouse on landscape handhelds
 
 - On XREAL One glasses, the hint now says to use Follow mode (not Anchor) with Stabilizer off. In Anchor mode the

@@ -494,7 +494,7 @@ internal class SpeedSlider(context: Context, private val onLift: (Int) -> Unit) 
  * The usage instructions' cover picture: a
  * still sketch of the gesture instead: a pad with the fingers and the way they go.
  */
-internal class IntroCover(context: Context, private val page: Int) : View(context) {
+internal class IntroCover(context: Context, private val art: com.hayeco.flipspaces.core.pointer.IntroArt) : View(context) {
     // 0.5.78 (Mike: "update the trackpad usage design and color ... flip spaces is dark themed but that usage page is white"):
     // the tokens' glass pad with its rim on the page's dark, white fingers with a soft glow, the accent's arrows.
     private val padPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = com.hayeco.flipspaces.core.Look.GLASS_RAISED or 0xFF000000.toInt() }
@@ -512,24 +512,36 @@ internal class IntroCover(context: Context, private val page: Int) : View(contex
         strokeJoin = Paint.Join.ROUND
     }
 
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = com.hayeco.flipspaces.core.Look.INK
+        textSize = context.dpf(13f)
+    }
+
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(com.hayeco.flipspaces.core.Look.PAD)
         val cx = width / 2f
         val cy = height / 2f
+        arrow.strokeWidth = context.dpf(3f)
+        val r = context.dpf(9f)
+        val len = context.dpf(46f)
+        // 1.1.9: the pages that are not a gesture on the pad draw their own picture.
+        when (art) {
+            com.hayeco.flipspaces.core.pointer.IntroArt.GLASSES_MENU -> return glassesMenu(canvas, cx, cy)
+            com.hayeco.flipspaces.core.pointer.IntroArt.AIM_PHONE -> return aim(canvas, cx, cy, handheld = false)
+            com.hayeco.flipspaces.core.pointer.IntroArt.AIM_HANDHELD -> return aim(canvas, cx, cy, handheld = true)
+            else -> Unit
+        }
         val w = context.dpf(120f)
         val h = context.dpf(190f)
         canvas.drawRoundRect(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f, context.dpf(14f), context.dpf(14f), padPaint)
         canvas.drawRoundRect(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f, context.dpf(14f), context.dpf(14f), padRim)
-        arrow.strokeWidth = context.dpf(3f)
-        val r = context.dpf(9f)
-        val len = context.dpf(46f)
-        when (page) {
-            0 -> {
+        when (art) {
+            com.hayeco.flipspaces.core.pointer.IntroArt.POINT -> {
                 canvas.drawCircle(cx - len / 2f, cy, r * 1.8f, fingerGlow)
                 canvas.drawCircle(cx - len / 2f, cy, r, finger)
                 line(canvas, cx - len / 2f + r * 1.6f, cy, cx + len / 2f + r, cy)
             }
-            1 -> {
+            com.hayeco.flipspaces.core.pointer.IntroArt.SCROLL -> {
                 val dx = context.dpf(14f)
                 canvas.drawCircle(cx - dx, cy + len / 3f, r * 1.8f, fingerGlow)
                 canvas.drawCircle(cx - dx, cy + len / 3f, r, finger)
@@ -550,6 +562,85 @@ internal class IntroCover(context: Context, private val page: Int) : View(contex
         }
     }
 
+    /**
+     * 1.1.9 (issue 31): the glasses' own menu, Follow picked and Stabilizer off, over a pair of glasses. A sketch, not
+     * their real menu.
+     */
+    private fun glassesMenu(canvas: Canvas, cx: Float, cy: Float) {
+        val d = context::dpf
+        // The menu card, two rows.
+        val mw = d(180f)
+        val rowH = d(34f)
+        val top = cy - d(70f)
+        canvas.drawRoundRect(cx - mw / 2f, top, cx + mw / 2f, top + 2 * rowH, d(12f), d(12f), padPaint)
+        canvas.drawRoundRect(cx - mw / 2f, top, cx + mw / 2f, top + 2 * rowH, d(12f), d(12f), padRim)
+        val textX = cx - mw / 2f + d(14f)
+        val base = (rowH - label.descent() - label.ascent()) / 2f
+        canvas.drawText("Follow mode", textX, top + base, label)
+        // The pick: an accent tick at the row's end.
+        arrow.strokeWidth = d(2.5f)
+        val tx = cx + mw / 2f - d(26f)
+        val ty = top + rowH / 2f
+        canvas.drawLine(tx, ty, tx + d(5f), ty + d(5f), arrow)
+        canvas.drawLine(tx + d(5f), ty + d(5f), tx + d(14f), ty - d(6f), arrow)
+        canvas.drawText("Stabilizer", textX, top + rowH + base, label)
+        // An off switch: a dim track with its knob at the left.
+        val sw = d(30f)
+        val sh = d(16f)
+        val sx = cx + mw / 2f - d(14f) - sw
+        val sy = top + rowH + (rowH - sh) / 2f
+        canvas.drawRoundRect(sx, sy, sx + sw, sy + sh, sh / 2f, sh / 2f, padRim)
+        canvas.drawCircle(sx + sh / 2f, sy + sh / 2f, sh / 2f - d(3f), finger)
+        // The glasses: two lenses, the bridge and the arms going back.
+        val lw = d(62f)
+        val lh = d(36f)
+        val gap = d(16f)
+        val gy = top + 2 * rowH + d(34f)
+        val rim = Paint(padRim).apply { strokeWidth = d(3f); color = com.hayeco.flipspaces.core.Look.INK }
+        canvas.drawRoundRect(cx - gap / 2f - lw, gy, cx - gap / 2f, gy + lh, d(12f), d(12f), rim)
+        canvas.drawRoundRect(cx + gap / 2f, gy, cx + gap / 2f + lw, gy + lh, d(12f), d(12f), rim)
+        canvas.drawLine(cx - gap / 2f, gy + d(10f), cx + gap / 2f, gy + d(10f), rim)
+        canvas.drawLine(cx - gap / 2f - lw, gy + d(8f), cx - gap / 2f - lw - d(14f), gy + d(2f), rim)
+        canvas.drawLine(cx + gap / 2f + lw, gy + d(8f), cx + gap / 2f + lw + d(14f), gy + d(2f), rim)
+    }
+
+    /**
+     * 1.1.9 (issue 33): Spatial Mouse held the device's way: a phone upright, a landscape handheld sideways like a game
+     * controller. The dot goes where the top edge points; the arrows show the tilt up and down.
+     */
+    private fun aim(canvas: Canvas, cx: Float, cy: Float, handheld: Boolean) {
+        val d = context::dpf
+        val w = if (handheld) d(170f) else d(70f)
+        val h = if (handheld) d(76f) else d(130f)
+        val top = cy - h / 2f + d(36f)
+        canvas.drawRoundRect(cx - w / 2f, top, cx + w / 2f, top + h, d(14f), d(14f), padPaint)
+        canvas.drawRoundRect(cx - w / 2f, top, cx + w / 2f, top + h, d(14f), d(14f), padRim)
+        if (handheld) {
+            // The screen in the middle, a pad on the left, buttons on the right.
+            val sw = d(84f)
+            canvas.drawRoundRect(cx - sw / 2f, top + d(10f), cx + sw / 2f, top + h - d(10f), d(6f), d(6f), padRim)
+            val lx = cx - w / 2f + d(22f)
+            val my = top + h / 2f
+            val arm = d(8f)
+            val dpad = Paint(finger).apply { strokeWidth = d(5f); strokeCap = Paint.Cap.ROUND }
+            canvas.drawLine(lx - arm, my, lx + arm, my, dpad)
+            canvas.drawLine(lx, my - arm, lx, my + arm, dpad)
+            val rx = cx + w / 2f - d(22f)
+            for ((ox, oy) in listOf(0f to -8f, 0f to 8f, -8f to 0f, 8f to 0f)) canvas.drawCircle(rx + d(ox), my + d(oy), d(3.5f), finger)
+        }
+        // The laser from the top edge to the dot.
+        val dotY = top - d(52f)
+        val laser = Paint(arrow).apply { strokeWidth = d(2f); pathEffect = android.graphics.DashPathEffect(floatArrayOf(d(5f), d(5f)), 0f) }
+        canvas.drawLine(cx, top - d(4f), cx, dotY + d(9f), laser)
+        canvas.drawCircle(cx, dotY, d(16f), fingerGlow)
+        canvas.drawCircle(cx, dotY, d(7f), finger)
+        // Tilt up and down: a double arrow beside the top edge.
+        arrow.strokeWidth = d(3f)
+        val ax = cx + w / 2f + d(20f)
+        line(canvas, ax, top + d(14f), ax, top - d(22f))
+        line(canvas, ax, top - d(8f), ax, top + d(28f))
+    }
+
     /** A line with an arrow head at its end. */
     private fun line(canvas: Canvas, x0: Float, y0: Float, x1: Float, y1: Float) {
         canvas.drawLine(x0, y0, x1, y1, arrow)
@@ -565,6 +656,12 @@ internal class IntroCover(context: Context, private val page: Int) : View(contex
 interface PadHost {
     /** 0.5.101: the Menu's settings back to Pocket XR's defaults (the pad type, presets and windows stay). */
     fun resetSettings()
+
+    /** 1.1.9: the Menu's "How to use the trackpad" pages, for this device ([com.hayeco.flipspaces.core.pointer.IntroPages.trackpad]). */
+    fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage>
+
+    /** 1.1.9: the glasses setup page for the glasses plugged in (else the last ones used), or null when they have none. */
+    fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage?
     fun padTouch(event: MotionEvent, width: Float, height: Float)
     fun backClicked()
     fun homeDown()
@@ -857,11 +954,17 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private var settings = TrackpadSettings()
     private var cover = false
 
-    /** 1.1.8 (issue 33): the phone's screen is landscape by nature, so Spatial Mouse's page is landscape too. */
+    /** 1.1.8 (issue 33): the phone is a landscape handheld, so Spatial Mouse's page is landscape too. */
     var landscapeDevice = false
 
-    /** The open phone's page is laid out landscape ([TrackpadSettings.landscapePage]), or the cover screen's. */
-    private val landscapeLayout: Boolean get() = cover || TrackpadSettings.landscapePage(settings.mode, landscapeDevice)
+    /**
+     * The open phone's page is laid out landscape ([TrackpadSettings.landscapePage]), or the cover screen's. 1.1.9: Spatial
+     * Mouse on a handheld as the screen is now, which it no longer locks.
+     */
+    private val landscapeLayout: Boolean
+        get() = cover || TrackpadSettings.landscapePage(
+            settings.mode, landscapeDevice, resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE,
+        )
     private val rects = HashMap<View, IntArray>()
 
     val pad = PadArtView(context) { e, w, h -> host.padTouch(e, w, h) }
@@ -1581,6 +1684,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // (Mike: "put Pocket XR Settings back where it was, i dont like it as its own tile"): back in this card.
         functions.addView(c.divider(20f))
         functions.addView(row(R.drawable.ic_settings_sliders, "Pocket XR Settings") { host.openSettings() })
+        // 1.1.9 (issue 31): the glasses' own settings the Space needs, the same page as at first run; only for glasses that have one.
+        host.glassesSetupPage()?.let { page ->
+            functions.addView(c.divider(20f))
+            functions.addView(row(R.drawable.ic_usage_intro, "Glasses setup") {
+                closeDrawer()
+                showIntro(listOf(page))
+            })
+        }
         // 0.5.102 (Mike): the Glasses report moved to Advanced on the settings home.
         functions.addView(c.divider(20f))
         // 0.5.99 (Mike: record the glasses as the Aura's puck does): the Space records what the left eye sees.
@@ -1683,7 +1794,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         s.addView(c.divider(20f))
         s.addView(row(R.drawable.ic_usage_intro, "How to use the trackpad") {
             closeDrawer()
-            showIntro()
+            showIntro(host.introPages())
         })
         drawerBody.addView(s, cardParams(12f))
 
@@ -2095,8 +2206,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private var introPage = 0
     private var introDownX = 0f
 
-    fun showIntro() {
+    /** 1.1.9: the pages shown now: first run's, the Menu's trackpad pages, or the glasses setup page alone. */
+    private var introPages: List<com.hayeco.flipspaces.core.pointer.IntroPage> = com.hayeco.flipspaces.core.pointer.IntroPages.GESTURES
+
+    fun showIntro(pages: List<com.hayeco.flipspaces.core.pointer.IntroPage>) {
+        if (pages.isEmpty()) return
         closePopup()
+        introPages = pages
         introPage = 0
         buildIntro()
         mask.visibility = View.VISIBLE
@@ -2115,21 +2231,31 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private fun buildIntro() {
         val c = context
         intro.removeAllViews()
-        val (title, items) = INTRO_PAGES[introPage]
+        val shown = introPages[introPage]
+        val n = introPages.size
+        fun turn(by: Int) {
+            introPage = ((introPage + by) % n + n) % n
+            buildIntro()
+        }
         // 0.5.78: a dark glass card like the dialog's (it was white and light grey).
         intro.setBackgroundResource(R.drawable.bg_pad_dialog)
         intro.clipToOutline = true
         val page = LinearLayout(c).apply {
             orientation = LinearLayout.VERTICAL
             // 1.1.2 (a Retroid in landscape, 432 dp tall: the last line and the dots were cut off): on a short screen the
-            // picture goes and the words get the card.
-            if (resources.configuration.screenHeightDp >= 500) addView(IntroCover(c, introPage), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 300f))
+            // picture goes and the words get the card. 1.1.9: the words take what they need and the picture the rest, so
+            // a page with more words (the glasses setup) still fits.
+            val picture = resources.configuration.screenHeightDp >= 500
+            if (picture) addView(IntroCover(c, shown.art), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             val text = LinearLayout(c).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(com.hayeco.flipspaces.core.Look.CARD)
                 setPadding(c.dp(20f), c.dp(16f), c.dp(20f), c.dp(10f))
-                addView(c.padText(title, 20f, com.hayeco.flipspaces.core.Look.INK, bold = true))
-                items.forEachIndexed { i, item ->
+                // The title clears the close mark at the card's top right when there is no picture above it.
+                addView(c.padText(shown.title, 20f, com.hayeco.flipspaces.core.Look.INK, bold = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (!picture) marginEnd = c.dp(24f)
+                })
+                shown.items.forEachIndexed { i, item ->
                     addView(LinearLayout(c).apply {
                         orientation = LinearLayout.HORIZONTAL
                         addView(c.padText("${i + 1}", 10f, WHITE).apply {
@@ -2139,25 +2265,38 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                         addView(c.padText(item, 14f, com.hayeco.flipspaces.core.Look.INK_2), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = c.dp(8f) })
                     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(10f) })
                 }
-                addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
-                // Page dots: the accent selected, faint white the others (0.5.78: 6 dp, they were 16 raw px).
-                addView(LinearLayout(c).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER
-                    for (k in INTRO_PAGES.indices) {
-                        addView(View(c).apply {
-                            background = GradientDrawable().apply {
-                                shape = GradientDrawable.OVAL
-                                setColor(if (k == introPage) com.hayeco.flipspaces.core.Look.ACCENT else 0x33FFFFFF)
-                            }
-                        }, LinearLayout.LayoutParams(c.dp(6f), c.dp(6f)).apply {
-                            marginStart = c.dp(4f)
-                            marginEnd = c.dp(4f)
-                        })
-                    }
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                // 1.1.9: a quieter line under the steps (the glasses setup's self-check).
+                shown.note?.let { note ->
+                    addView(c.padText(note, 13f, TEXT_99), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(12f) })
+                }
+                if (!picture) addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
+                // Page dots: the accent selected, faint white the others (0.5.78: 6 dp, they were 16 raw px). 1.1.9: with
+                // Next (Done on the last page), so a page can be skipped without knowing the swipe; none for a single page.
+                addView(FrameLayout(c).apply {
+                    if (n > 1) addView(LinearLayout(c).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER
+                        for (k in 0 until n) {
+                            addView(View(c).apply {
+                                background = GradientDrawable().apply {
+                                    shape = GradientDrawable.OVAL
+                                    setColor(if (k == introPage) com.hayeco.flipspaces.core.Look.ACCENT else 0x33FFFFFF)
+                                }
+                            }, LinearLayout.LayoutParams(c.dp(6f), c.dp(6f)).apply {
+                                marginStart = c.dp(4f)
+                                marginEnd = c.dp(4f)
+                            })
+                        }
+                    }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+                    val last = introPage == n - 1
+                    addView(c.padText(if (last) "Done" else "Next", 14f, com.hayeco.flipspaces.core.Look.ACCENT, bold = true).apply {
+                        gravity = Gravity.CENTER
+                        setPadding(c.dp(12f), 0, c.dp(4f), 0)
+                        setOnClickListener { if (last) closeIntro() else turn(1) }
+                    }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, c.dp(32f)).apply { topMargin = c.dp(8f) })
             }
-            addView(text, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 186f))
+            addView(text, if (picture) LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT) else LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
         // A looping pager: a swipe sideways turns the page.
         page.setOnTouchListener { v, e ->
@@ -2165,10 +2304,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 MotionEvent.ACTION_DOWN -> introDownX = e.x
                 MotionEvent.ACTION_UP -> {
                     val dx = e.x - introDownX
-                    if (kotlin.math.abs(dx) > c.dp(40f)) {
-                        val n = INTRO_PAGES.size
-                        introPage = ((introPage + if (dx < 0) 1 else -1) % n + n) % n
-                        buildIntro()
+                    if (n > 1 && kotlin.math.abs(dx) > c.dp(40f)) {
+                        turn(if (dx < 0) 1 else -1)
                         intro.getChildAt(0)?.let { it.translationX = if (dx < 0) v.width.toFloat() else -v.width.toFloat(); it.animate().translationX(0f).setDuration(220L).start() }
                     }
                 }
@@ -2290,18 +2427,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         /** 0.5.28: a toast with a one-tap action stays this long. */
         const val ACTION_TOAST_MS = 5000L
 
-        /**
-         * The intro's three pages: the trackpad's gestures. 0.5.96 (open source audit): written in Pocket XR's own words for
-         * what its gestures do (the earlier pages were another product's text).
-         */
-        val INTRO_PAGES: List<Pair<String, List<String>>> = listOf(
-            "Point and click" to listOf("Move one finger to move the dot", "Tap to click", "Tap with two fingers for a long press"),
-            "Scroll and zoom" to listOf(
-                "Run a finger along the strip at the edge to scroll",
-                "Move two fingers to scroll",
-                "Pinch with two fingers to zoom",
-            ),
-            "Three fingers" to listOf("Swipe up: your apps", "Swipe down: Control Center", "Swipe sideways: Back"),
-        )
+        // 1.1.9: the intro's pages moved to core ([com.hayeco.flipspaces.core.pointer.IntroPages]), with the glasses setup
+        // and Spatial Mouse pages.
     }
 }

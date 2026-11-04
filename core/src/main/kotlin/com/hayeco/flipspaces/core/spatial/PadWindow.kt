@@ -542,13 +542,44 @@ class FollowView {
  * 0.5.17: Spatial Mouse's ray from the phone's rotation vector (`SensorManager.getRotationMatrixFromVector`,
  * row major, device to world with x east, y north, z up). The phone points with its top edge
  * (device +y), like a laser pointer: yaw right positive, pitch up positive.
+ *
+ * 1.1.9 (issue 33, a Retroid Nova held landscape: "The up and down mouse is tied to lifting and lowering the left side of
+ * the device"): the sensor's axes are the screen's natural way up, and the Nova's is portrait, run landscape at a quarter
+ * turn. The aim now takes the screen's top edge as it is drawn at [angles]' rotation (Display.getRotation), the same
+ * axes as `SensorManager.remapCoordinateSystem` gives ([toScreen]), whoever set the orientation.
  */
 object PhoneAim {
-    fun angles(r: FloatArray): Pair<Float, Float>? {
+    /**
+     * [r] with its columns the screen's right, top edge and face at [rotation] quarter turns (Surface.ROTATION_0..270),
+     * as `remapCoordinateSystem` with (X, Y), (Y, -X), (-X, -Y) and (-Y, X).
+     */
+    fun toScreen(r: FloatArray, rotation: Int): FloatArray {
+        val out = r.copyOf()
+        if (r.size < 9) return out
+        for (row in 0 until 3) {
+            val x = r[row * 3]
+            val y = r[row * 3 + 1]
+            when (rotation and 3) {
+                1 -> { out[row * 3] = -y; out[row * 3 + 1] = x }
+                2 -> { out[row * 3] = -x; out[row * 3 + 1] = -y }
+                3 -> { out[row * 3] = y; out[row * 3 + 1] = -x }
+            }
+        }
+        return out
+    }
+
+    fun angles(r: FloatArray, rotation: Int = 0): Pair<Float, Float>? {
         if (r.size < 9) return null
-        val x = r[1]
-        val y = r[4]
-        val z = r[7]
+        // The screen's top edge: the device's +y, +x, -y or -x by the rotation.
+        val (col, sign) = when (rotation and 3) {
+            1 -> 0 to 1f
+            2 -> 1 to -1f
+            3 -> 0 to -1f
+            else -> 1 to 1f
+        }
+        val x = sign * r[col]
+        val y = sign * r[3 + col]
+        val z = sign * r[6 + col]
         val l = sqrt(x * x + y * y + z * z)
         if (!l.isFinite() || l < 1e-6f) return null
         return Pair(atan2(x / l, y / l) * RAD, asin((z / l).coerceIn(-1f, 1f)) * RAD)

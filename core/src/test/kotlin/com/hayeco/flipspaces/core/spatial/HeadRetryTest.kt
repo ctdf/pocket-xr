@@ -68,6 +68,33 @@ class HeadRetryTest {
     }
 
     @Test
+    fun theEcmLinkReachesTheGlassesAt169_254_1_1() {
+        // 1.1.8, John's S20 FE (Android 11): one eth0, the ECM link as the Flip logged it (DHCP from 169.254.1.1).
+        val ecmAddresses = listOf("fe80::437c:5c:3854:2d7/64", "169.254.1.10/24")
+        val ecmRoutes = listOf("fe80::/64 -> :: eth1 mtu 0", "169.254.1.0/24 -> 0.0.0.0 eth1 mtu 0")
+        // 1.1.7 saw no route to 169.254.2.1 there: "No route to 169.254.2.1 on eth0".
+        assertFalse(GlassesReach.hasRoute(OneImuProtocol.HOST, ecmAddresses, ecmRoutes))
+        assertEquals(OneImuProtocol.ECM_HOST, GlassesReach.host(ecmAddresses, ecmRoutes))
+        // The NCM link keeps 169.254.2.1, also when a /16 holds both.
+        assertEquals(OneImuProtocol.HOST, GlassesReach.host(listOf("169.254.2.10/24"), listOf("169.254.2.0/24")))
+        assertEquals(OneImuProtocol.HOST, GlassesReach.host(listOf("169.254.77.3/16"), emptyList()))
+        // Neither link: no host, so nothing is tried.
+        assertNull(GlassesReach.host(listOf("169.254.3.10/24"), listOf("169.254.3.0/24")))
+        assertNull(GlassesReach.host(listOf("fe80::2/64"), listOf("fe80::/64", "0.0.0.0/0")))
+    }
+
+    @Test
+    fun theEcmLinkIsUsedOnlyWhenNoNetworkReachesTheNcmLink() {
+        // The Flip: eth0 (NCM) and eth1 (ECM) both up; only eth0 is tried, as in 1.1.7.
+        assertEquals(listOf(OneImuProtocol.HOST, null), GlassesReach.pick(listOf(OneImuProtocol.HOST, OneImuProtocol.ECM_HOST)))
+        assertEquals(listOf(null, OneImuProtocol.HOST, null), GlassesReach.pick(listOf(OneImuProtocol.ECM_HOST, OneImuProtocol.HOST, null)))
+        // John's S20 FE: the ECM link alone.
+        assertEquals(listOf(OneImuProtocol.ECM_HOST), GlassesReach.pick(listOf(OneImuProtocol.ECM_HOST)))
+        assertEquals(listOf(null, OneImuProtocol.ECM_HOST), GlassesReach.pick(listOf(null, OneImuProtocol.ECM_HOST)))
+        assertEquals(emptyList<String?>(), GlassesReach.pick(emptyList()))
+    }
+
+    @Test
     fun theLoggedErrorsAreToldApart() {
         assertTrue(GlassesReach.noAnswer(timeout))
         assertFalse(GlassesReach.noRoute(timeout))
