@@ -123,11 +123,14 @@ class HandsActivity : ComponentActivity() {
                         usbHintText = UsbAsk.hint(checks.micAllowed),
                     ),
                     onMessageShown = { message = null },
-                    onOpenAccessibility = { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) },
+                    // 1.1.11 (Google Play): the add-on's disclosure first; it opens the service's page once agreed.
+                    onOpenAccessibility = {
+                        if (!AddonLink.openSetup(this, AddonLink.SETUP_POINTER)) startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    },
                     onOpenAppInfo = {
                         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", AddonLink.PACKAGE, null)))
                     },
-                    onGetAddon = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AddonLink.GET_URL))) },
+                    onGetAddon = { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AddonLink.getUrl(this)))) },
                     onAskCamera = { askPermissions.launch(runtimePermissions()) },
                     onAskUsb = { GlassesUsbAccess.find(this)?.let { GlassesUsbAccess.requestPermission(this, it) } },
                     onDownloadModel = { downloadModel() },

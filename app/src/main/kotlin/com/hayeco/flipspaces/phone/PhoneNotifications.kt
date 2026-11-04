@@ -38,9 +38,16 @@ object PhoneNotifications {
     fun hasAccess(context: Context): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(AddonLink.PACKAGE)
 
-    /** Blocking (Shizuku): turns notification access on for the add-on; null when it worked, else why not. */
+    /**
+     * Notification access for the add-on; null when it was turned on, else what to tell the user.
+     *
+     * 1.1.11 (Google Play): the add-on's disclosure comes first, on the phone's screen, and the user switches access on
+     * from there in Android's own page. Only an add-on too old to have that screen is still turned on through Shizuku
+     * (blocking).
+     */
     fun grant(context: Context): String? {
-        if (!AddonLink.isInstalled(context)) return "Install the Pocket XR add-on first: ${AddonLink.GET_URL}"
+        if (!AddonLink.isInstalled(context)) return "Install the Pocket XR add-on first: ${AddonLink.getUrl(context)}"
+        if (AddonLink.openSetup(context, AddonLink.SETUP_NOTES)) return "finish on the phone's screen"
         val r = ShizukuBridge.shell(listOf("cmd", "notification", "allow_listener", AddonLink.NOTES.flattenToString()))
         Log.i(TAG, "notification access asked for through Shizuku: exit ${r.exitCode} ${r.output.take(200)}")
         return if (r.exitCode == 0) null else r.output.ifBlank { "Shizuku is not running" }

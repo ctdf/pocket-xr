@@ -2,6 +2,19 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.11: ready for Google Play
+
+- Pocket XR and the add-on are prepared for Google Play (docs/PLAY.md). Nothing about how Pocket XR works changes.
+- The add-on has its own screen. Before its accessibility service or notification access is switched on, it says what
+  each one reads, what it is used for and that nothing leaves the phone, and it goes on to Android's page only when you
+  tap "Agree and turn on". Pocket XR's buttons for both open that screen.
+- Notification access is switched on by you in Android's own page, after the add-on's explanation, instead of silently
+  through Shizuku. An add-on from before this version is still turned on through Shizuku.
+- A copy of Pocket XR from Google Play gets its updates from Google Play: it hides "Check for updates" and links to the
+  add-on's Play page.
+- A privacy policy: [PRIVACY.md](PRIVACY.md).
+- The add-on is version 1.1.
+
 ## 1.1.10: one-finger scroll, Exit, clearer head tracking diagnostics
 
 - One-finger scroll on Spatial Mouse: slide one finger on the pad to scroll the window under the dot, and the dot holds

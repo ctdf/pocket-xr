@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -14,8 +16,8 @@ android {
         applicationId = "com.hayeco.flipspaces.addon"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     // Signed like the app (app/build.gradle.kts): the release key for an official build, else the debug key. The app
@@ -32,10 +34,29 @@ android {
         }
     }
 
+    // 1.1.11 (Google Play): a Play upload is signed with the upload key in keystore.properties, as the app's
+    // (app/build.gradle.kts, docs/PLAY.md). Not shrunk: it is small.
+    val play = (findProperty("pocketxr.play") as String?) == "true"
+    if (play) {
+        val props = Properties().apply {
+            val f = rootProject.file("keystore.properties")
+            if (!f.exists()) error("keystore.properties is missing at the repository root (docs/PLAY.md)")
+            f.inputStream().use { load(it) }
+        }
+        signingConfigs {
+            create("play") {
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName(if (official) "official" else "debug")
+            signingConfig = signingConfigs.getByName(if (play) "play" else if (official) "official" else "debug")
         }
     }
 

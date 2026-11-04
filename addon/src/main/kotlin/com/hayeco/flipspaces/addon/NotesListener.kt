@@ -10,8 +10,8 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * 1.1.0: notification access, now in the add-on. Android binds it once notification access is on (Pocket XR turns it
- * on through Shizuku, `cmd notification allow_listener`). It sends the phone's notifications to Pocket XR for the
+ * 1.1.0: notification access, now in the add-on. Android binds it once notification access is on (1.1.11: the user
+ * turns it on after [SetupActivity]'s disclosure; an older add-on was turned on through Shizuku). It sends the phone's notifications to Pocket XR for the
  * Space's Notifications page ([LinkService.notes]), dismisses them when asked, and says which apps play media (only a
  * listener's own app may read the media sessions).
  */

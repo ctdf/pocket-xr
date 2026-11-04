@@ -40,6 +40,37 @@ object AddonLink {
     /** Where the README says how to get the add-on. */
     const val GET_URL = "https://github.com/pocket-xr/pocket-xr#the-add-on"
 
+    /** 1.1.11: the add-on's Google Play page, for a copy of Pocket XR from Google Play. */
+    const val PLAY_URL = "https://play.google.com/store/apps/details?id=$PACKAGE"
+
+    /** 1.1.11: the add-on's setup screen (its disclosures and consent, SetupActivity), and which one to show. */
+    private val SETUP = ComponentName(PACKAGE, "$PACKAGE.SetupActivity")
+    const val SETUP_POINTER = "pointer"
+    const val SETUP_NOTES = "notes"
+
+    /** Where to get the add-on: its Play page when Pocket XR came from Google Play, else the README. */
+    fun getUrl(context: Context): String =
+        if (com.hayeco.flipspaces.core.UpdateCheck.fromPlay(com.hayeco.flipspaces.UpdateChecker.installer(context, context.packageName))) PLAY_URL else GET_URL
+
+    /**
+     * 1.1.11 (Google Play): opens the add-on's disclosure for [which] ([SETUP_POINTER], [SETUP_NOTES]) on the phone's own
+     * screen; after the user agrees there, it opens Android's page to switch the service on. False when the add-on is
+     * not installed or is too old to have the screen.
+     */
+    fun openSetup(context: Context, which: String): Boolean {
+        val intent = setupIntent(context, which) ?: return false
+        val options = android.app.ActivityOptions.makeBasic().setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY)
+        return runCatching { context.startActivity(intent, options.toBundle()); true }
+            .onFailure { Log.i(TAG, "the add-on's setup screen did not open: ${it.javaClass.simpleName}: ${it.message}") }
+            .getOrDefault(false)
+    }
+
+    /** The intent [openSetup] starts, or null when no installed add-on has the screen. */
+    fun setupIntent(context: Context, which: String): Intent? {
+        val intent = Intent().setComponent(SETUP).putExtra("kind", which).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return intent.takeIf { runCatching { context.packageManager.resolveActivity(it, 0) != null }.getOrDefault(false) }
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private var appContext: Context? = null
     private var bound = false

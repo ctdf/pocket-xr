@@ -223,7 +223,8 @@ private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Uni
             )
             Text(
                 "- draws the cursor, hints and the dock on the glasses display\n" +
-                    "- reads where app windows are on the glasses (position, size and title only)\n" +
+                    "- reads where app windows are on the glasses (position, size and title only), and the labels of DeX's " +
+                    "title bar buttons there, to find its full screen button\n" +
                     "- performs taps and drags on the glasses display, which is how windows are clicked, " +
                     "moved (drag on the DeX title bar) and resized (drag on a corner)\n" +
                     "It does nothing on the phone's own screens and sends nothing off the phone.",

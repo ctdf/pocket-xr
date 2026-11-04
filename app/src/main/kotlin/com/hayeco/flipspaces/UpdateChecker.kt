@@ -47,18 +47,23 @@ object UpdateChecker {
     /** Debug builds only (DebugReceiver): another repository's latest release, to see the update card for real. */
     @Volatile var testUrl: String? = null
 
-    /** Off when the user turned it off, and always on a copy F-Droid installed: F-Droid brings its own updates. */
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, true) && !fromFDroid(context)
+    /**
+     * Off when the user turned it off, and always on a copy F-Droid or Google Play installed: each brings its own updates
+     * (1.1.11: [UpdateCheck.selfUpdates]).
+     */
+    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, true) && offered(context)
 
-    /** Whether F-Droid (or its privileged extension) installed this copy. */
-    fun fromFDroid(context: Context): Boolean = runCatching {
-        val installer = if (android.os.Build.VERSION.SDK_INT >= 30) {
-            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+    /** Whether this copy offers GitHub's updates at all; the phone screen hides its switch when not. */
+    fun offered(context: Context): Boolean = UpdateCheck.selfUpdates(installer(context, context.packageName))
+
+    /** The package that installed [pkg] (Google Play, F-Droid, a browser's installer), or null (adb, unknown). */
+    fun installer(context: Context, pkg: String): String? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            context.packageManager.getInstallSourceInfo(pkg).installingPackageName
         } else {
-            @Suppress("DEPRECATION") context.packageManager.getInstallerPackageName(context.packageName)
+            @Suppress("DEPRECATION") context.packageManager.getInstallerPackageName(pkg)
         }
-        installer?.startsWith("org.fdroid.") == true
-    }.getOrDefault(false)
+    }.getOrNull()
 
     fun setEnabled(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_ON, on).apply()
