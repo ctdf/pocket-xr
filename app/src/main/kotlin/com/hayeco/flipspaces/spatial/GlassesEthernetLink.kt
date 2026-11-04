@@ -111,7 +111,7 @@ object GlassesEthernetLink {
                     for (r in routes) {
                         val error = probe(context, r)
                         if (error == null) {
-                            log("$iface: ${OneImuProtocol.HOST}:${OneImuProtocol.STREAM_PORT} answers (${r.kind.label}).")
+                            log("$iface: ${r.host}:${OneImuProtocol.STREAM_PORT} answers (${r.kind.label}).")
                             return true
                         }
                         errors += "${r.kind.label}: $error"
@@ -148,7 +148,7 @@ object GlassesEthernetLink {
 
     /** Null when the glasses accept a TCP connection on the IMU port. */
     private fun probe(context: Context, route: GlassesNetwork.Route): String? = try {
-        route.open(context, OneImuProtocol.HOST, OneImuProtocol.STREAM_PORT, PROBE_TIMEOUT_MS, PROBE_TIMEOUT_MS).close()
+        route.open(context, route.host, OneImuProtocol.STREAM_PORT, PROBE_TIMEOUT_MS, PROBE_TIMEOUT_MS).close()
         null
     } catch (e: Exception) {
         "${e.javaClass.simpleName}: ${e.message}"

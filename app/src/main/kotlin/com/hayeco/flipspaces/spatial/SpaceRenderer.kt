@@ -195,6 +195,15 @@ private class PanelGl(var panel: SpacePanel, private val frames: PanelDrain, bro
     var tasksCheckedMs = 0L
     @Volatile var tasksPending = false
 
+    /** 1.1.9: the window this one's app moved to when it went empty ([com.hayeco.flipspaces.core.spatial.SingleWindowApp]), else null. */
+    var movedTo: Int? = null
+
+    /** 1.1.9: this window for [com.hayeco.flipspaces.core.spatial.SingleWindowApp]. */
+    fun window(): com.hayeco.flipspaces.core.spatial.SingleWindowApp.Window {
+        val showing = state as? PanelState.Showing
+        return com.hayeco.flipspaces.core.spatial.SingleWindowApp.Window(panel.id, panel.packageName, empty.launchedAtMs, showing != null && !showing.appClosed)
+    }
+
     /** The Back question (0.4.2), while it is up; App closed comes from [state]. */
     var ask: PanelCard? = null
 
@@ -2996,9 +3005,15 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
-    /** The card over [p]: App closed, or the Back question; null when the app shows. */
-    private fun cardOf(p: PanelGl): PanelCard? =
-        if ((p.state as? PanelState.Showing)?.appClosed == true) PanelCard.AppClosed(p.panel.label, crashes[p.panel.id]) else p.ask ?: p.switcher
+    /**
+     * The card over [p]: App closed, or the Back question; null when the app shows. 1.1.9: an app that moved to a newer
+     * window of its own ([PanelGl.movedTo]) says so instead of App closed, unless it crashed.
+     */
+    private fun cardOf(p: PanelGl): PanelCard? {
+        if ((p.state as? PanelState.Showing)?.appClosed != true) return p.ask ?: p.switcher
+        val crash = crashes[p.panel.id]
+        return if (crash == null && p.movedTo != null) PanelCard.MovedToNewerWindow(p.panel.label) else PanelCard.AppClosed(p.panel.label, crash)
+    }
 
     /** 0.5.19: how each panel's app ended when its exit record was a crash, for its card. */
     private val crashes = HashMap<Int, String>()
@@ -3215,13 +3230,35 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                     val now = p.state as? PanelState.Showing ?: return@onGl
                     if (p.removed || now.displayId != display || now.appClosed) return@onGl
                     if (p.empty.sample(tasks, SystemClock.uptimeMillis())) {
+                        val newer = com.hayeco.flipspaces.core.spatial.SingleWindowApp.movedTo(p.window(), panels.values.map { it.window() })
                         p.state = now.copy(appClosed = true)
                         p.ask = null
+                        p.movedTo = null
                         Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: display $display has no task ($tasks); App closed")
                         problem = "${p.panel.label} closed on its panel; Reopen or Close it there."
                         askWhyClosed(p)
+                        newer?.let { checkMovedTo(p, it.id) }
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * 1.1.9 (a Galaxy S20 FE on Android 11): [p] went empty while a newer window of its app, [newerId], still shows
+     * it. Its display's task list is read once more; with the app's task there, [p]'s card says the app moved and
+     * offers only Close.
+     */
+    private fun checkMovedTo(p: PanelGl, newerId: Int) {
+        val q = panels[newerId] ?: return
+        val display = q.displayId ?: return
+        PanelHost.tasks(display) { tasks ->
+            onGl {
+                val closed = (p.state as? PanelState.Showing)?.appClosed == true
+                if (p.removed || q.removed || !closed || tasks == null || tasks.empty) return@onGl
+                p.movedTo = newerId
+                Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks); one window only, so Close is offered, not Reopen")
+                problem = "${p.panel.label} can only show one window on this phone. It moved to your newest window."
             }
         }
     }
@@ -3856,7 +3893,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val card = cardOf(p)
         // 0.5.69: with no card up its fade goes back to 0, so the next one fades in again.
         if (card == null && firstEye) p.cardLook.at(false, frameClockMs)
-        if (card is PanelCard.AppClosed) {
+        if (card != null && card.wholeWindow) {
             drawCard(p, panel, card, viewProj)
         } else if (read >= 0 && p.hasFrame && showing != null && !showing.paused) {
             // 0.5.13: the footprint filter where level 0 is sampled (below the mips' 1.9 texels a pixel).
@@ -4158,7 +4195,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (show < 0.01f) return
         val arcW = PanelCurve.arcWidthM(panel)
         val bodyH = panel.heightM
-        val closed = card is PanelCard.AppClosed
+        val closed = card.wholeWindow
         val rimM = rimWidthM(panel)
         // The window behind: dimmed (an app that closed has no picture: its glass fills the window instead).
         if (!closed) colorOn(PanelCurve.body(panel), viewProj, look(0xFF000000.toInt(), 0.5f * show), bodyRounding(panel))
@@ -4187,10 +4224,10 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             val dv = hM / bodyH / 2f
             drawOn(lift(PanelCurve.rect(panel, uC - du, v - dv, uC + du, v + dv), depth), viewProj, tex.id, alpha)
         }
-        p.cardTitle.set(listOf(card.title), Color.TRANSPARENT, Look.INK, CARD_TITLE_PX, centred = true, medium = true)
+        p.cardTitle.set(listOf(card.title), Color.TRANSPARENT, Look.INK, CARD_TITLE_PX * card.titleScale, centred = true, medium = true)
         line(p.cardTitle, CARD_LINE_W, CARD_LINE_H, card.titleV, card.titleH, show)
         card.detail?.let { d ->
-            p.cardDetail.set(listOf(d), Color.TRANSPARENT, Look.INK_2, CARD_TITLE_PX, centred = true)
+            p.cardDetail.set(listOf(d), Color.TRANSPARENT, Look.INK_2, CARD_TITLE_PX * card.detailScale, centred = true)
             line(p.cardDetail, CARD_LINE_W, CARD_LINE_H, card.detailV, card.detailH, show)
         }
         val hit = pointer.hoverOn(panel.id)?.takeIf { it.zone == PanelZone.BODY }

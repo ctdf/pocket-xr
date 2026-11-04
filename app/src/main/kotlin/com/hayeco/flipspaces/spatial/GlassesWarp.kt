@@ -428,7 +428,8 @@ object GlassesWarp {
                 val routes = scan.routes(ready, emptySet()).filter { r -> scan.networks.any { it.iface == r.iface && it.reachable } || scan.kernel.any { it.first == r.iface } }
                 for (r in routes) {
                     try {
-                        opened = r.openDuplex(context, GlassesControl.HOST, GlassesControl.PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
+                        // 1.1.8: the glasses' address on the route's link (169.254.1.1 on an ECM only phone).
+                        opened = r.openDuplex(context, r.host, GlassesControl.PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
                         how = "${r.label}, from ${opened.local}"
                         route = r
                         break

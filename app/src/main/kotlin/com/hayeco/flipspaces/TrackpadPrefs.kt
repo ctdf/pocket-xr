@@ -14,13 +14,25 @@ import com.hayeco.flipspaces.core.spatial.FollowMode
 class TrackpadPrefs(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("trackpad", Context.MODE_PRIVATE)
 
-    /** 1.1.2: the phone's own screen is landscape by nature (a handheld such as a Retroid), read once. */
+    /**
+     * 1.1.2: the phone is a landscape handheld such as a Retroid, read once. 1.1.9 (issue 33): its screen landscape by
+     * nature, or game controls built in ([TrackpadSettings.landscapeHandheld]); a Retroid Nova's screen is portrait by
+     * nature, run landscape by its system, so only its controls tell.
+     */
     val landscapeDevice: Boolean by lazy {
-        runCatching {
+        val natural = runCatching {
             val d = context.applicationContext.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY)
             val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
             TrackpadSettings.landscapeByNature(m.widthPixels, m.heightPixels, d.rotation)
         }.getOrDefault(false)
+        val gamepad = runCatching {
+            android.view.InputDevice.getDeviceIds().any { id ->
+                val d = android.view.InputDevice.getDevice(id)
+                d != null && !d.isVirtual && !d.isExternal && d.supportsSource(android.view.InputDevice.SOURCE_GAMEPAD)
+            }
+        }.getOrDefault(false)
+        android.util.Log.i("FlipSpaces/Trackpad", "landscape handheld: landscape by nature $natural, built in game controls $gamepad")
+        TrackpadSettings.landscapeHandheld(natural, gamepad)
     }
 
     var settings: TrackpadSettings
@@ -57,6 +69,16 @@ class TrackpadPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_INTRO, false)
         set(value) {
             prefs.edit().putBoolean(KEY_INTRO, value).apply()
+        }
+
+    /**
+     * 1.1.9: the glasses models ([com.hayeco.flipspaces.core.spatial.GlassesModel.key]) whose setup page was shown here,
+     * or that have none, so a new model plugged in for the first time gets its page once.
+     */
+    var glassesSetupSeen: Set<String>
+        get() = prefs.getStringSet(KEY_GLASSES_SEEN, null)?.toSet() ?: emptySet()
+        set(value) {
+            prefs.edit().putStringSet(KEY_GLASSES_SEEN, value.toSet()).apply()
         }
 
     /** 0.5.19: the curve new windows open with. 0.5.36: 0 flat to [com.hayeco.flipspaces.core.spatial.PanelCurve.MAX], the Menu's slider. */
@@ -102,6 +124,7 @@ class TrackpadPrefs(context: Context) {
         private const val KEY_CURVE = "CurveDefault"
         private const val KEY_WRAP = "CurveWrap"
         private const val KEY_NATIVE_BUFFER = "NativeBuffer"
+        private const val KEY_GLASSES_SEEN = "GlassesSetupSeen"
 
         /** 0.5.17 cover screen: the window rail's side, stored like the scrollbar's (0 left, else right). */
         private const val KEY_COVER_CONTROLS = "CoverControlsSide"

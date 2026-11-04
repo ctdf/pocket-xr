@@ -173,6 +173,14 @@ object GlassesDisplayControl {
         openBackoffMs > 0 -> "not opened: the glasses did not answer (tried again every ${openBackoffMs / 1000} s)"
         else -> "not tried yet (it opens with the Space)"
     }
+    /**
+     * 1.1.9: the glasses' own panel duty as read when the link opened (10065, already read for Sharper turns), and whether
+     * a duty of Pocket XR's own could be in it (the hover duty test or Sharper turns), for
+     * [com.hayeco.flipspaces.core.spatial.GlassesSetup.anchorLikely]. Nothing new is sent for it.
+     */
+    val glassesDuty: Int? get() = commands.turnDuty.normal
+    val dutyOurs: Boolean get() = hoverTestWanted || turnDutyOn || commands.turnDuty.lowered
+
     val reportSerial: String? get() = commands.serial
     val reportStereo: Int? get() = commands.stereo
     val reportEdid: Int? get() = commands.edid

@@ -25,10 +25,10 @@ class LandscapeDevice0112Test {
         assertEquals(PadMode.SPATIAL_MOUSE, TrackpadSettings.modeOf(1, landscapeDevice = true))
     }
 
-    /** 1.1.8 (issue 33, a Retroid Nova): Spatial Mouse keeps a landscape handheld landscape, so its top edge aims. */
+    /** 1.1.8 (issue 33, a Retroid Nova): Spatial Mouse keeps a landscape handheld landscape; 1.1.9: it locks nothing there. */
     @Test fun spatialMouseKeepsTheNaturalWayUp() {
-        assertEquals(0, TrackpadSettings.screenOrientation(PadMode.SPATIAL_MOUSE, PadDirection.DEFAULT, landscapeDevice = true))
-        assertEquals(0, TrackpadSettings.screenOrientation(PadMode.SPATIAL_MOUSE, PadDirection.INVERTED, landscapeDevice = true))
+        assertEquals(-1, TrackpadSettings.screenOrientation(PadMode.SPATIAL_MOUSE, PadDirection.DEFAULT, landscapeDevice = true))
+        assertEquals(-1, TrackpadSettings.screenOrientation(PadMode.SPATIAL_MOUSE, PadDirection.INVERTED, landscapeDevice = true))
         assertTrue(TrackpadSettings.landscapePage(PadMode.SPATIAL_MOUSE, landscapeDevice = true))
         // A phone is as before: Spatial Mouse and the Vertical Trackpad portrait, the Horizontal Trackpad by its direction.
         assertEquals(1, TrackpadSettings.screenOrientation(PadMode.SPATIAL_MOUSE, PadDirection.DEFAULT, landscapeDevice = false))

@@ -110,23 +110,30 @@ data class TrackpadSettings(
             if (rotation % 2 == 0) width > height else height > width
 
         /**
-         * Whether [mode]'s page is laid out landscape on the open phone. 1.1.8 (issue 33, a Retroid Nova: "Gesture seems to
-         * expect a portrait orientation"): Spatial Mouse on a [landscapeDevice] too, as it stays the way the screen is by
-         * nature ([screenOrientation]).
+         * 1.1.9 (issue 33): a handheld held landscape: a screen landscape by nature ([landscapeByNature]), or game controls
+         * built into the device. The Retroid Nova is the second: its panel is portrait by nature (Display.getRotation 0 is
+         * portrait) and its system runs it landscape at a quarter turn, so the 1.1.8 check alone said "a phone".
          */
-        fun landscapePage(mode: PadMode, landscapeDevice: Boolean): Boolean =
-            mode == PadMode.HORIZONTAL || (mode == PadMode.SPATIAL_MOUSE && landscapeDevice)
+        fun landscapeHandheld(landscapeByNature: Boolean, builtInGamepad: Boolean): Boolean = landscapeByNature || builtInGamepad
 
         /**
-         * The Android screen orientation [mode]'s page locks on the open phone (0 landscape, 1 portrait, 8 landscape turned).
-         * The Horizontal Trackpad takes its [direction]; the Vertical Trackpad is portrait. 1.1.8 (issue 33): Spatial Mouse
-         * keeps the screen's natural way up, portrait on a phone and landscape on a [landscapeDevice], because the phone
-         * aims with the sensor's +y ([com.hayeco.flipspaces.core.spatial.PhoneAim]), the top edge only that way up. Forced
-         * to portrait, a Retroid turned its screen on its side and aimed with its side edge.
+         * Whether [mode]'s page is laid out landscape on the open phone. 1.1.8 (issue 33, a Retroid Nova: "Gesture seems to
+         * expect a portrait orientation"): Spatial Mouse on a [landscapeDevice] too. 1.1.9: there it keeps the screen's
+         * own way up ([screenOrientation]), so its page follows [landscapeNow], the screen as it is.
+         */
+        fun landscapePage(mode: PadMode, landscapeDevice: Boolean, landscapeNow: Boolean = landscapeDevice): Boolean =
+            mode == PadMode.HORIZONTAL || (mode == PadMode.SPATIAL_MOUSE && landscapeDevice && landscapeNow)
+
+        /**
+         * The Android screen orientation [mode]'s page locks on the open phone (-1 none, 0 landscape, 1 portrait, 8 landscape
+         * turned). The Horizontal Trackpad takes its [direction]; the Vertical Trackpad is portrait. Spatial Mouse is portrait
+         * on a phone. 1.1.9 (issue 33): on a [landscapeDevice] it locks nothing, so the screen stays the way the system and
+         * the user hold it; the aim follows the screen's rotation ([com.hayeco.flipspaces.core.spatial.PhoneAim]), so the
+         * top edge aims whichever way up. 1.1.8 locked the natural way up, which on a Nova is portrait.
          */
         fun screenOrientation(mode: PadMode, direction: PadDirection, landscapeDevice: Boolean): Int = when {
             mode == PadMode.HORIZONTAL -> direction.screenOrientation
-            mode == PadMode.SPATIAL_MOUSE && landscapeDevice -> 0
+            mode == PadMode.SPATIAL_MOUSE && landscapeDevice -> -1
             else -> 1
         }
 

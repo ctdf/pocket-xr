@@ -69,6 +69,9 @@ class EmptyPanelDetector(private val graceMs: Long = 3000, private val confirmCh
     private var launchedMs = Long.MIN_VALUE
     private var emptyChecks = 0
 
+    /** 1.1.9: when the app was last (re)launched here, or null before the first launch or check ([SingleWindowApp]). */
+    val launchedAtMs: Long? get() = launchedMs.takeIf { it != Long.MIN_VALUE }
+
     /** The app was (re)launched at [nowMs]. */
     fun launched(nowMs: Long) {
         launchedMs = nowMs
@@ -84,6 +87,29 @@ class EmptyPanelDetector(private val graceMs: Long = 3000, private val confirmCh
         }
         emptyChecks = if (tasks.empty) emptyChecks + 1 else 0
         return emptyChecks >= confirmChecks
+    }
+}
+
+/**
+ * 1.1.9 (a Galaxy S20 FE on Android 11: a second Chrome window, and the first said "Reopen / Close"; Reopen only moved
+ * Chrome back and emptied the other): an app that keeps one task (Chrome on Android 11) moves to the newest window it is
+ * started on, and the window it left goes empty. A window that went empty while a newer window of the same app is still
+ * showing is taken as that, so its card says so and offers only Close.
+ */
+object SingleWindowApp {
+    /** A window as the Space knows it: its app, when its app was last launched there (null: not yet stamped), and whether it shows the app. */
+    data class Window(val id: Int, val packageName: String, val launchedMs: Long?, val showing: Boolean)
+
+    /**
+     * The window [empty]'s app moved to: another window of the same app, still showing, launched after [empty] (a window
+     * not stamped yet has only just opened, so it counts as newer). The newest, or null when there is none.
+     */
+    fun movedTo(empty: Window, others: List<Window>): Window? {
+        if (empty.packageName.isEmpty()) return null
+        val since = empty.launchedMs ?: return null
+        return others
+            .filter { it.id != empty.id && it.packageName == empty.packageName && it.showing && (it.launchedMs ?: Long.MAX_VALUE) > since }
+            .maxByOrNull { it.launchedMs ?: Long.MAX_VALUE }
     }
 }
 
@@ -170,6 +196,13 @@ sealed interface PanelCard {
     val detailV: Float
     val detailH: Float
 
+    /** 1.1.9: the card fills the whole window (the app has left it), as App closed does. */
+    val wholeWindow: Boolean get() = false
+
+    /** 1.1.9: the title's and the detail's text size, a share of the usual, so a long line fits its one line. */
+    val titleScale: Float get() = 1f
+    val detailScale: Float get() = 1f
+
     /**
      * 0.5.19 (a game crashed natively 10 s after each launch and its panel just went to "App closed"): [crash] says how it ended when its exit record was a crash or ANR.
      */
@@ -185,6 +218,37 @@ sealed interface PanelCard {
         override val titleH = 0.085f
         override val detailV = 0.47f
         override val detailH = 0.05f
+        override val wholeWindow: Boolean get() = true
+    }
+
+    /**
+     * 1.1.9: the window [label]'s app left for a newer window of its own ([SingleWindowApp]). Reopen would only move it
+     * back and empty the other, so the card says what happened and offers one button, to close this window.
+     */
+    data class MovedToNewerWindow(val label: String) : PanelCard {
+        override val lines = listOf("$label can only show one window on this phone.", "It moved to your newest window.")
+        override val v0 = 0f
+        override val buttons = listOf(
+            CardButton(CardAction.CLOSE_PANEL, "Close this window", 0.33f, 0.60f, 0.67f, 0.72f, primary = true),
+        )
+        override val titleV = 0.38f
+        override val titleH = 0.085f
+        override val detailV = 0.47f
+        override val detailH = 0.05f
+        override val wholeWindow: Boolean get() = true
+        override val titleScale: Float get() = fitScale(title)
+        override val detailScale: Float get() = fitScale(detail.orEmpty())
+    }
+
+    companion object {
+        /**
+         * 1.1.9: about this many characters fit a card line at the usual size (a 1024 pixel line texture, 58 px Inter);
+         * a longer line is drawn smaller rather than wrapped onto a second line the texture cuts off.
+         */
+        const val LINE_CHARS = 30
+
+        /** The text size share that fits [text] on one card line. */
+        fun fitScale(text: String): Float = if (text.length <= LINE_CHARS) 1f else LINE_CHARS.toFloat() / text.length
     }
 
     /**

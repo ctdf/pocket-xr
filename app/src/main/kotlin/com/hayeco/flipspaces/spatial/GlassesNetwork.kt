@@ -66,6 +66,8 @@ object GlassesNetwork {
         /** "eth1 (ethernet)": the interface and what Android calls it. */
         val network: String
         val label: String get() = "$network, ${kind.label}"
+        /** 1.1.8: the glasses' address on this route's link ([GlassesReach.host]). */
+        val host: String get() = OneImuProtocol.HOST
 
         /** Blocking. Throws with the exact error when the glasses cannot be reached this way. */
         fun open(context: Context, host: String, port: Int, timeoutMs: Int, readTimeoutMs: Int): Link
@@ -74,7 +76,7 @@ object GlassesNetwork {
         fun openDuplex(context: Context, host: String, port: Int, timeoutMs: Int, readTimeoutMs: Int): Duplex
 
         /** The app's own socket from [Network.socketFactory], which binds it to the network. */
-        class Direct(val net: Network, override val iface: String, override val network: String) : Route {
+        class Direct(val net: Network, override val iface: String, override val network: String, override val host: String = OneImuProtocol.HOST) : Route {
             override val kind = HeadRouteKind.DIRECT
             override fun open(context: Context, host: String, port: Int, timeoutMs: Int, readTimeoutMs: Int): Link =
                 SocketLink(net.socketFactory.createSocket().apply { connect(InetSocketAddress(host, port), timeoutMs) }, readTimeoutMs)
@@ -86,7 +88,7 @@ object GlassesNetwork {
          * [com.hayeco.flipspaces.platform.HeadStreamShell] through Shizuku, as the shell user.
          * 0.5.6: one helper is reused for every try until a stream opens on it ([ShellHelper]).
          */
-        class Shell(val net: Network, override val iface: String, override val network: String) : Route {
+        class Shell(val net: Network, override val iface: String, override val network: String, override val host: String = OneImuProtocol.HOST) : Route {
             override val kind = HeadRouteKind.SHELL
             override fun open(context: Context, host: String, port: Int, timeoutMs: Int, readTimeoutMs: Int): Link =
                 ShellHelper.connect(context, HeadShellCommand.Connect(net.networkHandle, iface, host, port, timeoutMs), readTimeoutMs)
@@ -121,8 +123,10 @@ object GlassesNetwork {
         val linkLocal: Boolean,
         val addresses: List<String> = emptyList(),
         val routes: List<String> = emptyList(),
+        /** 1.1.8: the glasses' address on this network (169.254.2.1, or 169.254.1.1 on the ECM link), null for none. */
+        val host: String? = GlassesReach.host(addresses, routes),
     ) {
-        val reachable: Boolean get() = GlassesReach.hasRoute(OneImuProtocol.HOST, addresses, routes)
+        val reachable: Boolean get() = host != null
     }
 
     /**
@@ -149,8 +153,8 @@ object GlassesNetwork {
             val plan = HeadRoutePlan.order(networks.map { it.iface }, kernel.map { it.first }, shizukuReady, refusedDirect)
             return plan.mapNotNull { c: HeadRouteCandidate ->
                 when (c.kind) {
-                    HeadRouteKind.DIRECT -> byIface[c.iface]?.let { Route.Direct(it.net, it.iface, it.description) }
-                    HeadRouteKind.SHELL -> byIface[c.iface]?.let { Route.Shell(it.net, it.iface, it.description) }
+                    HeadRouteKind.DIRECT -> byIface[c.iface]?.let { Route.Direct(it.net, it.iface, it.description, it.host ?: OneImuProtocol.HOST) }
+                    HeadRouteKind.SHELL -> byIface[c.iface]?.let { Route.Shell(it.net, it.iface, it.description, it.host ?: OneImuProtocol.HOST) }
                     HeadRouteKind.ADDRESS -> kernelByIface[c.iface]?.let { Route.Address(it, c.iface) }
                 }
             }
@@ -191,7 +195,8 @@ object GlassesNetwork {
             }
         }
         if (vpn != null) seen += "VPN covering Pocket XR: $vpn"
-        val networks = preferred + others
+        val found = preferred + others
+        val networks = found.zip(GlassesReach.pick(found.map { it.host })) { n, host -> n.copy(host = host) }
         // Kernel interfaces with a link-local IPv4 address that Android did not turn into a Network.
         val known = networks.map { it.iface }.toSet()
         val kernel = mutableListOf<Pair<String, InetAddress>>()

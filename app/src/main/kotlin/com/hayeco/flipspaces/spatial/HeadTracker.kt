@@ -564,7 +564,9 @@ object HeadTracker {
             val reachable = scan.networks.filter { it.reachable && it.iface !in noRoute }.map { it.iface } +
                 scan.kernel.map { it.first }.filter { it !in noRoute }
             if (reachable.isEmpty()) {
-                val names = scan.networks.map { it.iface } + scan.kernel.map { it.first }
+                // 1.1.8: with the addresses, so a report says which link it was ("eth0 169.254.1.10/24").
+                val names = scan.networks.map { n -> (listOf(n.iface) + n.addresses.filter { '.' in it }).joinToString(" ") } +
+                    scan.kernel.map { "${it.first} ${it.second.hostAddress} (no Android network)" }
                 _status.value = HeadTrackingStatus.NoRoute(names)
                 _answer.value = "No route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}: nothing is tried until the glasses' network changes or they are plugged in again."
                 Log.i(TAG, "head tracking: no route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}; waiting for a network change")
@@ -602,7 +604,7 @@ object HeadTracker {
                 tried += "${route.label}: connected"
                 _attempts.value = tried.toList()
                 _route.value = route.label
-                _answer.value = "The glasses answered on ${OneImuProtocol.HOST}:${OneImuProtocol.STREAM_PORT} over ${route.label}."
+                _answer.value = "The glasses answered on ${route.host}:${OneImuProtocol.STREAM_PORT} over ${route.label}."
                 _connectResult.value = "Connected over ${route.label} (${link.local})"
                 Log.i(TAG, "head tracking route: connected over ${route.label} (${link.local})")
                 openLink = link
@@ -732,7 +734,7 @@ object HeadTracker {
         var tries = 0
         while (true) {
             try {
-                return route.open(context, OneImuProtocol.HOST, OneImuProtocol.STREAM_PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
+                return route.open(context, route.host, OneImuProtocol.STREAM_PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
             } catch (e: Exception) {
                 val error = "${e.javaClass.simpleName}: ${e.message}"
                 if (route.kind != HeadRouteKind.DIRECT || HeadRoutePlan.bindRefused(error) || tries >= DIRECT_RETRIES || Thread.currentThread().isInterrupted) throw e
