@@ -12,5 +12,10 @@ captures/
 replay_pid*.log
 hs_err_pid*.log
 
+# 1.1.11 (Google Play): the upload key's path and passwords (docs/PLAY.md), and any keystore. Never committed.
+keystore.properties
+*.jks
+*.keystore
+
 # The export's marker (the private repo's tools/export-public.py).
 .pocketxr-export

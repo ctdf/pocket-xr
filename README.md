@@ -110,9 +110,13 @@ The add-on gives you:
 
 - **The Pocket XR pointer** (an accessibility service): the cursor on the glasses outside the Space, in flat DeX mode.
   It draws the cursor and taps where you point. It does nothing on the phone's own screen and sends nothing off the
-  phone. Turn it on in Android's accessibility settings; Pocket XR's Hands screen has a button for it.
+  phone. Pocket XR's Hands screen has a button for it: the add-on says what the service reads and why, and once you
+  agree it opens Android's page to switch it on.
 - **Notification access**: your phone's notifications on the Space's Notifications page, and smooth video for windows
-  playing media. Pocket XR turns it on through Shizuku when you press Allow on that page.
+  playing media. Press Allow on that page, read what the add-on reads and why on the phone, agree, and switch it on in
+  Android's page.
+
+What both read and what never leaves the phone is in the [privacy policy](PRIVACY.md).
 
 Get it from the [add-on releases](https://github.com/pocket-xr/pocket-xr/releases?q=addon&expanded=true)
 (`pocketxr-addon-x.y.apk`). It is signed with the same key as Pocket XR, and Pocket XR only talks to an add-on signed

@@ -34,8 +34,12 @@ object AccessibilityPrompt {
     /** The hidden Settings action for one service's page (AOSP AccessibilityDetailsSettingsActivity). */
     private const val DETAILS_ACTION = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
 
-    /** The intent that opens the pointer service's Accessibility page, or the Accessibility list. */
+    /**
+     * The intent that opens the add-on's disclosure for the pointer service (1.1.11, Google Play: it goes on to the
+     * service's Accessibility page once agreed), else that page, else the Accessibility list.
+     */
     fun settingsIntent(context: Context): Intent {
+        AddonLink.setupIntent(context, AddonLink.SETUP_POINTER)?.let { return it }
         val details = Intent(DETAILS_ACTION)
             .putExtra(Intent.EXTRA_COMPONENT_NAME, AddonLink.POINTER)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -55,9 +59,9 @@ object AccessibilityPrompt {
             val n = Notification.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("Turn on the Pocket XR pointer service")
-                .setStyle(Notification.BigTextStyle().bigText("$why: only the Pocket XR pointer accessibility service may press DeX's full screen button. It comes with the Pocket XR add-on. Tap to open its Accessibility page and turn it on."))
+                .setStyle(Notification.BigTextStyle().bigText("$why: only the Pocket XR pointer accessibility service may press DeX's full screen button. It comes with the Pocket XR add-on. Tap to read what it does and turn it on."))
                 .setContentIntent(open)
-                .addAction(Notification.Action.Builder(null, "Open Accessibility", open).build())
+                .addAction(Notification.Action.Builder(null, "Set up", open).build())
                 .setAutoCancel(true)
                 .build()
             manager.notify(NOTIFICATION_ID, n)
