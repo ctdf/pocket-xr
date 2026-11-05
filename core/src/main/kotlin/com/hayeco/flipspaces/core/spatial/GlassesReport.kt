@@ -20,9 +20,17 @@ data class GlassesReport(
     val calibration: String,
     val hands: String,
     val timeUtc: String,
+    /** 1.1.12: the newest PocketXR-Tracking line ([TrackingBeat]), null before one. */
+    val tracking: String? = null,
 ) {
     data class Display(val name: String, val productId: String?, val modes: List<String>, val current: String)
-    data class Usb(val vendorId: Int, val productId: Int, val name: String, val interfaces: List<String>)
+    /**
+     * 1.1.10: [ifaces] keeps each interface's class too (a HID interface often has no name, so the names alone missed it);
+     * [infos] falls back to the names for a report built without them.
+     */
+    data class Usb(val vendorId: Int, val productId: Int, val name: String, val interfaces: List<String>, val ifaces: List<UsbInterfaceInfo> = emptyList()) {
+        val infos: List<UsbInterfaceInfo> get() = ifaces.ifEmpty { interfaces.map(UsbInterfaceInfo::named) }
+    }
 
     /** The model, from the first display that names one, else from the USB product. */
     val model: GlassesModel
@@ -53,11 +61,14 @@ data class GlassesReport(
         val xreal = usb.filter { it.vendorId == XREAL_VENDOR }
         if (xreal.isEmpty()) appendLine("- none")
         xreal.forEach { u ->
-            appendLine("- %04X:%04X \"%s\": %s".format(java.util.Locale.ROOT, u.vendorId, u.productId, u.name, u.interfaces.joinToString(", ").ifEmpty { "no interfaces listed" }))
+            appendLine("- %04X:%04X \"%s\": %s".format(java.util.Locale.ROOT, u.vendorId, u.productId, u.name, u.infos.joinToString(", ") { it.label() }.ifEmpty { "no interfaces listed" }))
+            // 1.1.10: how these glasses carry head tracking, so a report from HID glasses says so at once.
+            appendLine("  Head tracking link: ${HeadImuTransport.choose(u.vendorId, u.productId, u.infos).label}")
         }
         appendLine()
         appendLine("What worked:")
         appendLine("- Head tracking: ${if (headTrackingWorks) "yes" else "no"} ($headTracking)")
+        tracking?.let { appendLine("- Tracking now: $it") }
         appendLine("- Control link: $controlLink")
         appendLine("- Glasses serial: ${serial?.let { "ends ${it.takeLast(4)}" } ?: "not read"}")
         appendLine("- 2D / 3D state: ${when (stereoState) { null -> "not read"; 1 -> "3D side by side (1)"; 0 -> "2D (0)"; else -> "$stereoState" }}")

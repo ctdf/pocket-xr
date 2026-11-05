@@ -10,8 +10,14 @@ import kotlin.math.tan
  * it off"): the One steadies its own picture against the head when its Stabilizer is on, on top of the Space's
  * head tracking, so the two fight and the picture glides back after each turn. Taken as the same on the One Pro
  * and 1S (the same family's menu), not confirmed.
+ *
+ * 1.1.8 (issue 31, a One Pro on a Retroid Nova and a Galaxy S24: body tracked windows "move the opposite direction at a
+ * 1:1 rate" on each turn and nod, while "the Level locks in place"): the glasses were in their own Anchor mode. The level
+ * line is drawn fixed to the display (SpaceRenderer.drawLevelCheck), so only the glasses moving the whole picture can
+ * hold it still in the room; the windows, which the Space already turns against the head, then move twice. The hint
+ * said only Stabilizer, so it names Follow mode too.
  */
-const val ONE_STABILIZER = "Turn Stabilizer off in the glasses' own menu, or windows glide after each head turn"
+const val ONE_STABILIZER = "Use Follow mode (not Anchor) with Stabilizer off on the glasses, or windows won't stay put"
 
 /**
  * 0.5.91 (support for the One, One Pro and 1S): what the app knows of each XREAL
@@ -54,7 +60,13 @@ enum class GlassesModel(
     ONE("XREAL One", "one", tested = true, camera = false, diagonalFovDeg = 50f, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
     ONE_PRO("XREAL One Pro", "onepro", tested = false, camera = false, diagonalFovDeg = 57f, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
     ONE_S("XREAL 1S", "1s", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
-    OTHER_XREAL("XREAL glasses", "xreal", tested = false, camera = false, diagonalFovDeg = null),
+    // 1.1.0: the One family's axes. Every XREAL with this head tracking link but the Aura has them, and the Aura's axes
+    // on a One family model turn the picture upside down (0.5.91).
+    // 1.1.12: the Air, Air 2, Air 2 Pro and Air 2 Ultra (USB [AirImuProtocol.modelName]). Their HID reports are turned
+    // into head axes as they are read ([AirImuProtocol.parse]), so the default axes; the One family's turned them half
+    // round, the Space facing behind.
+    AIR("XREAL Air", "air", tested = false, camera = false, diagonalFovDeg = 46f),
+    OTHER_XREAL("XREAL glasses", "xreal", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT),
     UNKNOWN("Unknown glasses", "unknown", tested = false, camera = false, diagonalFovDeg = null);
 
     /**
@@ -64,6 +76,13 @@ enum class GlassesModel(
      */
     val tanPerPx1to1: Float
         get() = if (this == AURA) GlassesScreen.TAN_PER_PX_1TO1 else tanPerPx(diagonalFovDeg ?: ONE.diagonalFovDeg!!)
+
+    /**
+     * 1.1.4 (issue 26, a One Pro: windows rolled as the head turned, while the level bar was right): the factory
+     * calibration's display mount is used only where it was checked against a level calibration, the Aura. The One sends
+     * none, and the One Pro's was never checked, so the level calibration's mount is used there.
+     */
+    val factoryMountChecked: Boolean get() = this == AURA
 
     /** Whether [tanPerPx1to1] comes from this model's own figure. */
     val fovKnown: Boolean get() = this == AURA || diagonalFovDeg != null
@@ -99,7 +118,13 @@ enum class GlassesModel(
         /** Tan per pixel of a 1920 x 1080 picture whose diagonal spans [diagonalDeg]. */
         fun tanPerPx(diagonalDeg: Float): Float = tan(diagonalDeg * DEG / 2f) / (sqrt(1920f * 1920f + 1080f * 1080f) / 2f)
 
-        /** The model behind [id] (the display's EDID) or, without one, [usbProduct] on XREAL's vendor id. */
+        /**
+         * The model behind [id] (the display's EDID) or, when that names none, [usbProduct] on XREAL's vendor id.
+         *
+         * 1.1.0 (a One Pro on an Honor Magic V5: the picture upside down): the USB product decided only when the display
+         * had no name at all. A phone that names the glasses' display itself (not from the EDID) made them UNKNOWN, and
+         * UNKNOWN takes the Aura's axes. Now any glasses on XREAL's USB vendor id are at least [OTHER_XREAL].
+         */
         fun detect(id: GlassesId?, usbProduct: Int? = null): GlassesModel {
             val name = id?.name?.trim().orEmpty()
             val lower = name.lowercase()
@@ -108,9 +133,10 @@ enum class GlassesModel(
                 id?.productId == EDID_ONE || lower == "xreal one" -> ONE
                 lower.contains("one pro") -> ONE_PRO
                 lower.contains("1s") || lower.contains("one s") -> ONE_S
-                lower.contains("xreal") || lower.contains("nreal") -> OTHER_XREAL
-                name.isEmpty() && usbProduct == USB_AURA -> AURA
-                name.isEmpty() && usbProduct == USB_ONE -> ONE
+                usbProduct == USB_AURA -> AURA
+                usbProduct == USB_ONE -> ONE
+                usbProduct?.let(AirImuProtocol::modelName) != null || lower.contains("xreal air") || lower.contains("nreal air") -> AIR
+                lower.contains("xreal") || lower.contains("nreal") || usbProduct != null -> OTHER_XREAL
                 else -> UNKNOWN
             }
         }

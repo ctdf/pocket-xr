@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 0.5.90 (Mike chose concept C, "Spaces in depth"): three glass panes stepping back to the upper right, in the
+     accent blues (core/Look.kt), inside the adaptive icon's 66 dp safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M56,32 h16 a5,5 0 0 1 5,5 v8 a5,5 0 0 1 -5,5 h-16 a5,5 0 0 1 -5,-5 v-8 a5,5 0 0 1 5,-5 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="51" android:startY="32" android:endX="77" android:endY="50"
+                android:startColor="#FFCBD8FF" android:endColor="#FFA9BDF5" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M46.5,41 h19 a5.5,5.5 0 0 1 5.5,5.5 v10 a5.5,5.5 0 0 1 -5.5,5.5 h-19 a5.5,5.5 0 0 1 -5.5,-5.5 v-10 a5.5,5.5 0 0 1 5.5,-5.5 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="41" android:startY="41" android:endX="71" android:endY="62"
+                android:startColor="#FF9AB8FF" android:endColor="#FF6F8FF0" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#1A0B1F5C" android:pathData="M38.5,53 h22 a6,6 0 0 1 6,6 v12 a6,6 0 0 1 -6,6 h-22 a6,6 0 0 1 -6,-6 v-12 a6,6 0 0 1 6,-6 z" />
+    <path android:pathData="M37,50 h22 a6,6 0 0 1 6,6 v12 a6,6 0 0 1 -6,6 h-22 a6,6 0 0 1 -6,-6 v-12 a6,6 0 0 1 6,-6 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="31" android:startY="50" android:endX="65" android:endY="74"
+                android:startColor="#FF5A93FF" android:endColor="#FF2F5BEA" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#00000000" android:strokeColor="#99FFFFFF" android:strokeWidth="1" android:pathData="M37,50 h22 a6,6 0 0 1 6,6 v12 a6,6 0 0 1 -6,6 h-22 a6,6 0 0 1 -6,-6 v-12 a6,6 0 0 1 6,-6 z" />
+</vector>

@@ -17,7 +17,9 @@ section 9.
 
 - **Which glasses.** Hands need a camera in the glasses. The XREAL Aura's camera turned out to be a standard USB Video
   Class (UVC) camera that the phone can read over USB, so the route in section 5a works on the Aura. Glasses without a
-  camera (the XREAL One, for example) have no hand tracking; see `docs/GLASSES.md`.
+  camera have no hand tracking yet. The XREAL One and One Pro can take the XREAL Eye camera add-on, so hand tracking
+  is possible there too, but the Eye does not stream as a standard camera (section 3), so it needs its own camera
+  route. That work is open for the community (help wanted); see `docs/GLASSES.md`.
 - **Providers** (`HandInputManager`, core's `HandProviders`): the XREAL SDK provider is always reported unavailable
   (section 3 says why), the glasses camera is used when it is there, and the phone trackpad always works. All of them
   feed the same pointer, so hands and the trackpad can be used together.

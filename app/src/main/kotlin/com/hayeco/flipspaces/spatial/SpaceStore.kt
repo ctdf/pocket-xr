@@ -22,7 +22,25 @@ class SpaceStore(context: Context) {
      * EDID), so the optics, the screen sizes and hand tracking follow the glasses, not the Aura.
      */
     val model: com.hayeco.flipspaces.core.spatial.GlassesModel
-        get() = com.hayeco.flipspaces.core.spatial.GlassesModel.detect(glasses)
+        get() = com.hayeco.flipspaces.core.spatial.GlassesModel.detect(glasses, xrealUsbProduct())
+
+    private val usb = context.applicationContext.getSystemService(android.hardware.usb.UsbManager::class.java)
+    private var usbProduct: Int? = null
+    private var usbReadAtMs = Long.MIN_VALUE / 2
+
+    /**
+     * 1.1.0: the product id of the XREAL glasses on USB, for [model] when the display's name does not say which they
+     * are (an Honor Magic V5 named a One Pro's display itself). Read again at most every [USB_READ_MS].
+     */
+    private fun xrealUsbProduct(): Int? {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - usbReadAtMs < USB_READ_MS) return usbProduct
+        usbReadAtMs = now
+        usbProduct = runCatching {
+            usb?.deviceList?.values?.firstOrNull { com.hayeco.flipspaces.core.hands.GlassesUsb.isXreal(it.vendorId) }?.productId
+        }.getOrNull()
+        return usbProduct
+    }
 
     /** 0.5.91: the Aura keeps its keys from 0.5.26; every other model has its own screen sizes. */
     private fun screenKey(sbs: Boolean): String = perModel(if (sbs) KEY_SCREEN_3D else KEY_SCREEN_2D)
@@ -95,9 +113,10 @@ class SpaceStore(context: Context) {
         set(value) = prefs.edit().putString(perModel(KEY_AXES), value.name).apply()
 
     /** 0.5.95: how many sessions the model's setup hint ([com.hayeco.flipspaces.core.spatial.GlassesModel.setupHint]) was said in. */
+    // 1.1.8 (issue 31): a new key, so the hint that now names Follow mode is said again on glasses that heard the old one.
     var setupHintSaid: Int
-        get() = prefs.getInt("setup_hint_said_" + model.key, 0)
-        set(value) = prefs.edit().putInt("setup_hint_said_" + model.key, value).apply()
+        get() = prefs.getInt("setup_hint2_said_" + model.key, 0)
+        set(value) = prefs.edit().putInt("setup_hint2_said_" + model.key, value).apply()
 
     /** 0.5.91: [key] for the glasses' model: the Aura keeps the key it always had, every other model has its own. */
     private fun perModel(key: String): String {
@@ -528,6 +547,9 @@ class SpaceStore(context: Context) {
         set(value) = prefs.edit().putString(KEY_RECENTS, value.joinToString("\n")).apply()
 
     companion object {
+        /** 1.1.0: how often [xrealUsbProduct] reads the USB devices again. */
+        private const val USB_READ_MS = 5_000L
+
         /**
          * 0.5.13: the glasses behind [display], from its EDID (Android 12+); null when
          * Android does not say.

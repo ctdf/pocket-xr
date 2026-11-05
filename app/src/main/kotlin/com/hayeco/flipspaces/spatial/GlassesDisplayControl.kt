@@ -91,6 +91,29 @@ object GlassesDisplayControl {
     @Volatile private var want72 = false
     @Volatile private var want60 = false
 
+    /**
+     * 1.1.0: the hover duty test's Developer switch ([com.hayeco.flipspaces.core.spatial.HoverDutyTest]). Kept in memory
+     * only, so it is off at every start of the app and the glasses are never left hovering by a saved setting.
+     */
+    @Volatile var hoverTestWanted = false
+        private set
+    @Volatile private var hoverTestApplied = false
+
+    fun hoverTest(context: Context, on: Boolean) {
+        app = context.applicationContext
+        hoverTestWanted = on
+        // The same switch has the glasses warp read the duty while it warps the Space's frames.
+        GlassesWarp.readDuty(on)
+        Log.i(TAG, "hover duty test ${if (on) "on" else "off"} (Developer)")
+        ensureLoop()
+    }
+
+    /** 1.1.0: the glasses were asked to hover, so the Space draws head locked (their anchor holds the picture). */
+    val hoverHeadLocked: Boolean get() = link != null && commands.hover.headLocked
+
+    /** 1.1.0: the hover duty test's line for the Developer card, and the duty read in the glasses warp. */
+    val hoverLine: String get() = commands.hover.line() + (GlassesWarp.dutyInWarp?.let { " Duty with the glasses warp: $it %." } ?: "")
+
     /** The Space's settings beat (every 0.5 s): whether a Space is up and the turn duty switch. */
     fun configure(context: Context, spaceUp: Boolean, turnDuty: Boolean) {
         app = context.applicationContext
@@ -150,6 +173,14 @@ object GlassesDisplayControl {
         openBackoffMs > 0 -> "not opened: the glasses did not answer (tried again every ${openBackoffMs / 1000} s)"
         else -> "not tried yet (it opens with the Space)"
     }
+    /**
+     * 1.1.9: the glasses' own panel duty as read when the link opened (10065, already read for Sharper turns), and whether
+     * a duty of Pocket XR's own could be in it (the hover duty test or Sharper turns), for
+     * [com.hayeco.flipspaces.core.spatial.GlassesSetup.anchorLikely]. Nothing new is sent for it.
+     */
+    val glassesDuty: Int? get() = commands.turnDuty.normal
+    val dutyOurs: Boolean get() = hoverTestWanted || turnDutyOn || commands.turnDuty.lowered
+
     val reportSerial: String? get() = commands.serial
     val reportStereo: Int? get() = commands.stereo
     val reportEdid: Int? get() = commands.edid
@@ -163,7 +194,7 @@ object GlassesDisplayControl {
     // A 72 Hz try keeps the link through the display's re-plug (the Space ends and comes back), so its revert can go out.
     // 0.5.65: also while a 2D / 3D change waits, and once per run of the app for the factory calibration.
     // 0.5.91: and for [STEREO_HOLD_MS] after the glasses took a 2D / 3D change ([stereoHoldUntilMs]).
-    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead)) || stereoWant != null || commands.tryingSinceMs != null ||
+    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead || hoverTestWanted)) || stereoWant != null || commands.tryingSinceMs != null ||
         SystemClock.elapsedRealtime() < stereoHoldUntilMs) && !GlassesWarp.linkWanted
 
     /**
@@ -226,6 +257,11 @@ object GlassesDisplayControl {
                 }
                 l != null -> {
                     synchronized(lock) {
+                        // 1.1.0: the hover duty test follows its switch (off puts the glasses back in follow).
+                        if (hoverTestApplied != hoverTestWanted) {
+                            hoverTestApplied = hoverTestWanted
+                            commands.hoverTest(hoverTestWanted, now)
+                        }
                         commands.tick(now)
                         if (want72 && commands.edid != null) {
                             want72 = false
@@ -329,6 +365,10 @@ object GlassesDisplayControl {
             link = null
             outbox.clear()
             Log.i(TAG, "display control link closed ($why)")
+            // 1.1.0: a hover duty test ends with its link (the glasses drop the link's modes; a replug resets them), and
+            // starts again on the next link while its switch is on.
+            synchronized(lock) { commands.hover.stop() }
+            hoverTestApplied = false
         }
         runCatching { l.close() }
     }

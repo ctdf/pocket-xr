@@ -16,11 +16,17 @@ import com.hayeco.flipspaces.core.GlassesReady
 class FlipSpacesApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // 1.0.1: a crash is kept and offered the next time the app opens ([CrashCatcher]); first, so it catches the rest.
+        CrashCatcher.install(this)
+        // 1.1.10: the open screens, so Exit Pocket XR can finish each one.
+        AppExit.track(this)
         // 0.5.28: the app's own rotating log file, before anything logs.
         AppLogFile.start(this)
         // 0.5.68: the bundled font, before the Space or the trackpad paints any text.
         com.hayeco.flipspaces.ui.LookType.init(this)
         GlassesAutoOpen.start(this)
+        // 1.1.0: the add-on's pointer service and notification listener, when the add-on is installed.
+        com.hayeco.flipspaces.platform.AddonLink.connect(this)
         GlassesReadyService.start(this, GlassesReady.From.APP_START)
         // 0.5.1: each plug-in's time, so the hand camera never asks over Android's plug-in prompt.
         com.hayeco.flipspaces.hands.UsbPrompt.register(this)

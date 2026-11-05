@@ -44,8 +44,19 @@ sealed interface PadSignal : PointerSignal {
      * 0.5.21 (Mike: a thin, long scroll strip): [wheel] marks the thin strip ([ScrollStrip]), whose [dy]
      * is the page's travel (the finger's times the speed curve, then the coast after the lift), which the
      * Space turns into smooth wheel scrolling of the window under the cursor.
+     * 1.1.10 (issue 35): [oneFinger] marks Spatial Mouse's one finger scroll ([TrackpadInterpreter.oneFingerScroll]): the
+     * same travel and path as two fingers, and the Space holds the phone's aim still while it lasts.
      */
-    data class Scroll(val axisX: Float, val axisY: Float, val dx: Float, val dy: Float, val phase: Phase, val strip: Boolean = false, val wheel: Boolean = false) : PadSignal
+    data class Scroll(
+        val axisX: Float,
+        val axisY: Float,
+        val dx: Float,
+        val dy: Float,
+        val phase: Phase,
+        val strip: Boolean = false,
+        val wheel: Boolean = false,
+        val oneFinger: Boolean = false,
+    ) : PadSignal
 
     /** A two finger pinch: the fingers' distance over the distance at its start. */
     data class Pinch(val factor: Float, val phase: Phase) : PadSignal

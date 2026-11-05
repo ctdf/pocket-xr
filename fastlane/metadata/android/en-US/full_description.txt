@@ -26,7 +26,7 @@ Pocket XR turns an Android phone and a pair of XREAL glasses into a multi-window
 <li>A phone whose USB-C port carries video (DisplayPort alt mode), on Android 11 or later.</li>
 <li>XREAL glasses: the Aura and the One are tested; the One Pro and 1S are in community testing.</li>
 <li>Shizuku, to create a window for each app.</li>
-<li>Its accessibility service, which draws the cursor on the glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone.</li>
+<li>Optional: the Pocket XR add-on, for the cursor outside the Space and the Notifications page. It holds the accessibility service and notification access, so Pocket XR itself needs neither.</li>
 </ul>
 
 Pocket XR is not made by or affiliated with XREAL. "XREAL" and the glasses' names are XREAL's trademarks, used only to say what the app works with.

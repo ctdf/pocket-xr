@@ -79,6 +79,8 @@ data class TrackpadSettings(
      */
     val scrollSpeed: Int = DEFAULT_SCROLL_SPEED,
     val stripSpeed: Int = DEFAULT_STRIP_SPEED,
+    /** 1.1.10 (issue 35): one finger on the pad scrolls on Spatial Mouse ([TrackpadInterpreter.oneFingerScroll]); on by default. */
+    val oneFingerScroll: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_SCROLL_SPEED = 35
@@ -90,12 +92,51 @@ data class TrackpadSettings(
         /** 0.5.83: a stored scroll speed, or [default] when unset or out of range. */
         fun scrollSpeedOf(stored: Int, default: Int): Int = if (stored in 0..100) stored else default
 
-        /** The stored pad type -1..3: 0 and 1 are Spatial Mouse, 2 and 3 the trackpads; unset (-1) is the default, the Vertical Trackpad. */
-        fun modeOf(stored: Int): PadMode = when (stored) {
+        /**
+         * The stored pad type -1..3: 0 and 1 are Spatial Mouse, 2 and 3 the trackpads; unset (-1) is the default, the Vertical
+         * Trackpad. 1.1.2 (a Retroid Nova owner): on a device whose screen is landscape by nature ([landscapeDevice]), a
+         * handheld, the default is the Horizontal Trackpad, so the screen does not turn on its side. A chosen page is kept.
+         */
+        fun modeOf(stored: Int, landscapeDevice: Boolean = false): PadMode = when (stored) {
             2 -> PadMode.VERTICAL
             3 -> PadMode.HORIZONTAL
             0, 1 -> PadMode.SPATIAL_MOUSE
-            else -> PadMode.VERTICAL
+            else -> if (landscapeDevice) PadMode.HORIZONTAL else PadMode.VERTICAL
+        }
+
+        /**
+         * 1.1.2: whether a screen is landscape by nature: [width] by [height] as it is now, at [rotation] quarter turns from its
+         * natural way up (Display.getRotation).
+         */
+        fun landscapeByNature(width: Int, height: Int, rotation: Int): Boolean =
+            if (rotation % 2 == 0) width > height else height > width
+
+        /**
+         * 1.1.9 (issue 33): a handheld held landscape: a screen landscape by nature ([landscapeByNature]), or game controls
+         * built into the device. The Retroid Nova is the second: its panel is portrait by nature (Display.getRotation 0 is
+         * portrait) and its system runs it landscape at a quarter turn, so the 1.1.8 check alone said "a phone".
+         */
+        fun landscapeHandheld(landscapeByNature: Boolean, builtInGamepad: Boolean): Boolean = landscapeByNature || builtInGamepad
+
+        /**
+         * Whether [mode]'s page is laid out landscape on the open phone. 1.1.8 (issue 33, a Retroid Nova: "Gesture seems to
+         * expect a portrait orientation"): Spatial Mouse on a [landscapeDevice] too. 1.1.9: there it keeps the screen's
+         * own way up ([screenOrientation]), so its page follows [landscapeNow], the screen as it is.
+         */
+        fun landscapePage(mode: PadMode, landscapeDevice: Boolean, landscapeNow: Boolean = landscapeDevice): Boolean =
+            mode == PadMode.HORIZONTAL || (mode == PadMode.SPATIAL_MOUSE && landscapeDevice && landscapeNow)
+
+        /**
+         * The Android screen orientation [mode]'s page locks on the open phone (-1 none, 0 landscape, 1 portrait, 8 landscape
+         * turned). The Horizontal Trackpad takes its [direction]; the Vertical Trackpad is portrait. Spatial Mouse is portrait
+         * on a phone. 1.1.9 (issue 33): on a [landscapeDevice] it locks nothing, so the screen stays the way the system and
+         * the user hold it; the aim follows the screen's rotation ([com.hayeco.flipspaces.core.spatial.PhoneAim]), so the
+         * top edge aims whichever way up. 1.1.8 locked the natural way up, which on a Nova is portrait.
+         */
+        fun screenOrientation(mode: PadMode, direction: PadDirection, landscapeDevice: Boolean): Int = when {
+            mode == PadMode.HORIZONTAL -> direction.screenOrientation
+            mode == PadMode.SPATIAL_MOUSE && landscapeDevice -> -1
+            else -> 1
         }
 
         fun storedOf(mode: PadMode): Int = mode.pageType

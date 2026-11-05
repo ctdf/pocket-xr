@@ -1,4 +1,4 @@
-package com.hayeco.flipspaces.pointer
+package com.hayeco.flipspaces.addon
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription

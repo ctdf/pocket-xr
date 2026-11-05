@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- M2-hands. CAMERA: Android requires it before granting USB access to a video class
          device such as the glasses' UVC camera, and for the camera foreground service.
@@ -28,6 +29,21 @@
     <!-- 0.5.46: the Control Center's Bluetooth page (paired and connected devices); granted through Shizuku on its press. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- 1.1.0: the link to the Pocket XR add-on, granted only to apps signed with the same key. Declared here too, so
+         it is granted whichever of the two apps is installed first. -->
+    <permission
+        android:name="com.hayeco.flipspaces.permission.ADDON_LINK"
+        android:label="Pocket XR add-on link"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.hayeco.flipspaces.permission.ADDON_LINK" />
+
+    <!-- 1.1.11 (Google Play): LiteRT brings Play's asset pack library, whose extraction service is a dataSync foreground
+         service (disabled in its own manifest). Pocket XR has no asset packs, so neither it nor its permission is
+         merged, and Play asks no foreground service declaration for dataSync. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        tools:node="remove" />
+
     <uses-feature android:glEsVersion="0x00030000" android:required="true" />
 
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
@@ -42,6 +58,8 @@
         <!-- Samsung DeX (to offer its settings) and Shizuku (the shell fallback). -->
         <package android:name="com.sec.android.desktopmode.uiservice" />
         <package android:name="moe.shizuku.privileged.api" />
+        <!-- 1.1.0: the Pocket XR add-on, bound for the DeX cursor and the Notifications page. -->
+        <package android:name="com.hayeco.flipspaces.addon" />
         <intent>
             <action android:name="android.settings.SETTINGS" />
         </intent>
@@ -201,33 +219,9 @@
                 android:value="0" />
         </activity>
 
-        <!-- Draws the cursor on the glasses, reads where windows are there and performs taps
-             and drags on that display. -->
-        <service
-            android:name=".pointer.PointerService"
-            android:exported="true"
-            android:label="@string/pointer_service_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/pointer_service" />
-        </service>
-
+        <!-- 1.1.0: the pointer accessibility service and the notification listener are in the Pocket XR
+             add-on (the addon module), so this app declares neither and Google's install check does not block it. -->
         <!-- Reads the glasses camera over USB and runs hand tracking while Pocket XR is in use. -->
-        <!-- 0.5.46: the Space's Notifications page; Android binds it once notification access is on. -->
-        <service
-            android:name=".phone.PhoneNotifications$Listener"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
         <service
             android:name=".hands.HandTrackingService"
             android:exported="false"
@@ -274,6 +268,17 @@
 
         <!-- Receives the Shizuku binder when Shizuku is running: the launch fallback, and the
              panel service for M3-spatial app panels. -->
+        <!-- 1.1.5: the Glasses report shared as a file too, so a file manager can save it (it got only text before). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/report_paths" />
+        </provider>
+
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
@@ -281,5 +286,10 @@
             android:exported="true"
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- 1.1.11: see FOREGROUND_SERVICE_DATA_SYNC above. -->
+        <service
+            android:name="com.google.android.play.core.assetpacks.ExtractionForegroundService"
+            tools:node="remove" />
     </application>
 </manifest>

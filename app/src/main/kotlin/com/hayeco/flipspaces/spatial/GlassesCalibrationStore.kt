@@ -69,7 +69,8 @@ object GlassesCalibrationStore {
     }
 
     /** 0.5.91: for the Glasses report: whether a calibration is in use and whose. */
-    fun reportLine(context: Context): String = last(context)?.let { "read from the glasses${cachedSerial?.let { s -> " ending ${s.takeLast(4)}" } ?: ""} and in use" }
+    // 1.1.4: with its numbers (gyro scale, display mount), so a report shows what the fusion was given.
+    fun reportLine(context: Context): String = last(context)?.let { "read from the glasses${cachedSerial?.let { s -> " ending ${s.takeLast(4)}" } ?: ""} and in use; ${it.line()}" }
         ?: "none (the glasses did not send one, or have not been asked yet)"
 
     /**

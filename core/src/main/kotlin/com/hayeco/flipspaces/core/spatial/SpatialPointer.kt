@@ -428,6 +428,13 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     private data class MouseRef(val phoneYaw: Float, val phonePitch: Float, val headYaw: Float, val headPitch: Float)
     private var mouseRef: MouseRef? = null
 
+    /** 1.1.10 (issue 35): the phone's angles at the last aim, and whether a one finger scroll holds the aim still. */
+    private var lastPhoneAim: Pair<Float, Float>? = null
+
+    /** 1.1.10 (issue 35): true while Spatial Mouse's one finger scroll lasts; the dot stays on what it scrolls ([AimHold]). */
+    var aimHeld = false
+        private set
+
     /** 0.5.17: the window the trackpad holds, or null. */
     val heldPanelId: Int? get() = (main.grab as? Holding)?.panelId
 
@@ -1097,6 +1104,11 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
             }
             is PadSignal.TwoFinger -> if (held != null) holdTwo(held, s, layout, out)
             is PadSignal.Scroll -> when {
+                // 1.1.10 (issue 35): the aim is held from the one finger scroll's start to its end, whatever it landed on.
+                s.oneFinger && padMode == PadMode.SPATIAL_MOUSE && held == null -> {
+                    aimHeld = s.phase != Phase.END
+                    padScroll(s, head, layout, out)
+                }
                 held != null -> if (s.strip) {
                     if (s.phase == Phase.BEGIN) held.stripDy = 0f
                     val dy = s.dy - held.stripDy
@@ -1128,6 +1140,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                 if (padMode != s.mode) {
                     padMode = s.mode
                     mouseRef = null
+                    aimHeld = false
                     if (s.mode != PadMode.SPATIAL_MOUSE) centre()
                 }
             }
@@ -1454,7 +1467,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                 }
                 val hit = panelHit(r, layout)
                 // 0.5.78 (Mike: "im trying to use scroll on trackpad but its not working"): what each scroll lands on, logged.
-                out += SpaceAction.Note(scrollNote("two finger scroll", hit, r))
+                out += SpaceAction.Note(scrollNote(if (s.oneFinger) "one finger scroll (Spatial Mouse)" else "two finger scroll", hit, r))
                 coast?.let { endCoast(it, out) }
                 main.grab = when {
                     hit != null && hit.zone == PanelZone.BODY -> {
@@ -1462,6 +1475,8 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                         out += SpaceAction.Wheel(hit.panel.id, hit.u, hit.v, 0f, 0f, Phase.BEGIN, smooth = true)
                         PadWheelScroll(hit.panel.id, hit.u, hit.v)
                     }
+                    // 1.1.10 (issue 35): one finger over empty space does nothing; two fingers there turn the view as before.
+                    hit == null && s.oneFinger -> Button
                     hit == null -> PadTurning(0f)
                     else -> Button
                 }
@@ -1616,6 +1631,16 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     /** Spatial Mouse: the phone's turn since the last recentre, from where the head looked then, is the ray in the room. */
     private fun mouseAim(s: PadSignal.Aim, head: Quat, layout: SpaceLayout, out: MutableList<SpaceAction>) {
         if (!s.yawDeg.isFinite() || !s.pitchDeg.isFinite()) return
+        val last = lastPhoneAim
+        lastPhoneAim = Pair(s.yawDeg, s.pitchDeg)
+        // 1.1.10 (issue 35): while one finger scrolls, the phone's turn slides the reference instead of the dot, so the
+        // dot stays on what it scrolls and, after, moves on from there with the phone (no jump).
+        mouseRef?.let { r ->
+            if (aimHeld && last != null) {
+                val (py, pp) = AimHold.slide(r.phoneYaw, r.phonePitch, last.first, last.second, s.yawDeg, s.pitchDeg)
+                mouseRef = r.copy(phoneYaw = py, phonePitch = pp)
+            }
+        }
         var ref = mouseRef ?: Angles.of(head.forward).let { MouseRef(s.yawDeg, s.pitchDeg, it.yawDeg, it.pitchDeg) }.also { mouseRef = it }
         var yaw = wrapDegrees(ref.headYaw + wrapDegrees(s.yawDeg - ref.phoneYaw))
         var pitch = (ref.headPitch + s.pitchDeg - ref.phonePitch).coerceIn(-89f, 89f)

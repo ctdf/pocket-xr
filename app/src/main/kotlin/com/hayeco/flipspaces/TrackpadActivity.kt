@@ -13,6 +13,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -145,6 +146,12 @@ class TrackpadActivity : Activity(), PadHost {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 1.1.10: after Exit Pocket XR, nothing opens the trackpad by itself; the user opening it brings Pocket XR back.
+        if (AppExit.exited && intent?.getBooleanExtra(EXTRA_AUTO, false) == true) {
+            finish()
+            return
+        }
+        AppExit.reopened(this)
         // The phone's screen stays on while it is the trackpad, so it never dims under a resting thumb.
         // 0.5.17 cover screen: over the lock screen, waking the screen it starts on (the manifest
         // says so too), and drawn into the cutout area so core's layout places around the cameras.
@@ -161,6 +168,7 @@ class TrackpadActivity : Activity(), PadHost {
         rotation = sensors?.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
         if (settings.mode == PadMode.SPATIAL_MOUSE && rotation == null) settings = settings.copy(mode = PadMode.VERTICAL)
         screen = PadScreen(this, this)
+        screen.landscapeDevice = prefs.landscapeDevice
         // 0.5.55: the pad drawn at the panel's own pixels where Samsung's size compatibility
         // makes the window 1.5 times the cover ([NativeFrame]); the screen itself is laid out and touched as before.
         frame = NativeFrame(this, screen, ::bufferFor) { b, drawn, why ->
@@ -196,9 +204,12 @@ class TrackpadActivity : Activity(), PadHost {
         }
         // First open: the usage instructions, as the drawer shows them at any time.
         // 0.5.17 cover screen: not over a trackpad that opened by itself (the glasses plugged in folded).
+        // 1.1.9: the plugged-in glasses' setup first when they have one (issue 31), and Spatial Mouse for this device (issue 33).
         if (!prefs.introShown && !intent.getBooleanExtra(EXTRA_AUTO, false)) {
             prefs.introShown = true
-            screen.showIntro()
+            val plugged = pluggedGlasses()
+            plugged?.let { glassesSeen(it) }
+            screen.showIntro(com.hayeco.flipspaces.core.pointer.IntroPages.firstRun(plugged, prefs.landscapeDevice, rotation != null, settings.oneFingerScroll))
         }
     }
 
@@ -227,6 +238,9 @@ class TrackpadActivity : Activity(), PadHost {
         val changed = lastConfig?.diff(newConfig) ?: -1
         lastConfig = Configuration(newConfig)
         if (changed != -1 && changed != 0 && changed and (android.content.pm.ActivityInfo.CONFIG_FONT_SCALE or android.content.pm.ActivityInfo.CONFIG_FONT_WEIGHT_ADJUSTMENT).inv() == 0) return
+        // 1.1.9 (issue 33): Spatial Mouse on a handheld locks no orientation, so its page follows the screen's turn.
+        aimRotation = display?.rotation ?: aimRotation
+        if (!cover && changed and ActivityInfo.CONFIG_ORIENTATION != 0) screen.configure(settings, cover, coverLayout)
         relayout()
     }
 
@@ -353,15 +367,14 @@ class TrackpadActivity : Activity(), PadHost {
         pad.cursorSpeed = settings.cursorSpeed
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
+        pad.oneFingerScroll = settings.oneFingerScroll
         pad.stripSide = settings.stripSide
         pad.stripAllowed = !cover
         // Spatial Mouse and Vertical lock portrait, Horizontal landscape (0 or 8 by its direction);
-        // the cover screen keeps its own.
-        requestedOrientation = when {
-            cover -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            settings.mode == PadMode.HORIZONTAL -> settings.direction.screenOrientation
-            else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        // the cover screen keeps its own. 1.1.9 (issue 33): Spatial Mouse on a landscape handheld locks nothing, as its aim
+        // follows the screen's rotation.
+        requestedOrientation = if (cover) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else TrackpadSettings.screenOrientation(settings.mode, settings.direction, prefs.landscapeDevice)
         // 0.5.17 cover screen: the whole Flex Window, no status bar over the top row (a swipe shows it).
         window.insetsController?.let { c ->
             if (cover) {
@@ -405,6 +418,8 @@ class TrackpadActivity : Activity(), PadHost {
         }
         GlassesAutoOpen.resumed(this)
         CoverTrackpad.resumed(this)
+        // 1.0.1: if the last run crashed, offer to send the report.
+        CrashCatcher.offer(this)
         // 0.5.101: Settings' Trackpad row opens the trackpad with its Menu out, where its settings are.
         if (intent?.getBooleanExtra(EXTRA_MENU, false) == true) {
             intent.removeExtra(EXTRA_MENU)
@@ -435,7 +450,18 @@ class TrackpadActivity : Activity(), PadHost {
      * home's banner with the same fix.
      */
     private fun offerShizuku() {
-        if (com.hayeco.flipspaces.platform.ShizukuBridge.status(this) != com.hayeco.flipspaces.core.ShizukuStatus.NOT_RUNNING) return
+        val status = com.hayeco.flipspaces.platform.ShizukuBridge.status(this)
+        // 1.1.3 (issue 20: "there was no Shizuku enable flow"): Shizuku running but Pocket XR not allowed yet. The allow
+        // button was only under Menu, Settings, Spatial windows; the trackpad now asks Shizuku's own dialog at one tap.
+        if (status == com.hayeco.flipspaces.core.ShizukuStatus.NO_PERMISSION) {
+            Log.i(TAG, "Shizuku is running but has not allowed Pocket XR: the trackpad offers to allow it")
+            screen.showAction("Allow Pocket XR in Shizuku for app windows.", "Tap here to allow", millis = 15_000L) {
+                Log.i(TAG, "Shizuku's allow dialog asked for from the trackpad's note")
+                com.hayeco.flipspaces.platform.ShizukuBridge.requestPermission()
+            }
+            return
+        }
+        if (status != com.hayeco.flipspaces.core.ShizukuStatus.NOT_RUNNING) return
         Log.i(TAG, "Shizuku is installed but not running: the trackpad offers to start it")
         screen.showAction("Start Shizuku for app windows.", "Tap here to open Shizuku") {
             Log.i(TAG, "Shizuku opened from the trackpad's note")
@@ -737,6 +763,7 @@ class TrackpadActivity : Activity(), PadHost {
             }
             screen.refreshGesture()
             status()
+            checkGlassesSetup(now)
         }
     }
 
@@ -802,6 +829,15 @@ class TrackpadActivity : Activity(), PadHost {
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
     }
 
+    /** 1.1.10 (issue 35): the Menu's "One-finger scroll on Spatial Mouse". */
+    override fun oneFingerScrollChosen(on: Boolean) {
+        if (touching) send(pad.cancel())
+        settings = prefs.update { it.copy(oneFingerScroll = on) }
+        pad.oneFingerScroll = on
+        screen.configure(settings, cover, coverLayout)
+        Log.i(TAG, "one finger scroll on Spatial Mouse ${if (on) "on" else "off"} (${if (cover) "cover" else "main"} screen)")
+    }
+
     override fun stripSpeedChanged(speed: Int) {
         settings = prefs.update { it.copy(stripSpeed = speed) }
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
@@ -832,6 +868,7 @@ class TrackpadActivity : Activity(), PadHost {
         pad.cursorSpeed = settings.cursorSpeed
         pad.scrollFactor = TrackpadSettings.scrollFactor(settings.scrollSpeed)
         pad.stripFactor = TrackpadSettings.scrollFactor(settings.stripSpeed)
+        pad.oneFingerScroll = settings.oneFingerScroll
         pad.stripSide = settings.stripSide
         if (settings.mode == PadMode.HORIZONTAL && !cover) requestedOrientation = settings.direction.screenOrientation
         coverLayout = null
@@ -846,6 +883,65 @@ class TrackpadActivity : Activity(), PadHost {
         followChosen(FollowMode.BODY_ANCHOR)
         Log.i(TAG, "trackpad settings reset to Pocket XR's defaults (the Menu)")
         screen.showToast("Trackpad settings are back to Pocket XR's defaults.")
+    }
+
+    // ---- 1.1.9: the tutorial's pages and the glasses setup ----
+
+    private val spaceStore by lazy { com.hayeco.flipspaces.spatial.SpaceStore(this) }
+
+    /** The XREAL glasses on USB now ([com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged]), or null when none are. */
+    private fun pluggedGlasses(): com.hayeco.flipspaces.core.spatial.GlassesModel? = runCatching {
+        val usb = getSystemService(android.hardware.usb.UsbManager::class.java)
+        val d = usb?.deviceList?.values?.firstOrNull { com.hayeco.flipspaces.core.hands.GlassesUsb.isXreal(it.vendorId) }
+        com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged(d?.productId, d?.productName)
+    }.getOrNull()
+
+    override fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage> =
+        com.hayeco.flipspaces.core.pointer.IntroPages.trackpad(prefs.landscapeDevice, rotation != null, settings.oneFingerScroll)
+
+    /** The glasses plugged in, else the ones the Space last ran on (the model from their display's EDID). */
+    override fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage? =
+        com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(pluggedGlasses() ?: spaceStore.model)
+
+    /** The glasses setup page of [model] was shown, or it has none: it is not shown again when they are plugged in. */
+    private fun glassesSeen(model: com.hayeco.flipspaces.core.spatial.GlassesModel) {
+        val seen = prefs.glassesSetupSeen
+        if (model.key !in seen) prefs.glassesSetupSeen = seen + model.key
+    }
+
+    private var glassesCheckedMs = 0L
+
+    /**
+     * 1.1.9, once a second from [ticker]: (issue 31) a glasses model plugged in for the first time shows its setup page
+     * by itself, and glasses that are likely in their own Anchor mode get a card with one tap to that page. Never over
+     * another card or the Menu, and not on the cover screen, so the page waits for the open phone.
+     */
+    private fun checkGlassesSetup(now: Long) {
+        if (now - glassesCheckedMs < GLASSES_CHECK_MS) return
+        glassesCheckedMs = now
+        if (cover || screen.introOpen || screen.dialogOpen || screen.drawerOpen) return
+        val plugged = pluggedGlasses()
+        if (plugged != null && plugged.key !in prefs.glassesSetupSeen) {
+            val page = com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(plugged)
+            glassesSeen(plugged)
+            if (page != null) {
+                Log.i(TAG, "glasses setup page shown: ${plugged.label} plugged in for the first time here")
+                screen.showIntro(listOf(page))
+                return
+            }
+        }
+        if (anchorAskedThisRun || !SpaceSession.active) return
+        val model = spaceStore.model
+        val duty = com.hayeco.flipspaces.spatial.GlassesDisplayControl.glassesDuty
+        if (!com.hayeco.flipspaces.core.spatial.GlassesSetup.anchorLikely(model, duty, com.hayeco.flipspaces.spatial.GlassesDisplayControl.dutyOurs)) return
+        anchorAskedThisRun = true
+        val page = com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(model) ?: return
+        Log.i(TAG, "${model.label} answered a duty of $duty % (their world lock range, at most ${com.hayeco.flipspaces.core.spatial.GlassesSetup.WORLD_LOCK_DUTY_MAX} %): likely in their own Anchor mode; card shown")
+        screen.showDialog(
+            com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD,
+            ok = com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD_OK,
+            cancel = com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD_LATER,
+        ) { screen.showIntro(listOf(page)) }
     }
 
     override fun followChosen(mode: FollowMode) {
@@ -1232,6 +1328,15 @@ class TrackpadActivity : Activity(), PadHost {
         applyMode()
     }
 
+    override fun hoverTestOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTestWanted
+
+    override fun hoverTestChosen(on: Boolean) {
+        com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTest(this, on)
+        screen.showToast(if (on) "Less blur test on. Windows stay put in front of you while the glasses hold them. Turn your head and look for less smear." else "Less blur test off. The glasses are back in follow.")
+    }
+
+    override fun hoverTestLine(): String = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverLine
+
     override fun turnDutyOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).turnDuty
 
     override fun turnDutyChosen(on: Boolean) {
@@ -1366,6 +1471,10 @@ class TrackpadActivity : Activity(), PadHost {
     }
 
     /** Unlock the phone where Android allows it: the keyguard's own prompt (its PIN on the cover screen if it is secure). */
+    override fun exitApp() {
+        AppExit.exit(this, "the trackpad Menu")
+    }
+
     override fun unlockPhone() {
         val keyguard = getSystemService(KeyguardManager::class.java)
         if (keyguard == null || !keyguard.isKeyguardLocked) {
@@ -1492,21 +1601,43 @@ class TrackpadActivity : Activity(), PadHost {
 
         override fun onSensorChanged(event: SensorEvent) {
             SensorManager.getRotationMatrixFromVector(matrix, event.values)
-            val (yaw, pitch) = PhoneAim.angles(matrix) ?: return
+            val (yaw, pitch) = PhoneAim.angles(matrix, aimRotation) ?: return
             submit(PadSignal.Aim(yaw, pitch))
         }
 
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
     }
 
+    /**
+     * 1.1.9 (issue 33): the screen's rotation now (Display.getRotation), so the aim is its top edge as it is held, in
+     * portrait, landscape and landscape turned, whether the app or the system turned it. A half turn (90 to 270) is no
+     * configuration change, so the display's own changes are watched while Spatial Mouse aims.
+     */
+    @Volatile private var aimRotation = 0
+
+    private val rotationWatch = object : DisplayManager.DisplayListener {
+        override fun onDisplayChanged(displayId: Int) {
+            val d = display ?: return
+            if (d.displayId == displayId) aimRotation = d.rotation
+        }
+
+        override fun onDisplayAdded(displayId: Int) = Unit
+
+        override fun onDisplayRemoved(displayId: Int) = Unit
+    }
+
     private fun updateSensor() {
         val want = resumed && padMode == PadMode.SPATIAL_MOUSE && rotation != null
         if (want == rotationOn) return
         rotationOn = want
+        val displays = getSystemService(DisplayManager::class.java)
         if (want) {
+            aimRotation = display?.rotation ?: 0
+            displays?.registerDisplayListener(rotationWatch, null)
             sensors?.registerListener(aimListener, rotation, SensorManager.SENSOR_DELAY_GAME)
         } else {
             sensors?.unregisterListener(aimListener)
+            displays?.unregisterDisplayListener(rotationWatch)
         }
     }
 
@@ -1530,6 +1661,12 @@ class TrackpadActivity : Activity(), PadHost {
 
         /** 0.5.101: open with the Menu out (Settings' Trackpad row). */
         const val EXTRA_MENU = "com.hayeco.flipspaces.extra.TRACKPAD_MENU"
+
+        /** 1.1.9: how often the plugged-in glasses and the Anchor signal are looked at. */
+        private const val GLASSES_CHECK_MS = 1_000L
+
+        /** 1.1.9: the Anchor card was offered in this run of the app (the trackpad may open more than once). */
+        @Volatile private var anchorAskedThisRun = false
     }
 }
 

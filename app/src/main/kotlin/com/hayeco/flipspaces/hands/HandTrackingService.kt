@@ -66,6 +66,8 @@ class HandTrackingService : Service() {
             .setContentText("Reading the glasses camera to follow your hands")
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, "Stop until next plug-in", stop).build())
+            // 1.1.10: quit Pocket XR altogether from here too.
+            .addAction(Notification.Action.Builder(null, com.hayeco.flipspaces.core.pointer.IntroPages.EXIT_LABEL, com.hayeco.flipspaces.GlassesReadyService.exitIntent(this)).build())
             .setOngoing(true)
             .build()
     }

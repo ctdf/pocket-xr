@@ -74,6 +74,14 @@ and a command id; command 0x19 with payload `[1]` starts the stream; gyro and ac
 24 bit integers with a multiplier and divisor.
 ([ar-drivers-rs nreal_air.rs](https://raw.githubusercontent.com/badicsalex/ar-drivers-rs/master/src/nreal_air.rs))
 
+**1.1.10: HID glasses in the app.** `HeadImuTransport.choose` (core) sends the One family and the Aura (0x0435 to
+0x043A, 0x043D, 0x043E, and any XREAL id with a CDC NCM or ECM interface) to the network path, and the Air family,
+Helen and Helen Pro (0x0423 to 0x0432, 0x043F to 0x0442) and any XREAL id with HID but no CDC network to "HID". The
+app has no HID IMU reader: for HID glasses `HeadTracker` opens nothing on them and reports
+`HeadTrackingStatus.HidGlasses`. A reader needs, per model, the HID interface and endpoint, the start command (the Air
+family's 0x19 above is not confirmed for Helen, which may use its own IMU format), the checksum
+and the sample layout, checked on real glasses before anything is sent to them.
+
 **One family (network).** One, One Pro and 1S appear to the host as a USB network device
 (NCM / ECM) with the glasses at `169.254.2.1`:
 

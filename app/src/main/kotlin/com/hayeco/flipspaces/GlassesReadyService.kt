@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
 import com.hayeco.flipspaces.core.GlassesReady
+import com.hayeco.flipspaces.core.pointer.IntroPages
 
 /**
  * Keeps Pocket XR awake for the glasses (0.4.4, [GlassesReady]): a connectedDevice foreground
@@ -27,6 +28,12 @@ class GlassesReadyService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 1.1.10: the notification's Exit Pocket XR.
+        if (intent?.action == ACTION_EXIT) {
+            AppExit.exit(this, "the notification")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         try {
             startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
             Log.i(TAG, "glasses ready service in the foreground; display events reach the plug-in watcher")
@@ -55,6 +62,8 @@ class GlassesReadyService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(GlassesReady.NOTIFICATION_TEXT)
             .setContentIntent(open)
+            // 1.1.10 (a tester: the app "stays active in the notification bar"): a way to quit from here.
+            .addAction(Notification.Action.Builder(null, IntroPages.EXIT_LABEL, exitIntent(this)).build())
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOnlyAlertOnce(true)
             .setOngoing(true)
@@ -65,6 +74,12 @@ class GlassesReadyService : Service() {
         private const val TAG = "FlipSpaces/Mode"
         private const val CHANNEL = "glasses_ready"
         private const val NOTIFICATION_ID = 8
+        private const val ACTION_EXIT = "com.hayeco.flipspaces.EXIT"
+
+        /** 1.1.10: Exit Pocket XR, for a notification action ([AppExit]). */
+        fun exitIntent(context: Context): PendingIntent = PendingIntent.getService(
+            context, 2, Intent(context, GlassesReadyService::class.java).setAction(ACTION_EXIT), PendingIntent.FLAG_IMMUTABLE,
+        )
 
         /** Starts the service; from the background Android may refuse ([GlassesReady.mayBeRefused]), which is logged. */
         fun start(context: Context, from: GlassesReady.From) {

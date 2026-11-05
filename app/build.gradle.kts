@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.hayeco.flipspaces"
-    compileSdk = 36
+    // Compose 1.12 and core 1.19 need API 37 to compile against. targetSdk stays 36, so the app behaves as before.
+    compileSdk = 37
 
     val playBuild = (findProperty("pocketxr.play") as String?) == "true"
 
@@ -13,8 +16,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 129
-        versionName = "1.0.0"
+        versionCode = 143
+        versionName = "1.1.12"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
         // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments
@@ -40,14 +43,36 @@ android {
         }
     }
 
+    // 1.1.11 (Google Play): a Play upload (-Ppocketxr.play=true, docs/PLAY.md) is signed with the Pocket XR upload key, which
+    // keystore.properties at the repository root points to (storeFile, storePassword, keyAlias, keyPassword; gitignored,
+    // like the other Haye & Co apps). Google Play re-signs it with the app signing key. It is also shrunk by R8, with the
+    // mapping kept for Play's crash reports (proguard-rules.pro keeps Pocket XR's own classes and the native libraries').
+    val play = (findProperty("pocketxr.play") as String?) == "true"
+    if (play) {
+        val props = Properties().apply {
+            val f = rootProject.file("keystore.properties")
+            if (!f.exists()) error("keystore.properties is missing at the repository root (docs/PLAY.md)")
+            f.inputStream().use { load(it) }
+        }
+        signingConfigs {
+            create("play") {
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = play
+            if (play) proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // 0.5.49 (Mike: "switch to a non-debuggable build"): ART runs it fully optimised, without the debugger's
             // hooks. Signed with the same debug key as every build so far, so it installs over them; the debug-only
             // tools (src/debug: DebugReceiver, the hand replays, the NPU self test) are not in it. 0.5.98: an official
             // release is signed with the release key instead (above).
-            signingConfig = signingConfigs.getByName(if (official) "official" else "debug")
+            signingConfig = signingConfigs.getByName(if (play) "play" else if (official) "official" else "debug")
         }
         debug {
             // Debug builds also run on an x86_64 Android emulator (docs/EMULATOR_TESTING.md).
@@ -80,7 +105,7 @@ android {
 
     buildFeatures {
         compose = true
-        // IPanelHost: the Shizuku user service that hosts app panels.
+        // IPanelHost: the Shizuku user service that hosts app panels. 1.1.0: IAddon, the link to the add-on.
         aidl = true
         // 1.0.1: BuildConfig.PLAY_BUILD (above).
         buildConfig = true
@@ -89,6 +114,13 @@ android {
     // 1.0.1: the unit tests check BuildConfig.PLAY_BUILD against the build that was asked for.
     testOptions {
         unitTests.all { it.systemProperty("pocketxr.play", playBuild.toString()) }
+    }
+
+    // 1.1.0: the add-on's link (IAddon, IAddonCallback) is compiled into both apps from the add-on's one copy.
+    sourceSets {
+        getByName("main") {
+            aidl.directories.add("../addon/src/main/aidl")
+        }
     }
 }
 
@@ -114,7 +146,7 @@ dependencies {
     implementation(libs.androidx.graphics.core)
     // 0.5.49: the release build's lint (InvalidFragmentVersionForActivityResult): a library brings an old Fragment, under
     // which registerForActivityResult's permission results can be lost; this one is new enough.
-    implementation("androidx.fragment:fragment:1.8.5")
+    implementation("androidx.fragment:fragment:1.9.1")
 
     testImplementation(libs.junit)
 }

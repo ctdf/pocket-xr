@@ -17,6 +17,18 @@ object UpdateCheck {
     /** At most one check a day. */
     const val EVERY_MS = 24L * 60 * 60 * 1000
 
+    /** The installer Google Play records for a copy it installed. */
+    const val PLAY_INSTALLER = "com.android.vending"
+
+    /** Whether Google Play installed this copy ([installer]: the package manager's installing package). */
+    fun fromPlay(installer: String?): Boolean = installer == PLAY_INSTALLER
+
+    /**
+     * 1.1.11 (Google Play): whether this copy may offer GitHub's updates. Not a copy from Google Play (Play's Device and
+     * Network Abuse policy: an app from Play is updated only through Play) or from F-Droid (F-Droid brings its own).
+     */
+    fun selfUpdates(installer: String?): Boolean = !fromPlay(installer) && installer?.startsWith("org.fdroid.") != true
+
     /** What the latest release offers. */
     data class Release(val version: String, val pageUrl: String, val apkUrl: String?, val notes: String)
 

@@ -71,6 +71,23 @@ class GlassesDisplayCommands(private val io: Io) {
 
     val turnDuty = TurnDuty()
 
+    /** 1.1.0: the hover duty test (Developer), off unless [hoverTest] turns it on. */
+    val hover = HoverDutyTest()
+
+    /** 1.1.0: the Developer switch for the hover duty test: on starts it, off puts the glasses back in follow. */
+    fun hoverTest(on: Boolean, nowMs: Long) {
+        if (on && !hover.active && hover.phase != HoverDutyTest.Phase.REFUSED) perform(hover.start())
+        if (!on) perform(hover.stop())
+        io.log("display control: hover duty test: ${hover.line()}")
+    }
+
+    private fun perform(steps: List<HoverDutyTest.Step>) {
+        for (step in steps) when (step) {
+            is HoverDutyTest.Step.ReadDuty -> rpc(ControlWire::dutyGet, step.what)
+            is HoverDutyTest.Step.SetSpace -> rpc({ ControlWire.spaceMode(it, step.mode) }, step.what)
+        }
+    }
+
     /** The EDID index the glasses answered, null before. */
     @Volatile var edid: Int? = null
         private set
@@ -152,7 +169,19 @@ class GlassesDisplayCommands(private val io: Io) {
                 calibrationSerial = serial
                 io.calibration(serial, it)
             }
-            GlassesControl.DUTY_GET -> if (m.result == 0L) m.value?.toInt()?.takeIf { it in 1..100 }?.let { if (!turnDuty.lowered) turnDuty.normal = it }
+            GlassesControl.DUTY_GET -> if (m.result == 0L) m.value?.toInt()?.takeIf { it in 1..100 }?.let {
+                // 1.1.0: during the hover duty test the reads are its own, never the turn duty's normal.
+                if (hover.active) {
+                    perform(hover.duty(it, lastTickMs))
+                    io.log("display control: hover duty test: ${hover.line()}")
+                } else if (!turnDuty.lowered) {
+                    turnDuty.normal = it
+                }
+            }
+            GlassesControl.SPACE_MODE -> {
+                perform(hover.spaceAnswer(m.result))
+                if (m.result != null && m.result != 0L) io.log("display control: the glasses did not take the space mode (result ${m.result}); hover duty test: ${hover.line()}")
+            }
             GlassesControl.EDID_GET -> if (m.result == 0L) edid = m.value?.toInt()
             GlassesControl.EC_COUNT -> if (m.result == 0L) m.value?.toInt()?.takeIf { it in 2..16 }?.let { ecCount = it }
             GlassesControl.EC_GET -> if (m.result == 0L) m.value?.toInt()?.takeIf { it in 0..15 }?.let { ecLevel = it }
@@ -183,6 +212,8 @@ class GlassesDisplayCommands(private val io: Io) {
 
     /** Each frame with the head's turn speed while the turn duty switch is on. */
     fun frame(turnSpeedDegS: Float, nowMs: Long) {
+        // 1.1.0: the hover duty test reads the glasses' own duty, so nothing writes one while it runs.
+        if (hover.active) return
         turnDuty.update(turnSpeedDegS, nowMs)?.let { d ->
             rpc({ ControlWire.dutySet(it, d) }, "duty $d % (10066, ${if (d == turnDuty.low) "a fast turn" else "the glasses' own, the head still"})")
             // 0.5.34: read back, so the log says what the glasses hold now (they may overwrite a host's duty).
@@ -216,7 +247,12 @@ class GlassesDisplayCommands(private val io: Io) {
         }
     }
 
+    /** 1.1.0: the last [tick]'s time, for replies that arrive between ticks. */
+    @Volatile private var lastTickMs = 0L
+
     fun tick(nowMs: Long) {
+        lastTickMs = nowMs
+        perform(hover.tick(nowMs))
         // 0.5.36: the glasses' 3D distance read again every [DEPTH_EVERY_MS], so a change in their menu is followed.
         // 0.5.55: off ([REREAD_DEPTH]); nothing uses the answer (APPLY_DEPTH is false) and the
         // Menu's distance comes from its saved value, so it was 6 messages a minute to the glasses for nothing.
@@ -244,6 +280,8 @@ class GlassesDisplayCommands(private val io: Io) {
     /** Before the link closes (the warp taking the link, the Space ending, the switch off): the glasses' own duty back. */
     fun restoreAll() {
         turnDuty.restore()?.let { d -> rpc({ ControlWire.dutySet(it, d) }, "duty $d % back, the glasses' own (10066)") }
+        // 1.1.0: the glasses back in follow if the hover duty test asked for hover.
+        perform(hover.stop())
         // 0.5.37: the lenses' dimming back too, if Immersive left them dimmed (the Space ending in Immersive).
         immersiveDim(false)
     }

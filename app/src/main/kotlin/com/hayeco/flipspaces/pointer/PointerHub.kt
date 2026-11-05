@@ -1,6 +1,5 @@
 package com.hayeco.flipspaces.pointer
 
-import android.content.ComponentName
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -8,6 +7,7 @@ import android.provider.Settings
 import com.hayeco.flipspaces.core.hands.HandProviderKind
 import com.hayeco.flipspaces.core.hands.HandStatus
 import com.hayeco.flipspaces.core.pointer.PointerSignal
+import com.hayeco.flipspaces.platform.AddonLink
 import com.hayeco.flipspaces.spatial.SpaceSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,16 +15,17 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Where every input provider sends its pointer signals. It hands them, on the main thread, to
- * the Pocket XR pointer accessibility service, which owns the cursor, the overlay and the
- * touch injection on the glasses. Without the service nothing reaches the glasses, and the
- * setup screen says so.
+ * the pointer session, which owns the cursor and the touches on the glasses. Without it
+ * nothing reaches the glasses outside the Space, and the setup screen says so.
+ *
+ * 1.1.0: the session runs while the add-on's pointer accessibility service is on ([AddonLink]).
  */
 object PointerHub {
     private val main = Handler(Looper.getMainLooper())
-    private var service: PointerService? = null
+    private var session: PointerSession? = null
 
     private val _connected = MutableStateFlow(false)
-    /** The accessibility service is enabled and bound. */
+    /** The add-on's pointer service is on and linked. */
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
     private val _displayId = MutableStateFlow<Int?>(null)
@@ -42,9 +43,9 @@ object PointerHub {
             return
         }
         main.post {
-            val s = service
+            val s = session
             if (s == null) {
-                if (signal is PointerSignal.Down || (signal as? PointerSignal.ForHand)?.signal is PointerSignal.Down) report("Turn on the Pocket XR pointer accessibility service to click on the glasses.")
+                if (signal is PointerSignal.Down || (signal as? PointerSignal.ForHand)?.signal is PointerSignal.Down) report("Install the Pocket XR add-on and turn on its pointer service to click on the glasses.")
                 return@post
             }
             s.onSignal(signal, source)
@@ -52,34 +53,38 @@ object PointerHub {
     }
 
     fun handStatus(status: HandStatus?, source: HandProviderKind) {
-        main.post { service?.onHandStatus(status, source) }
+        main.post { session?.onHandStatus(status, source) }
     }
 
-    internal fun attach(s: PointerService) {
-        service = s
+    /** The add-on's pointer service came on. Main thread. */
+    internal fun addonOn(context: Context) {
+        if (session != null) return
+        session = PointerSession(context).also { it.start() }
         _connected.value = true
     }
 
-    internal fun detach(s: PointerService) {
-        if (service === s) {
-            service = null
-            _connected.value = false
-            _displayId.value = null
-        }
+    /** It went off, or the add-on went away. Main thread. */
+    internal fun addonOff() {
+        session?.stop()
+        session = null
+        _connected.value = false
+        _displayId.value = null
     }
 
-    /**
-     * 0.5.9: presses DeX's own full screen button on the Space's window on [displayId]
-     * ([PointerService.pressDexFullScreen]); [done] gets what happened, on the main thread.
-     */
     /** 0.5.10: the words of the reply when the service is off, which the phone prompt looks for. */
     const val SERVICE_OFF = "the Pocket XR pointer accessibility service is off"
 
+    /**
+     * 0.5.9: presses DeX's own full screen button on the Space's window on [displayId]
+     * ([PointerSession.pressDexFullScreen]); [done] gets what happened, on the main thread.
+     */
     fun pressDexFullScreen(displayId: Int, done: (String) -> Unit) {
-        main.post {
-            val s = service
-            done(s?.pressDexFullScreen(displayId) ?: "not pressed: $SERVICE_OFF, so nothing may press DeX's buttons; turn it on in Settings, Accessibility")
+        val s = session
+        if (s == null) {
+            main.post { done("not pressed: $SERVICE_OFF, so nothing may press DeX's buttons; install the Pocket XR add-on and turn it on in Settings, Accessibility") }
+            return
         }
+        Thread { val result = s.pressDexFullScreen(displayId); main.post { done(result) } }.start()
     }
 
     internal fun displayChanged(id: Int?) {
@@ -90,10 +95,9 @@ object PointerHub {
         _problem.value = problem
     }
 
-    /** Whether the user has the service switched on in Settings (it may not be bound yet). */
+    /** Whether the user has the add-on's pointer service switched on in Settings (it may not be bound yet). */
     fun enabledInSettings(context: Context): Boolean {
         val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-        val me = ComponentName(context, PointerService::class.java)
-        return enabled.split(':').any { ComponentName.unflattenFromString(it) == me }
+        return enabled.split(':').any { android.content.ComponentName.unflattenFromString(it) == AddonLink.POINTER }
     }
 }

@@ -4,12 +4,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
 import com.hayeco.flipspaces.R
+import com.hayeco.flipspaces.platform.AddonLink
 
 /**
  * 0.5.10: the one time phone prompt for the pointer accessibility service. DeX's full screen
@@ -17,6 +17,8 @@ import com.hayeco.flipspaces.R
  * app or shell call reaches it on One UI 8: 0.5.9's section 24.2). When the press finds the
  * service off, the phone shows this once (per install), with a button that opens the service's
  * own Accessibility page, else the Accessibility list.
+ *
+ * 1.1.0: the service is the Pocket XR add-on's ([AddonLink.POINTER]).
  *
  * The full screen task hold (0.5.7) needs no accessibility service and has no DeX taskbar; with
  * 0.5.10's check it is no longer undone by an "unknown" answer, so this prompt only matters when
@@ -32,10 +34,14 @@ object AccessibilityPrompt {
     /** The hidden Settings action for one service's page (AOSP AccessibilityDetailsSettingsActivity). */
     private const val DETAILS_ACTION = "android.settings.ACCESSIBILITY_DETAILS_SETTINGS"
 
-    /** The intent that opens the pointer service's Accessibility page, or the Accessibility list. */
+    /**
+     * The intent that opens the add-on's disclosure for the pointer service (1.1.11, Google Play: it goes on to the
+     * service's Accessibility page once agreed), else that page, else the Accessibility list.
+     */
     fun settingsIntent(context: Context): Intent {
+        AddonLink.setupIntent(context, AddonLink.SETUP_POINTER)?.let { return it }
         val details = Intent(DETAILS_ACTION)
-            .putExtra(Intent.EXTRA_COMPONENT_NAME, ComponentName(context, PointerService::class.java))
+            .putExtra(Intent.EXTRA_COMPONENT_NAME, AddonLink.POINTER)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val resolves = runCatching { context.packageManager.resolveActivity(details, 0) != null }.getOrDefault(false)
         return if (resolves) details else Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -53,9 +59,9 @@ object AccessibilityPrompt {
             val n = Notification.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle("Turn on the Pocket XR pointer service")
-                .setStyle(Notification.BigTextStyle().bigText("$why: only the Pocket XR pointer accessibility service may press DeX's full screen button. Tap to open its Accessibility page and turn it on."))
+                .setStyle(Notification.BigTextStyle().bigText("$why: only the Pocket XR pointer accessibility service may press DeX's full screen button. It comes with the Pocket XR add-on. Tap to read what it does and turn it on."))
                 .setContentIntent(open)
-                .addAction(Notification.Action.Builder(null, "Open Accessibility", open).build())
+                .addAction(Notification.Action.Builder(null, "Set up", open).build())
                 .setAutoCancel(true)
                 .build()
             manager.notify(NOTIFICATION_ID, n)

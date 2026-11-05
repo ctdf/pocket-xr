@@ -154,6 +154,8 @@ object GlassesAutoOpen {
     /** A Pocket XR phone screen came to the front. */
     fun resumed(activity: Activity) {
         front = WeakReference(activity)
+        // 1.1.0: finds an add-on installed since the process started.
+        com.hayeco.flipspaces.platform.AddonLink.connect(activity)
         start(activity)
         schedule()
     }
@@ -219,6 +221,11 @@ object GlassesAutoOpen {
         val displays = monitor?.snapshot()
         if (context == null || displays == null) {
             Log.w(TAG, "plug-in check before the watcher started; skipped")
+            return
+        }
+        // 1.1.10: after Exit Pocket XR nothing opens on a plug-in until Pocket XR is opened again.
+        if (AppExit.exited) {
+            log("plug-in check: Pocket XR was exited; not opening anything until it is opened again")
             return
         }
         // 0.5.9: the plain display session switches DeX off and on; its display changes are its own.

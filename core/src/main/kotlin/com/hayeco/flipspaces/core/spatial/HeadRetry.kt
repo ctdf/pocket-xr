@@ -52,6 +52,20 @@ object GlassesReach {
         }
     }
 
+    /**
+     * 1.1.8: the glasses' address this network reaches: [OneImuProtocol.HOST] on the NCM link, else
+     * [OneImuProtocol.ECM_HOST] on the ECM link; null when it reaches neither.
+     */
+    fun host(linkAddresses: List<String>, routes: List<String>): String? =
+        listOf(OneImuProtocol.HOST, OneImuProtocol.ECM_HOST).firstOrNull { hasRoute(it, linkAddresses, routes) }
+
+    /**
+     * 1.1.8: [hosts] (one per network, from [host]) with the ECM link's address kept only when no network reaches
+     * [OneImuProtocol.HOST]: a phone with both links (the Flip's eth0 and eth1) stays on the NCM link it streams on.
+     */
+    fun pick(hosts: List<String?>): List<String?> =
+        if (OneImuProtocol.HOST in hosts) hosts.map { it.takeIf { h -> h == OneImuProtocol.HOST } } else hosts
+
     /** True when [error] says the kernel has no way there, not that the glasses stayed quiet. */
     fun noRoute(error: String): Boolean = "ENETUNREACH" in error || "EHOSTUNREACH" in error || "Network is unreachable" in error || "No route to host" in error
 

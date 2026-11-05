@@ -3,7 +3,6 @@ package com.hayeco.flipspaces.spatial
 import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
-import android.hardware.usb.UsbManager
 import android.util.Log
 import android.view.Display
 import com.hayeco.flipspaces.core.hands.ProviderStatus
@@ -37,11 +36,8 @@ object GlassesReportFile {
                     current = d.mode.let { m -> "${m.physicalWidth}x${m.physicalHeight}@${m.refreshRate.toInt()}" },
                 )
             }
-        val usb = runCatching {
-            context.getSystemService(UsbManager::class.java).deviceList.values.map { u ->
-                GlassesReport.Usb(u.vendorId, u.productId, u.productName.orEmpty(), (0 until u.interfaceCount).mapNotNull { u.getInterface(it).name })
-            }
-        }.getOrDefault(emptyList())
+        // 1.1.10: with each interface's class, so a HID interface without a name is listed too.
+        val usb = GlassesUsbList.read(context)
         val head = HeadTracker.status.value
         val hands = when (val s = GlassesCameraProvider.status.value) {
             is ProviderStatus.Unavailable -> "not available: ${s.reason}"
@@ -65,6 +61,7 @@ object GlassesReportFile {
             calibration = GlassesCalibrationStore.reportLine(context),
             hands = hands,
             timeUtc = utc,
+            tracking = HeadTracker.lastTrackingLine,
         )
     }
 
@@ -79,6 +76,12 @@ object GlassesReportFile {
         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_SUBJECT, "Pocket XR glasses report")
             .putExtra(Intent.EXTRA_TEXT, text)
+        // 1.1.5 (issue 26: saving it to Downloads with a file manager failed): the file too, so apps that save files get one.
+        file?.let { f ->
+            runCatching { androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".reports", f) }
+                .onSuccess { u -> send.putExtra(Intent.EXTRA_STREAM, u).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+                .onFailure { Log.i(TAG, "the report file is not attached: ${it.message}") }
+        }
         runCatching { context.startActivity(Intent.createChooser(send, "Share the glasses report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onFailure { Log.i(TAG, "no share sheet: ${it.message}") }
         return file

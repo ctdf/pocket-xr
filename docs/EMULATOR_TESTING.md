@@ -18,14 +18,15 @@ All commands below run on the PC, from the repo folder.
 2. Start it, then build and install:
 
    ```
-   gradle :app:assembleDebug
+   gradle :app:assembleDebug :addon:assembleDebug
    adb install -r app/build/outputs/apk/debug/app-debug.apk
+   adb install -r addon/build/outputs/apk/debug/addon-debug.apk
    ```
 
-3. Turn on the Pocket XR pointer accessibility service without the Settings screens:
+3. Turn on the Pocket XR pointer accessibility service (in the add-on) without the Settings screens:
 
    ```
-   adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces/com.hayeco.flipspaces.pointer.PointerService
+   adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces.addon/com.hayeco.flipspaces.addon.PointerAccess
    adb shell settings put secure accessibility_enabled 1
    ```
 
@@ -149,6 +150,19 @@ swiped sideways are Back, a quick two finger tap is a long press, and a two fing
 over a panel scrolls (mouse wheel) or zooms inside its app. The thermal guard can be tried with
 `adb shell cmd thermalservice override-status 2` (moderate) and undone with
 `adb shell cmd thermalservice reset`.
+
+### Opening an app as a window without the launcher (1.1.1)
+
+```
+adb shell am broadcast -a com.hayeco.flipspaces.debug.ADD_APP -p com.hayeco.flipspaces --es pkg com.android.settings
+```
+
+does what picking the app in the launcher does. It is in debug builds only.
+
+### Android 11 to 13 emulators (1.1.1)
+
+Their images start with OpenGL ES 2.0 only, and the Space needs 3 (`eglChooseConfig failed` at once). Start them with
+`-gpu host -feature GLESDynamicVersion`. On Android 11 `multidisplay add` prints `KO` but still adds the 2D display.
 
 ## 4. Hand replay
 

@@ -16,7 +16,8 @@ class GlassesProfile0591Test {
         assertEquals(GlassesModel.ONE, GlassesModel.detect(GlassesId("XREAL One", "16641")))
         assertEquals(GlassesModel.ONE_PRO, GlassesModel.detect(GlassesId("XREAL One Pro", "")))
         assertEquals(GlassesModel.ONE_S, GlassesModel.detect(GlassesId("XREAL 1S", "")))
-        assertEquals(GlassesModel.OTHER_XREAL, GlassesModel.detect(GlassesId("XREAL Air 2", "")))
+        assertEquals(GlassesModel.AIR, GlassesModel.detect(GlassesId("XREAL Air 2", "")))
+        assertEquals(GlassesModel.OTHER_XREAL, GlassesModel.detect(GlassesId("XREAL Beam", "")))
         assertEquals(GlassesModel.UNKNOWN, GlassesModel.detect(GlassesId("LG Monitor", "1234")))
         // No EDID name: the USB product decides.
         assertEquals(GlassesModel.ONE, GlassesModel.detect(null, 0x0438))
@@ -126,8 +127,22 @@ class GlassesProfile0591Test {
         assertFalse(t.contains("H501X00042"))
         assertTrue(t.contains("2D (0)"))
         // 0.5.95 (Mike: the One's Stabilizer made windows glide after each turn): the report says to check it.
-        assertTrue(t.contains("Check on the glasses: Turn Stabilizer off"))
+        assertTrue(t.contains("Check on the glasses: Use Follow mode (not Anchor) with Stabilizer off"))
         assertEquals(null, GlassesModel.AURA.setupHint)
+    }
+
+    /**
+     * 1.1.8 (issue 31, a One Pro: windows moved twice each turn while the display-fixed level line held still): the
+     * glasses' own Anchor mode. Every One family model says to use Follow, not Anchor, and to turn Stabilizer off, in a
+     * line short enough for the glasses' two line hint.
+     */
+    @Test
+    fun theOneFamilyHintNamesFollowModeAndStabilizer() {
+        for (m in listOf(GlassesModel.ONE, GlassesModel.ONE_PRO, GlassesModel.ONE_S)) {
+            val hint = m.setupHint!!
+            assertTrue(m.label, hint.contains("Follow mode") && hint.contains("not Anchor") && hint.contains("Stabilizer off"))
+            assertTrue("${hint.length} characters", hint.length <= 90)
+        }
     }
 
     @Test

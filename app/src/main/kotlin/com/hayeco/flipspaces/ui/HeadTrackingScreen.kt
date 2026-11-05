@@ -76,6 +76,9 @@ fun HeadTrackingScreen(
     /** 0.5.25: the per-eye late warp in side by side 3D. */
     lateWarpSbs: Boolean = true,
     onLateWarp: (Boolean) -> Unit = {},
+    /** 1.1.10: the whole screen as text ([com.hayeco.flipspaces.core.spatial.HeadDiagnosticsText]), copied or shared in full. */
+    onCopyAll: () -> Unit = {},
+    onShare: () -> Unit = {},
 ) {
     Scaffold { padding ->
         LazyColumn(
@@ -107,6 +110,11 @@ fun HeadTrackingScreen(
                             OutlinedButton(onClick = onRecentre, enabled = ok) { Text("Recentre") }
                             OutlinedButton(onClick = onRetry) { Text("Try again") }
                         }
+                        // 1.1.10 (a tester could copy only the start of one line): everything on this screen, in full.
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onCopyAll) { Text("Copy all") }
+                            OutlinedButton(onClick = onShare) { Text("Share") }
+                        }
                     }
                 }
             }
@@ -115,6 +123,8 @@ fun HeadTrackingScreen(
                     "1. Glasses USB network",
                     when (status) {
                         is HeadTrackingStatus.NoNetwork -> "Not found."
+                        // 1.1.10: these glasses have no USB network for head tracking; nothing is missing.
+                        is HeadTrackingStatus.HidGlasses -> "Not used: these glasses send head tracking over USB HID."
                         HeadTrackingStatus.Searching, HeadTrackingStatus.Off -> "Looking."
                         else -> "Found."
                     },
@@ -227,7 +237,7 @@ fun HeadTrackingScreen(
                         Text(
                             "Once per pair of glasses: with the Space on the glasses, tap Check level. A green line appears across the middle of the view. " +
                                 "Look at a level edge at eye height (the horizon, a far shelf or window frame), tilt your head until the line lies on it, hold still, then tap Save level. " +
-                                "The sensor may read up to 25 degrees of pitch (the Aura's sits about 14.5 degrees tilted) and 10 of roll.",
+                                "The sensor may read up to 40 degrees of pitch (the Aura's sits about 14.5 degrees tilted, a One Pro more) and 10 of roll.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

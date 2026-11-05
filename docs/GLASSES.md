@@ -8,8 +8,8 @@ set on the glasses themselves, and what to send when something is wrong.
 | Glasses | Status | Hand tracking | Notes |
 | --- | --- | --- | --- |
 | XREAL Aura | Tested | Yes, through its camera | The model the app was built on. |
-| XREAL One | Tested (30 October 2026) | No (no camera) | Turn **Stabilizer off**, see below. |
-| XREAL One Pro | Community testing | No (unless a camera is found, such as the Eye) | Treated as a One with a 57 degree view. Not run by the project yet. |
+| XREAL One | Tested (30 October 2026) | Not yet: possible with the XREAL Eye add-on (help wanted) | Use **Follow mode** with **Stabilizer off**, see below. |
+| XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) | Treated as a One with a 57 degree view. Not run by the project yet. |
 | XREAL 1S | Community testing | No | Treated as a One. Its view is not published, so the One's 50 degrees is used. |
 | Other glasses | Help wanted | No | Plain fallbacks; see "Unknown glasses" below. |
 
@@ -18,9 +18,13 @@ the USB product id. The model is logged when the Space opens, and the Glasses re
 
 ## Settings on the glasses themselves
 
-### XREAL One (and likely the One Pro and 1S): Stabilizer off
+### XREAL One, One Pro and 1S: Follow mode, Stabilizer off
 
-**Turn Stabilizer off in the glasses' own menu** (with the buttons on the glasses).
+**Use Follow mode, not Anchor, and turn Stabilizer off in the glasses' own menu** (with the buttons on the glasses).
+
+In Anchor mode the glasses hold their whole picture still in the room by themselves. Pocket XR already turns the windows
+against the head, so they move twice: opposite to each turn and nod, as far again. Things fixed to the view, like the
+level calibration's green line, look pinned in the room instead. Seen on a One Pro (issue 31).
 
 With Stabilizer on, the windows lag each head turn and then glide back into place when the head stops. The One steadies
 its own picture against the head while Pocket XR already moves the picture to match the head, so the two fight.
@@ -29,8 +33,16 @@ Found by Mike on his One on 30 October 2026: "it was the xreal ones Stabilizer s
 because it was on. i turned it off". The One Pro and 1S have the same menu; that they need the same setting is
 assumed, not yet confirmed.
 
-The app cannot read or change this setting. It says it on the glasses for the first three sessions on a One-family
-pair, and the Glasses report lists it under "Check on the glasses".
+The app cannot change these settings. It shows a Glasses setup page on the phone (`GlassesSetup` in
+`core/.../spatial/GlassesSetup.kt`): first in the first-run tutorial when One-family glasses are plugged in, by itself
+the first time a new model is plugged in, and from the trackpad's Menu under **Glasses setup**. It also says it on the
+glasses for the first three sessions, and the Glasses report lists it under "Check on the glasses".
+
+The app cannot read the mode either. The one hint it has is the panel duty the glasses answer when the control link opens
+(10065, already read for Sharper turns): about 90 % in head lock, and 16 to 32 % in the glasses' own world lock modes
+(measured on the Aura). A One-family pair that answers 40 % or less is taken as likely in Anchor mode, and the trackpad
+shows a card with one tap to the Glasses setup page, once per run of the app. That a One in Anchor mode reads low is
+inferred, not measured, so the card says "may be". No other control message is sent to find out.
 
 ### 3D mode
 

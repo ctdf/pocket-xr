@@ -159,10 +159,13 @@ fun PhoneScreen(
                     NavRow("Hands", "Hand tracking, calibrating hand aim, gestures", onOpenHands)
                     RowDivider()
                     NavRow("Trackpad", "Cursor and scroll speeds, scroll strip, window curve, in its Menu", onOpenTrackpadSettings)
-                    RowDivider()
-                    ToggleRow("Check for updates", updateLine(checkUpdates, updateStatus), checkUpdates) {
-                        checkUpdates = it
-                        com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
+                    // 1.1.11: not on a copy from Google Play or F-Droid, which bring their own updates.
+                    if (com.hayeco.flipspaces.UpdateChecker.offered(context)) {
+                        RowDivider()
+                        ToggleRow("Check for updates", updateLine(checkUpdates, updateStatus), checkUpdates) {
+                            checkUpdates = it
+                            com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
+                        }
                     }
                     if (checkUpdates && updateStatus?.result != com.hayeco.flipspaces.UpdateChecker.Result.CHECKING) {
                         TextButton(

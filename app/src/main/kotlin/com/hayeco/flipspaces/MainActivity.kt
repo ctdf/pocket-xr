@@ -68,6 +68,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 1.1.10: after Exit Pocket XR, a plug-in's USB prompt opens nothing; the icon brings Pocket XR back.
+        if (AppExit.exited && intent?.action == android.hardware.usb.UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            finish()
+            return
+        }
+        AppExit.reopened(this)
         // 0.5.37 (Mike: reopening the app showed the old developer screen; "I'd rather have the Pocket XR trackpad always
         // appear when I open the app"): the app's icon opens the trackpad. The glasses' USB prompt still comes here.
         if (opensTrackpad(intent)) return
@@ -196,6 +202,8 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         GlassesAutoOpen.resumed(this)
+        // 1.0.1: if the last run crashed, offer to send the report.
+        CrashCatcher.offer(this)
         // 0.5.97: a newer Pocket XR on GitHub Releases, checked at most once a day.
         UpdateChecker.checkIfDue(this)
         // 0.4.4: always allowed from a screen in front, should the app start's try have been refused.

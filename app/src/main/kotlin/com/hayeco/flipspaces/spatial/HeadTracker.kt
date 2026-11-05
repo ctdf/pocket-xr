@@ -6,10 +6,13 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.hayeco.flipspaces.core.ShizukuStatus
+import com.hayeco.flipspaces.core.spatial.AirImuProtocol
 import com.hayeco.flipspaces.core.spatial.BiasSavePolicy
+import com.hayeco.flipspaces.core.spatial.ImuReportSource
 import com.hayeco.flipspaces.core.spatial.FramerCounts
 import com.hayeco.flipspaces.core.spatial.FusionSettings
 import com.hayeco.flipspaces.core.spatial.HeadChain
@@ -24,6 +27,8 @@ import com.hayeco.flipspaces.core.spatial.GlassesReach
 import com.hayeco.flipspaces.core.spatial.HeadRetryBackoff
 import com.hayeco.flipspaces.core.spatial.HeadRouteKind
 import com.hayeco.flipspaces.core.spatial.HeadView
+import com.hayeco.flipspaces.core.spatial.HeadImuTransport
+import com.hayeco.flipspaces.core.spatial.PhoneSystem
 import com.hayeco.flipspaces.core.spatial.HeadRoutePlan
 import com.hayeco.flipspaces.core.spatial.HeadTrackingStatus
 import com.hayeco.flipspaces.core.spatial.ImuReportType
@@ -88,6 +93,9 @@ object HeadTracker {
 
     /** 0.5.6: how often a wait looks again at the glasses' network, to retry at once when it changes. */
     private const val NETWORK_LOOK_MS = 3000L
+
+    /** 1.1.10: how often the USB list is read again while HID glasses are plugged in. */
+    private const val HID_RECHECK_MS = 10_000L
 
     private val _status = MutableStateFlow<HeadTrackingStatus>(HeadTrackingStatus.Off)
     val status: StateFlow<HeadTrackingStatus> = _status.asStateFlow()
@@ -215,6 +223,8 @@ object HeadTracker {
         _attempts.value = emptyList()
         _answer.value = null
         watchNetworks(app)
+        graceHandler.removeCallbacks(beatTick)
+        graceHandler.post(beatTick)
         thread = Thread({ run(app) }, "head-tracker").apply {
             isDaemon = true
             start()
@@ -253,13 +263,17 @@ object HeadTracker {
             override fun onLost(network: Network) = nudge()
             override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) = nudge()
         }
-        val request = NetworkRequest.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-            .addTransportType(NetworkCapabilities.TRANSPORT_USB)
-            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
-            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-        runCatching { cm.registerNetworkCallback(request, callback) }
+        // 1.1.1 (an S20 FE on Android 11 crashed at plug-in: "Transport type 8 is out of range"): TRANSPORT_USB is
+        // Android 12 (API 31) and up; on 11 the builder throws. The request is built inside the guard too.
+        runCatching {
+            val builder = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+            if (Build.VERSION.SDK_INT >= 31) builder.addTransportType(NetworkCapabilities.TRANSPORT_USB)
+            val request = builder
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            cm.registerNetworkCallback(request, callback)
+        }
             .onSuccess { networkCallback = callback }
             .onFailure { Log.i(TAG, "network callback not available (${it.javaClass.simpleName}: ${it.message}); network changes are found by looking every ${NETWORK_LOOK_MS / 1000} s") }
     }
@@ -276,8 +290,17 @@ object HeadTracker {
         }
     }
 
+    /** 1.1.10: Exit Pocket XR ([com.hayeco.flipspaces.AppExit]): stops now, whoever holds the tracker, with no grace. */
+    @Synchronized
+    fun stopForExit() {
+        users = 0
+        graceHandler.removeCallbacks(stopAfterGrace)
+        stop()
+    }
+
     @Synchronized
     private fun stop() {
+        graceHandler.removeCallbacks(beatTick)
         thread?.interrupt()
         runCatching { openLink?.close() }
         GlassesNetwork.ShellHelper.close()
@@ -420,7 +443,8 @@ object HeadTracker {
         if (next.axes != settings.axes) resetRequested.set(true)
         settings = next
         val line = when {
-            next.factoryMount != null || next.gyroMatrix != null -> "fusion uses the glasses' factory calibration: " + (GlassesCalibrationStore.last(context)?.line() ?: "")
+            next.factoryMount != null || next.gyroMatrix != null -> "fusion uses the glasses' factory calibration: " + (GlassesCalibrationStore.last(context)?.line() ?: "") +
+                if (next.factoryMount == null && GlassesCalibrationStore.last(context)?.displayMount != null) "; its display mount is not used on the ${store.model.label} (checked only on the Aura), the level calibration's is" else ""
             store.factoryCalibration -> "fusion uses the level calibration's mount: no factory calibration read yet"
             else -> "fusion uses the level calibration's mount: factory calibration switched off"
         }
@@ -438,7 +462,7 @@ object HeadTracker {
         val cal = if (store.factoryCalibration) GlassesCalibrationStore.last(context) else null
         return settings.copy(
             axes = store.axisMap, predictSeconds = store.predictMs / 1000f, mountRollDeg = store.mountRollDeg, mountPitchDeg = store.mountPitchDeg,
-            factoryMount = cal?.displayMount, gyroMatrix = cal?.gyroMatrix,
+            factoryMount = cal?.displayMount?.takeIf { store.model.factoryMountChecked }, gyroMatrix = cal?.gyroMatrix,
         )
     }
 
@@ -532,6 +556,26 @@ object HeadTracker {
                 backoff.reset()
                 noRoute.clear()
             }
+            // 1.1.12 (an Air 2 Pro user: "head tracking is not working even though it shows 3dof"): the Air family
+            // streams its IMU on USB HID and has no USB network, so it is read there; up to 1.1.11 only the One family's
+            // network was read and the Space stayed head locked on an Air.
+            val air = AirImuLink.find(context)
+            if (air != null) {
+                if (!streamAir(air, context, fusion, backoff)) return
+                continue
+            }
+            // 1.1.10 (USB 3318:0442 on a Pixel 8a: "No USB network to the glasses ... One UI may not bring up the glasses'
+            // NCM or ECM interface"): other glasses whose IMU is on USB HID have no USB network to find. Nothing is opened
+            // on them; the status says so, and the USB list is read again every [HID_RECHECK_MS] or on a kick (plug-in).
+            val hid = HeadImuTransport.hidGlasses(GlassesUsbList.read(context))
+            if (hid != null) {
+                val st = HeadTrackingStatus.HidGlasses(hid.vendorId, hid.productId, hid.infos.map { it.label() })
+                if (_status.value != st) Log.i(TAG, "head tracking: ${st.summary}")
+                _status.value = st
+                _answer.value = null
+                if (!waitFor(HID_RECHECK_MS, GlassesNetwork.scan(context).fingerprint, context)) return
+                continue
+            }
             if (backoff.failures == 0) _status.value = HeadTrackingStatus.Searching
             var scan = GlassesNetwork.scan(context)
             if (scan.empty && !ethernetTried) {
@@ -549,7 +593,7 @@ object HeadTracker {
             lastPrint = scan.fingerprint
             _networks.value = scan.seen
             if (scan.empty) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }
@@ -558,7 +602,9 @@ object HeadTracker {
             val reachable = scan.networks.filter { it.reachable && it.iface !in noRoute }.map { it.iface } +
                 scan.kernel.map { it.first }.filter { it !in noRoute }
             if (reachable.isEmpty()) {
-                val names = scan.networks.map { it.iface } + scan.kernel.map { it.first }
+                // 1.1.8: with the addresses, so a report says which link it was ("eth0 169.254.1.10/24").
+                val names = scan.networks.map { n -> (listOf(n.iface) + n.addresses.filter { '.' in it }).joinToString(" ") } +
+                    scan.kernel.map { "${it.first} ${it.second.hostAddress} (no Android network)" }
                 _status.value = HeadTrackingStatus.NoRoute(names)
                 _answer.value = "No route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}: nothing is tried until the glasses' network changes or they are plugged in again."
                 Log.i(TAG, "head tracking: no route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}; waiting for a network change")
@@ -568,7 +614,7 @@ object HeadTracker {
             val shizuku = ShizukuBridge.status(context)
             val routes = scan.routes(shizuku == ShizukuStatus.READY, refusedDirect).filter { it.iface in reachable }
             if (routes.isEmpty()) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen)
+                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }
@@ -596,10 +642,11 @@ object HeadTracker {
                 tried += "${route.label}: connected"
                 _attempts.value = tried.toList()
                 _route.value = route.label
-                _answer.value = "The glasses answered on ${OneImuProtocol.HOST}:${OneImuProtocol.STREAM_PORT} over ${route.label}."
+                _answer.value = "The glasses answered on ${route.host}:${OneImuProtocol.STREAM_PORT} over ${route.label}."
                 _connectResult.value = "Connected over ${route.label} (${link.local})"
                 Log.i(TAG, "head tracking route: connected over ${route.label} (${link.local})")
                 openLink = link
+                sourceLine = "TCP ${OneImuProtocol.HOST}:${OneImuProtocol.STREAM_PORT} over ${route.label}"
                 // 0.5.10: the fusion, the recentre and the pose carry on across a reconnect: the
                 // first report's time step is not plausible and is skipped, then the gyro goes on
                 // from where it was (0.5.6 to 0.5.9 reset here, and forward became wherever the
@@ -608,6 +655,7 @@ object HeadTracker {
                 val streamed = stream(link, route.label, fusion)
                 runCatching { link.close() }
                 openLink = null
+                sourceLine = null
                 _route.value = null
                 Log.i(TAG, "head tracking stream over ${route.label} ended after ${(SystemClock.elapsedRealtime() - opened) / 1000.0} s: ${_status.value.summary}; the last pose holds for up to ${HeadHold.HOLD_MS / 1000} s while it reconnects")
                 if (Thread.currentThread().isInterrupted) return
@@ -624,6 +672,111 @@ object HeadTracker {
             Log.i(TAG, "head tracking: next try in ${delay / 1000} s (failed round ${backoff.failures}; ${GlassesNetwork.ShellHelper.started} shell helpers started so far)")
             if (!waitFor(delay, scan.fingerprint, context)) return
         }
+    }
+
+    /** 1.1.12: the Air glasses USB access was asked for (their device name), so Android's prompt shows once a plug-in. */
+    private var askedUsbFor: String? = null
+
+    /**
+     * 1.1.12: one round on Air family glasses ([AirImuLink]): USB access, the IMU's HID interface, its stream until it
+     * ends, then the backoff's wait. False when the tracker was stopped.
+     */
+    private fun streamAir(device: android.hardware.usb.UsbDevice, context: Context, fusion: HeadFusion, backoff: HeadRetryBackoff): Boolean {
+        val name = AirImuLink.glassesName(device)
+        val print = GlassesNetwork.scan(context).fingerprint
+        if (!AirImuLink.manager(context).hasPermission(device)) {
+            _status.value = HeadTrackingStatus.UsbPermission(name)
+            if (askedUsbFor != device.deviceName) {
+                askedUsbFor = device.deviceName
+                Log.i(TAG, "head tracking: $name found on USB without access to it; asking Android (its USB prompt)")
+                runCatching { com.hayeco.flipspaces.hands.GlassesUsbAccess.requestPermission(context, device) }
+                    .onFailure { Log.w(TAG, "head tracking: the USB prompt for $name failed: ${it.javaClass.simpleName}: ${it.message}") }
+            }
+            return waitFor(1000L, print, context)
+        }
+        val link = try {
+            AirImuLink.open(context, device, READ_TIMEOUT_MS)
+        } catch (e: Exception) {
+            if (Thread.currentThread().isInterrupted) return false
+            val error = "${e.javaClass.simpleName}: ${e.message}"
+            val delay = backoff.nextDelayMs()
+            _status.value = HeadTrackingStatus.UsbFailed(name, error)
+            _attempts.value = listOf("$name over USB HID: $error")
+            Log.w(TAG, "head tracking: $name over USB HID failed: $error; next try in ${delay / 1000} s")
+            return waitFor(delay, print, context)
+        }
+        _attempts.value = listOf("${link.label}: opened, start command sent")
+        _route.value = link.label
+        sourceLine = link.label
+        Log.i(TAG, "head tracking route: ${link.label}, the IMU's start command sent")
+        val opened = SystemClock.elapsedRealtime()
+        val streamed = try {
+            stream(link, link.label, fusion)
+        } finally {
+            runCatching { link.close() }
+            sourceLine = null
+            _route.value = null
+        }
+        Log.i(TAG, "head tracking stream over ${link.label} ended after ${(SystemClock.elapsedRealtime() - opened) / 1000.0} s: ${_status.value.summary}; ${link.timestampLine}")
+        if (Thread.currentThread().isInterrupted) return false
+        if (streamed) backoff.reset()
+        val delay = backoff.nextDelayMs()
+        val why = if (streamed) "The stream stopped." else "The $name took the start command but sent no head tracking reports."
+        _answer.value = why
+        _status.value = HeadTrackingStatus.RetryLater(why, (delay / 1000).toInt())
+        return waitFor(delay, print, context)
+    }
+
+    // ---- 1.1.12: the once a second PocketXR-Tracking line ----
+
+    private const val TRACK_TAG = "PocketXR-Tracking"
+    private const val BEAT_MS = 1000L
+    private val beat = com.hayeco.flipspaces.core.spatial.TrackingBeat()
+
+    /** IMU samples fused since the process started (reader thread writes, the beat reads). */
+    @Volatile private var fusedSamples = 0L
+
+    /** Where the open stream's reports come from, null with none open. */
+    @Volatile private var sourceLine: String? = null
+
+    /** The newest accelerometer as the fusion takes it in, ten times a second. */
+    @Volatile private var lastAccel: Vec3? = null
+
+    /** The last line, for the Glasses report. */
+    @Volatile var lastTrackingLine: String? = null
+        private set
+
+    private val beatTick = object : Runnable {
+        override fun run() {
+            runCatching { logBeat() }.onFailure { Log.w(TRACK_TAG, "tracking line failed: ${it.javaClass.simpleName}: ${it.message}") }
+            graceHandler.postDelayed(this, BEAT_MS)
+        }
+    }
+
+    private fun logBeat() {
+        val c = appContext ?: return
+        val facts = com.hayeco.flipspaces.core.spatial.TrackingFacts(
+            glasses = glassesSeen(c), source = sourceLine, follow = SpaceSession.follow, status = _status.value,
+            samples = fusedSamples, pose = pose?.orientation, accel = lastAccel, axes = settings.axes,
+        )
+        val line = beat.line(facts, System.nanoTime())
+        lastTrackingLine = line
+        Log.i(TRACK_TAG, line)
+    }
+
+    /** The glasses' model from their display and every XREAL device on USB, with whether Pocket XR may use it. */
+    private fun glassesSeen(c: Context): String {
+        val manager = AirImuLink.manager(c)
+        val usb = runCatching { manager.deviceList.values.filter { com.hayeco.flipspaces.core.hands.GlassesUsb.isXreal(it.vendorId) } }.getOrDefault(emptyList())
+        val devices = if (usb.isEmpty()) "no XREAL device on USB" else usb.joinToString(", ") { d ->
+            val air = AirImuProtocol.isAir(d.vendorId, d.productId)
+            "%s USB %04X:%04X%s, USB access %s".format(
+                java.util.Locale.ROOT, AirImuProtocol.modelName(d.productId) ?: d.productName ?: "XREAL", d.vendorId, d.productId,
+                if (air) " (Air family, IMU on HID interface ${AirImuProtocol.imuInterface(d.productId)})" else "",
+                if (runCatching { manager.hasPermission(d) }.getOrDefault(false)) "yes" else "no",
+            )
+        }
+        return "display says ${SpaceStore(c).model.label}; $devices"
     }
 
     /** Poses from before a recentre or a new mount are in the old frame: the prediction starts from the new one. Reader thread. */
@@ -669,7 +822,7 @@ object HeadTracker {
         val c = appContext
         val msg = when {
             r == null -> "Not saved: hold your head still for a moment first (gravity was not steady or the head was turning)."
-            // 0.5.16: pitch up to 25 degrees (the Aura's IMU sits about 14.5 pitched), roll up to 10.
+            // 0.5.16: pitch up to 25 degrees (the Aura's IMU sits about 14.5 pitched), roll up to 10. 1.1.7: pitch up to 40 (a One Pro).
             !com.hayeco.flipspaces.core.spatial.LevelCalibration.plausible(r.first, r.second) ->
                 "Not saved: the glasses read roll %.1f, pitch %.1f degrees: %s; is the line really on a level edge at eye height?".format(
                     java.util.Locale.ROOT, r.first, r.second, com.hayeco.flipspaces.core.spatial.LevelCalibration.refusal(r.first, r.second),
@@ -726,7 +879,7 @@ object HeadTracker {
         var tries = 0
         while (true) {
             try {
-                return route.open(context, OneImuProtocol.HOST, OneImuProtocol.STREAM_PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
+                return route.open(context, route.host, OneImuProtocol.STREAM_PORT, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS)
             } catch (e: Exception) {
                 val error = "${e.javaClass.simpleName}: ${e.message}"
                 if (route.kind != HeadRouteKind.DIRECT || HeadRoutePlan.bindRefused(error) || tries >= DIRECT_RETRIES || Thread.currentThread().isInterrupted) throw e
@@ -786,13 +939,27 @@ object HeadTracker {
         return line
     }
 
-    private fun stream(link: GlassesNetwork.Link, label: String, fusion: HeadFusion): Boolean {
-        val framer = OneImuFramer()
+    /** 1.1.12: the One family's TCP stream as a report source. */
+    private class NetworkSource(private val link: GlassesNetwork.Link) : ImuReportSource {
+        private val framer = OneImuFramer()
+        private val buf = ByteArray(16 * 1024)
+        override val counts: FramerCounts get() = framer.counts
+        override val noReportsHint: String = HeadTrackingStatus.ONE_FAMILY_HINT
+
+        override fun read(out: ArrayList<com.hayeco.flipspaces.core.spatial.ImuReport>): Int {
+            val n = link.read(buf)
+            if (n > 0) framer.append(buf, n, out) else out.clear()
+            return n
+        }
+    }
+
+    private fun stream(link: GlassesNetwork.Link, label: String, fusion: HeadFusion): Boolean = stream(NetworkSource(link), label, fusion)
+
+    private fun stream(source: ImuReportSource, label: String, fusion: HeadFusion): Boolean {
         val rate = RateMeter()
         val reads = RateMeter()
         val clock = ImuClock()
         var lastChainMs = SystemClock.elapsedRealtime()
-        val buf = ByteArray(16 * 1024)
         val startMs = SystemClock.elapsedRealtime()
         var lastImuMs = startMs
         var lastLiveMs = 0L
@@ -805,7 +972,7 @@ object HeadTracker {
         gcMark()
         while (!Thread.currentThread().isInterrupted) {
             val n = try {
-                link.read(buf)
+                source.read(reports)
             } catch (e: Exception) {
                 if (Thread.currentThread().isInterrupted) return everStreamed
                 if (everStreamed) _status.value = HeadTrackingStatus.Lost(label, "${e.javaClass.simpleName}: ${e.message}")
@@ -814,7 +981,7 @@ object HeadTracker {
             }
             if (n < 0) {
                 _status.value = if (everStreamed) HeadTrackingStatus.Lost(label, "the glasses closed the connection")
-                else HeadTrackingStatus.NoReports(label, ((SystemClock.elapsedRealtime() - startMs) / 1000).toInt(), framer.counts.bytes, framer.counts)
+                else HeadTrackingStatus.NoReports(label, ((SystemClock.elapsedRealtime() - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint)
                 return everStreamed
             }
             val nowMs = SystemClock.elapsedRealtime()
@@ -829,7 +996,6 @@ object HeadTracker {
             if (n > 0) {
                 // 0.5.55: into the kept lists, walked by index (no iterator), and the poses only tested with
                 // [HeadView.isUsable] (usable made a normalized Quat that was thrown away, twice a sample).
-                framer.append(buf, n, reports)
                 fused.clear()
                 for (ri in 0 until reports.size) {
                     val r = reports[ri]
@@ -837,6 +1003,7 @@ object HeadTracker {
                     fusion.update(r)?.let { fused += it }
                 }
                 val imu = fused.size
+                fusedSamples += imu
                 if (imu > 0) {
                     // 0.5.6: a pose that is not a finite rotation is dropped, never drawn ([HeadView]).
                     pose = fused.last().takeIf { HeadView.isUsable(it.orientation) } ?: pose
@@ -976,7 +1143,7 @@ object HeadTracker {
             val silentS = (nowMs - lastImuMs) / 1000
             if (silentS >= NO_REPORT_SECONDS) {
                 // 0.5.22: a stream that worked and went quiet is lost, not "no sensor reports".
-                _status.value = com.hayeco.flipspaces.core.spatial.HeadSilence.status(label, everStreamed, silentS, ((nowMs - startMs) / 1000).toInt(), framer.counts.bytes, framer.counts)
+                _status.value = com.hayeco.flipspaces.core.spatial.HeadSilence.status(label, everStreamed, silentS, ((nowMs - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint)
                 if (silentS >= NO_REPORT_SECONDS * 3) return everStreamed // reconnect
             } else if (everStreamed && (_status.value !is HeadTrackingStatus.Streaming || nowMs - lastStatusMs >= STATUS_EVERY_MS)) {
                 // 0.5.48 (Mike, vc68: windows shaky when looking around, the phone at severe heat): the status at most
@@ -994,12 +1161,13 @@ object HeadTracker {
             if (n > 0 && everStreamed && READ_BATCH_NS > 0L) java.util.concurrent.locks.LockSupport.parkNanos(READ_BATCH_NS)
             if (nowMs - lastLiveMs >= 100) {
                 lastLiveMs = nowMs
+                lastAccel = fusion.lastRawAccel
                 val p = pose
                 if (p != null) {
                     val (y, pi, r) = p.orientation.yawPitchRoll()
-                    _live.value = HeadLive(y, pi, r, p.angularVelocity, fusion.lastRawAccel, rate.rate, framer.counts, p.still, p.gyroBias)
+                    _live.value = HeadLive(y, pi, r, p.angularVelocity, fusion.lastRawAccel, rate.rate, source.counts, p.still, p.gyroBias)
                 } else {
-                    _live.value = HeadLive(0f, 0f, 0f, Vec3.ZERO, Vec3.ZERO, rate.rate, framer.counts, false, Vec3.ZERO)
+                    _live.value = HeadLive(0f, 0f, 0f, Vec3.ZERO, Vec3.ZERO, rate.rate, source.counts, false, Vec3.ZERO)
                 }
             }
         }

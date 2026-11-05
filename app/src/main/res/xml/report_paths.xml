@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1.1.5: only the Glasses reports are shared as files (GlassesReportFile), nothing else of the app's. -->
+<paths>
+    <external-files-path name="reports" path="reports/" />
+    <files-path name="reports_internal" path="reports/" />
+</paths>

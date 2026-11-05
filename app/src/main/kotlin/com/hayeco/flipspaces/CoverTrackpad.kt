@@ -145,6 +145,8 @@ object CoverTrackpad {
     /** Starts the trackpad on [displayId], from the first context Android lets start it. */
     private fun launch(displayId: Int) {
         val app = appContext ?: return
+        // 1.1.10: nothing is opened after Exit Pocket XR.
+        if (AppExit.exited) return
         val intent = Intent(app, TrackpadActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             .putExtra(TrackpadActivity.EXTRA_AUTO, true)

@@ -195,6 +195,18 @@ private class PanelGl(var panel: SpacePanel, private val frames: PanelDrain, bro
     var tasksCheckedMs = 0L
     @Volatile var tasksPending = false
 
+    /** 1.1.9: the window this one's app moved to when it went empty ([com.hayeco.flipspaces.core.spatial.SingleWindowApp]), else null. */
+    var movedTo: Int? = null
+
+    /** 1.1.10: whether the Menu's Open a new instance was on when this window's app moved ([com.hayeco.flipspaces.core.spatial.SingleWindowApp.card]). */
+    var movedSwitchOn = false
+
+    /** 1.1.9: this window for [com.hayeco.flipspaces.core.spatial.SingleWindowApp]. */
+    fun window(): com.hayeco.flipspaces.core.spatial.SingleWindowApp.Window {
+        val showing = state as? PanelState.Showing
+        return com.hayeco.flipspaces.core.spatial.SingleWindowApp.Window(panel.id, panel.packageName, empty.launchedAtMs, showing != null && !showing.appClosed)
+    }
+
     /** The Back question (0.4.2), while it is up; App closed comes from [state]. */
     var ask: PanelCard? = null
 
@@ -966,7 +978,10 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (!manualYaw.isFinite()) manualYaw = 0f
         // 0.5.10: input and hit tests use the pose at this frame's present time too.
         // 0.5.17: the tracking mode (Smooth Follow keeps the Space in front, [com.hayeco.flipspaces.core.spatial.FollowView]).
-        val tracked = HeadTracker.renderPose(presentNs)
+        // 1.1.0: while the hover duty test has the glasses hold the picture in the room, the Space draws head locked, so
+        // it is not moved twice (their anchor and the Space's own head tracking).
+        val hoverLocked = GlassesDisplayControl.hoverHeadLocked
+        val tracked = if (hoverLocked) null else HeadTracker.renderPose(presentNs)
         follow.mode = SpaceSession.follow
         follow.update(tracked, nowMs)
         var head = HeadView.pose(follow.relative(tracked), manualYaw)
@@ -1100,7 +1115,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 // 0.5.57: on the clock, the scene for the glasses refresh the coming frame is posed for.
                 val scenePresent = if (onClock) frameClock.plan(System.nanoTime(), clockBudgetNs())?.let { it.poseNs + glassesNs } ?: presentNs
                 else late.plan(System.nanoTime(), fence.lockNs)?.let { fence.snap(it.presentNs + fenceExtra(it)) + glassesNs } ?: presentNs
-                val sceneHead = HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
+                val sceneHead = if (hoverLocked) head else HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
                 this.head = sceneHead
                 eyeWarp.bindScene(slot.index)
                 if (seeThrough) GLES30.glClearColor(0f, 0f, 0f, 1f) else GLES30.glClearColor(0.05f, 0.06f, 0.08f, 1f)
@@ -1188,8 +1203,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // 0.5.21: not while the glasses warp: they warp each 32 row band to its own light time from the
         // one pose in the record, so a per-row pose here would be corrected twice.
         val rows = if (!warping && store.rowPoseFor(stereo == StereoMode.SIDE_BY_SIDE) && HeadTracker.tracking) rowTimingNow(periodNs) else null
-        val headTop = rows?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
-        val headBottom = rows?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
+        val headTop = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
+        val headBottom = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
         if (warpEyes) {
             // 0.5.25: the newest buffer turned onto the window by the newest pose, the top and the bottom row's when
             // the per-row pose is on (the row model at 60 Hz), each eye through its own homography.
@@ -2993,9 +3008,15 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
-    /** The card over [p]: App closed, or the Back question; null when the app shows. */
-    private fun cardOf(p: PanelGl): PanelCard? =
-        if ((p.state as? PanelState.Showing)?.appClosed == true) PanelCard.AppClosed(p.panel.label, crashes[p.panel.id]) else p.ask ?: p.switcher
+    /**
+     * The card over [p]: App closed, or the Back question; null when the app shows. 1.1.9: an app that moved to a newer
+     * window of its own ([PanelGl.movedTo]) says so instead of App closed, unless it crashed.
+     */
+    private fun cardOf(p: PanelGl): PanelCard? {
+        if ((p.state as? PanelState.Showing)?.appClosed != true) return p.ask ?: p.switcher
+        val crash = crashes[p.panel.id]
+        return if (crash == null && p.movedTo != null) com.hayeco.flipspaces.core.spatial.SingleWindowApp.card(p.panel.label, p.movedSwitchOn) else PanelCard.AppClosed(p.panel.label, crash)
+    }
 
     /** 0.5.19: how each panel's app ended when its exit record was a crash, for its card. */
     private val crashes = HashMap<Int, String>()
@@ -3073,28 +3094,40 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
+    /** The App closed card's Reopen: the app started again in [p]'s window, as a new instance there ([PanelHost.relaunch]). */
+    private fun reopen(p: PanelGl) {
+        val label = p.panel.label
+        val showing = p.state as? PanelState.Showing ?: return
+        val now = SystemClock.uptimeMillis()
+        // 0.5.19: Mike asked for it again: the crash is forgotten.
+        crashes.remove(p.panel.id)
+        SpaceSession.crashedApps.remove(p.panel.packageName)
+        p.state = showing.copy(appClosed = false)
+        p.empty.launched(now)
+        p.tasksCheckedMs = now
+        // 0.5.24: an app that closed is reopened at a sane size.
+        val (capped, why) = com.hayeco.flipspaces.core.spatial.ReopenCap.cap(p.panel, wideView.isOn(p.panel.packageName), appDensity.smallestDp(p.panel.packageName))
+        if (why != null) {
+            Log.i(PANEL_TAG, "panel ${p.panel.id} $label: $why")
+            setLayout(layout.replace(capped), commit = true)
+        }
+        PanelHost.relaunch(showing.displayId, label, p.panel.packageName, p.panel.activityName) { err ->
+            if (err != null) onGl { problem = "Reopening $label: $err" }
+        }
+    }
+
     /** A press on a card's button (or beside it). */
     private fun onCard(p: PanelGl, card: PanelCard, action: CardAction?, button: com.hayeco.flipspaces.core.spatial.CardButton? = null) {
         val label = p.panel.label
         when (action) {
-            CardAction.REOPEN -> {
-                val showing = p.state as? PanelState.Showing ?: return
-                val now = SystemClock.uptimeMillis()
-                // 0.5.19: Mike asked for it again: the crash is forgotten.
-                crashes.remove(p.panel.id)
-                SpaceSession.crashedApps.remove(p.panel.packageName)
-                p.state = showing.copy(appClosed = false)
-                p.empty.launched(now)
-                p.tasksCheckedMs = now
-                // 0.5.24: an app that closed is reopened at a sane size.
-                val (capped, why) = com.hayeco.flipspaces.core.spatial.ReopenCap.cap(p.panel, wideView.isOn(p.panel.packageName), appDensity.smallestDp(p.panel.packageName))
-                if (why != null) {
-                    Log.i(PANEL_TAG, "panel ${p.panel.id} $label: $why")
-                    setLayout(layout.replace(capped), commit = true)
-                }
-                PanelHost.relaunch(showing.displayId, label, p.panel.packageName, p.panel.activityName) { err ->
-                    if (err != null) onGl { problem = "Reopening $label: $err" }
-                }
+            CardAction.REOPEN -> reopen(p)
+            CardAction.TURN_ON_AND_REOPEN -> {
+                // 1.1.10: the Menu's Open a new instance turned on, then the app reopened here as a new instance.
+                store.newInstance = true
+                PanelHost.newInstance = true
+                com.hayeco.flipspaces.SpacesState.setNewInstance(true)
+                Log.i(PANEL_TAG, "panel ${p.panel.id} $label: Open a new instance turned on from its card; reopening")
+                reopen(p)
             }
             CardAction.CLOSE_PANEL -> {
                 Log.i(PANEL_TAG, "panel ${p.panel.id} $label: closed from its card")
@@ -3212,12 +3245,42 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                     val now = p.state as? PanelState.Showing ?: return@onGl
                     if (p.removed || now.displayId != display || now.appClosed) return@onGl
                     if (p.empty.sample(tasks, SystemClock.uptimeMillis())) {
+                        val newer = com.hayeco.flipspaces.core.spatial.SingleWindowApp.movedTo(p.window(), panels.values.map { it.window() })
                         p.state = now.copy(appClosed = true)
                         p.ask = null
+                        p.movedTo = null
                         Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: display $display has no task ($tasks); App closed")
                         problem = "${p.panel.label} closed on its panel; Reopen or Close it there."
                         askWhyClosed(p)
+                        newer?.let { checkMovedTo(p, it.id) }
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * 1.1.9 (a Galaxy S20 FE on Android 11): [p] went empty while a newer window of its app, [newerId], still shows
+     * it. Its display's task list is read once more; with the app's task there, [p]'s card says the app moved and
+     * offers only Close.
+     */
+    private fun checkMovedTo(p: PanelGl, newerId: Int) {
+        val q = panels[newerId] ?: return
+        val display = q.displayId ?: return
+        PanelHost.tasks(display) { tasks ->
+            onGl {
+                val closed = (p.state as? PanelState.Showing)?.appClosed == true
+                if (p.removed || q.removed || !closed || tasks == null || tasks.empty) return@onGl
+                p.movedTo = newerId
+                // 1.1.10: with Open a new instance off, the second window reused the app's task: the card names the switch.
+                val switchOn = store.newInstance
+                p.movedSwitchOn = switchOn
+                if (switchOn) {
+                    Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks) with Open a new instance on; one window only, so Close is offered, not Reopen")
+                    problem = "${p.panel.label} can only show one window on this phone. It moved to your newest window."
+                } else {
+                    Log.i(PANEL_TAG, "panel ${p.panel.id} ${p.panel.label}: its app moved to the newer window $newerId on display $display ($tasks) with Open a new instance off; Turn on and reopen is offered")
+                    problem = "${p.panel.label} moved to your newer window. To keep both, turn on Open a new instance."
                 }
             }
         }
@@ -3853,7 +3916,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val card = cardOf(p)
         // 0.5.69: with no card up its fade goes back to 0, so the next one fades in again.
         if (card == null && firstEye) p.cardLook.at(false, frameClockMs)
-        if (card is PanelCard.AppClosed) {
+        if (card != null && card.wholeWindow) {
             drawCard(p, panel, card, viewProj)
         } else if (read >= 0 && p.hasFrame && showing != null && !showing.paused) {
             // 0.5.13: the footprint filter where level 0 is sampled (below the mips' 1.9 texels a pixel).
@@ -4155,7 +4218,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         if (show < 0.01f) return
         val arcW = PanelCurve.arcWidthM(panel)
         val bodyH = panel.heightM
-        val closed = card is PanelCard.AppClosed
+        val closed = card.wholeWindow
         val rimM = rimWidthM(panel)
         // The window behind: dimmed (an app that closed has no picture: its glass fills the window instead).
         if (!closed) colorOn(PanelCurve.body(panel), viewProj, look(0xFF000000.toInt(), 0.5f * show), bodyRounding(panel))
@@ -4184,10 +4247,10 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             val dv = hM / bodyH / 2f
             drawOn(lift(PanelCurve.rect(panel, uC - du, v - dv, uC + du, v + dv), depth), viewProj, tex.id, alpha)
         }
-        p.cardTitle.set(listOf(card.title), Color.TRANSPARENT, Look.INK, CARD_TITLE_PX, centred = true, medium = true)
+        p.cardTitle.set(listOf(card.title), Color.TRANSPARENT, Look.INK, CARD_TITLE_PX * card.titleScale, centred = true, medium = true)
         line(p.cardTitle, CARD_LINE_W, CARD_LINE_H, card.titleV, card.titleH, show)
         card.detail?.let { d ->
-            p.cardDetail.set(listOf(d), Color.TRANSPARENT, Look.INK_2, CARD_TITLE_PX, centred = true)
+            p.cardDetail.set(listOf(d), Color.TRANSPARENT, Look.INK_2, CARD_TITLE_PX * card.detailScale, centred = true)
             line(p.cardDetail, CARD_LINE_W, CARD_LINE_H, card.detailV, card.detailH, show)
         }
         val hit = pointer.hoverOn(panel.id)?.takeIf { it.zone == PanelZone.BODY }

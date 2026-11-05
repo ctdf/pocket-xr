@@ -112,7 +112,11 @@ class SpaceRecorder(private val context: Context) {
             fd.close()
 
             val display = EGL14.eglGetCurrentDisplay()
-            val surface = EGL14.eglCreateWindowSurface(display, currentConfig(display), input, intArrayOf(EGL14.EGL_NONE), 0)
+            // 1.1.5 (issue 26: a 0 byte video on a Retroid): a video encoder's surface wants a recordable config. Adreno
+            // takes the Space's own config anyway; other GPUs then drop every frame. A recordable one first, else the own.
+            val surface = recordableConfig(display)?.let { EGL14.eglCreateWindowSurface(display, it, input, intArrayOf(EGL14.EGL_NONE), 0) }
+                ?.takeIf { it != EGL14.EGL_NO_SURFACE }
+                ?: EGL14.eglCreateWindowSurface(display, currentConfig(display), input, intArrayOf(EGL14.EGL_NONE), 0)
             if (surface == null || surface == EGL14.EGL_NO_SURFACE) error("no EGL surface for the encoder (EGL 0x${Integer.toHexString(EGL14.eglGetError())})")
 
             codec = c
@@ -122,6 +126,7 @@ class SpaceRecorder(private val context: Context) {
             uri = u
             frameNo = 0
             frames = 0
+            samples = 0
             startNs = SystemClock.elapsedRealtimeNanos()
             draining = true
             drainThread = Thread({ drain(c, m) }, "space-record").apply { start() }
@@ -140,13 +145,18 @@ class SpaceRecorder(private val context: Context) {
         codec?.runCatching { signalEndOfInputStream() }
         draining = false
         drainThread?.join(3000)
-        val kept = frames > 0
+        // 1.1.5: kept only when the encoder wrote video into the file; frames drawn alone left a 0 byte file "saved".
+        val kept = samples > 0
         cleanUp(keep = kept)
-        Log.i(tag, "recording $why: %.1f s, %d frames%s".format(Locale.ROOT, secs, frames, if (kept) ", saved to Movies/Pocket XR" else ", nothing saved"))
+        Log.i(tag, "recording $why: %.1f s, %d frames drawn, %d samples written%s".format(Locale.ROOT, secs, frames, samples, if (kept) ", saved to Movies/Pocket XR" else ", nothing saved"))
         wanted = false
         SpaceSession.recordWanted = false
         SpaceSession.recording = false
-        SpaceSession.recordSaved = if (kept) "Saved to Movies/Pocket XR (%.0f s)".format(Locale.ROOT, secs) else null
+        SpaceSession.recordSaved = when {
+            kept -> "Saved to Movies/Pocket XR (%.0f s)".format(Locale.ROOT, secs)
+            frames > 0 -> "The recording didn't work on this phone. Nothing was saved."
+            else -> null
+        }
     }
 
     private fun cleanUp(keep: Boolean) {
@@ -187,6 +197,7 @@ class SpaceRecorder(private val context: Context) {
                         buf.position(info.offset)
                         buf.limit(info.offset + info.size)
                         m.writeSampleData(track, buf, info)
+                        samples++
                     }
                     c.releaseOutputBuffer(i, false)
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
@@ -201,6 +212,22 @@ class SpaceRecorder(private val context: Context) {
 
     private var idleAfterStop = 0
 
+    /** 1.1.5: samples the encoder wrote into the MP4 (drain thread). */
+    @Volatile private var samples = 0L
+
+    /** 1.1.5: an RGBA8888, OpenGL ES 3 config that a video encoder's surface takes (EGL_RECORDABLE_ANDROID), or null. */
+    private fun recordableConfig(display: android.opengl.EGLDisplay): EGLConfig? {
+        val attribs = intArrayOf(
+            EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8, EGL14.EGL_ALPHA_SIZE, 8,
+            EGL14.EGL_RENDERABLE_TYPE, EGLExt.EGL_OPENGL_ES3_BIT_KHR,
+            EGL_RECORDABLE_ANDROID, 1,
+            EGL14.EGL_NONE,
+        )
+        val configs = arrayOfNulls<EGLConfig>(1)
+        val n = IntArray(1)
+        return if (EGL14.eglChooseConfig(display, attribs, 0, configs, 0, 1, n, 0) && n[0] > 0) configs[0] else null
+    }
+
     /** The config of the Space's own context, so the encoder's surface matches it. */
     private fun currentConfig(display: android.opengl.EGLDisplay): EGLConfig {
         val id = IntArray(1)
@@ -212,6 +239,8 @@ class SpaceRecorder(private val context: Context) {
     }
 
     companion object {
+        /** EGL_ANDROID_recordable. */
+        private const val EGL_RECORDABLE_ANDROID = 0x3142
         const val WIDTH = 1920
         const val HEIGHT = 1080
         const val FPS = 30

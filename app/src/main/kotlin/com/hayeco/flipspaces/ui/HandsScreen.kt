@@ -49,6 +49,8 @@ import com.hayeco.flipspaces.hands.GlassesCameraProvider
 data class HandsSetup(
     val statuses: Map<HandProviderKind, ProviderStatus>,
     val active: HandProviderKind,
+    /** 1.1.0: the Pocket XR add-on, which holds the pointer service, is installed. */
+    val addonInstalled: Boolean = true,
     val serviceEnabled: Boolean,
     val serviceConnected: Boolean,
     val glassesDisplayId: Int?,
@@ -85,6 +87,8 @@ fun HandsScreen(
     onMessageShown: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenAppInfo: () -> Unit,
+    /** 1.1.0: opens where to get the Pocket XR add-on. */
+    onGetAddon: () -> Unit = {},
     onAskCamera: () -> Unit,
     onAskUsb: () -> Unit,
     onDownloadModel: () -> Unit,
@@ -116,7 +120,7 @@ fun HandsScreen(
             item { Text("Hands", style = MaterialTheme.typography.headlineMedium) }
             // 0.5.1: first, so its reason is on screen when Android asks for the microphone.
             if (!setup.micAllowed) item { UsbHintCard(setup, onAllowMic, onUsbHintDone) }
-            item { PointerServiceCard(setup, onOpenAccessibility, onOpenAppInfo) }
+            item { PointerServiceCard(setup, onOpenAccessibility, onOpenAppInfo, onGetAddon) }
             // 0.5.101 (Mike's settings audit): the providers list, camera formats and the shoulder ray are under Developer;
             // the mirror and Track two hands switches are gone (the glasses' camera faces out, and two hands have been
             // always on since 0.5.37); the trackpad card went to the trackpad's own Menu; the gestures are the Space's.
@@ -203,7 +207,7 @@ private fun HandsAutoCard(
 }
 
 @Composable
-private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Unit, onOpenAppInfo: () -> Unit) {
+private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Unit, onOpenAppInfo: () -> Unit, onGetAddon: () -> Unit) {
     val ok = setup.serviceConnected
     Card(
         Modifier.fillMaxWidth(),
@@ -212,13 +216,15 @@ private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Uni
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("1. Pocket XR pointer (accessibility service)", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Hands and the trackpad reach the glasses through an accessibility service. It is the only " +
-                    "way Android lets an ordinary app act on other apps' windows. It:",
+                "Outside the Space, hands and the trackpad reach the glasses through an accessibility service. It is the only " +
+                    "way Android lets an ordinary app act on other apps' windows. It comes with the Pocket XR add-on, a " +
+                    "second small app, because Google blocks installing apps with one in some countries. It:",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
                 "- draws the cursor, hints and the dock on the glasses display\n" +
-                    "- reads where app windows are on the glasses (position, size and title only)\n" +
+                    "- reads where app windows are on the glasses (position, size and title only), and the labels of DeX's " +
+                    "title bar buttons there, to find its full screen button\n" +
                     "- performs taps and drags on the glasses display, which is how windows are clicked, " +
                     "moved (drag on the DeX title bar) and resized (drag on a corner)\n" +
                     "It does nothing on the phone's own screens and sends nothing off the phone.",
@@ -226,6 +232,7 @@ private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Uni
             )
             Text(
                 when {
+                    !setup.addonInstalled -> "The Pocket XR add-on is not installed. The Space works without it."
                     ok && setup.glassesDisplayId != null -> "On. Cursor is on display ${setup.glassesDisplayId}."
                     ok -> "On, but no glasses display is connected."
                     setup.serviceEnabled -> "Switched on in Settings but not running yet."
@@ -234,6 +241,10 @@ private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Uni
                 style = MaterialTheme.typography.bodyMedium,
             )
             setup.problem?.let { Text("Last problem: $it", style = MaterialTheme.typography.bodySmall) }
+            if (!setup.addonInstalled) {
+                Button(onClick = onGetAddon) { Text("Get the add-on") }
+                return@Column
+            }
             Button(onClick = onOpenAccessibility) { Text("Open accessibility settings") }
             if (!ok) {
                 Text(
@@ -243,13 +254,13 @@ private fun PointerServiceCard(setup: HandsSetup, onOpenAccessibility: () -> Uni
                 )
                 SelectionContainer {
                     Text(
-                        "adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces/.pointer.PointerService\n" +
+                        "adb shell settings put secure enabled_accessibility_services com.hayeco.flipspaces.addon/.PointerAccess\n" +
                             "adb shell settings put secure accessibility_enabled 1",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                OutlinedButton(onClick = onOpenAppInfo) { Text("App info") }
+                OutlinedButton(onClick = onOpenAppInfo) { Text("Add-on app info") }
             }
         }
     }

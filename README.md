@@ -1,27 +1,56 @@
-# Pocket XR
+<p align="center">
+  <img src="docs/brand/pocket-xr-logo-512.png" width="128" alt="Pocket XR icon">
+</p>
 
-**A spatial desktop for XREAL glasses, run from your Android phone.**
+<h1 align="center">Pocket XR</h1>
+
+<p align="center">
+  <b>A spatial desktop for XREAL glasses, run from your Android phone.</b><br>
+  Free, open source, no ads, no accounts.
+</p>
+
+<p align="center">
+  <a href="https://github.com/pocket-xr/pocket-xr/releases/latest"><img src="https://img.shields.io/github/v/release/pocket-xr/pocket-xr?label=download&color=5A93FF" alt="Latest release"></a>
+  <a href="https://github.com/pocket-xr/pocket-xr/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/pocket-xr/pocket-xr/ci.yml?branch=main&label=build" alt="Build status"></a>
+  <img src="https://img.shields.io/badge/Android-11%2B-3DDC84?logo=android&logoColor=white" alt="Android 11+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-blue" alt="GPL-3.0"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/pocket-xr/pocket-xr/releases/latest"><b>Download</b></a> ·
+  <a href="https://youtu.be/H8dBKm-I6zw"><b>Watch the demo</b></a> ·
+  <a href="#setup">Setup</a> ·
+  <a href="#supported-glasses">Glasses</a> ·
+  <a href="https://github.com/pocket-xr/pocket-xr/discussions">Discussions</a> ·
+  <a href="https://github.com/pocket-xr/pocket-xr/issues/11">Roadmap</a>
+</p>
+
+<p align="center"><img src="docs/media/demo.gif" width="720" alt="Pocket XR on XREAL glasses: windows all around you, looking around, opening an app, moving and resizing a window, and the Control Center"></p>
+
+<p align="center"><a href="https://youtu.be/H8dBKm-I6zw">▶ Watch the full demo video (46 s)</a></p>
 
 Pocket XR turns a phone and a pair of XREAL glasses into a multi-window workspace. Your apps float around you as
 windows you can move, resize, curve and push back. Head tracking keeps them in place as you look around, and the
 phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 
-<p align="center"><img src="docs/media/demo.gif" width="600" alt="Pocket XR on XREAL glasses: windows all around you, looking around, opening an app, moving and resizing a window, and the Control Center"></p>
-
-<!-- TODO before launch: a link to the full demo video. -->
+> [!NOTE]
+> Pocket XR is a community project. It is not made by or affiliated with XREAL. Thanks to XREAL for approving its
+> release.
 
 ## What it does
 
 - **Windows in space.** Any Android app opens as a window around you, at its own size and distance. You can drag a
   window by its edge, snap it next to others, curve it, or push it further and pull it closer.
 - **All windows at once.** Hold both hands up, or use Adjust all, to move, push, pull or resize every window together.
-- **Head tracking.** Windows stay where you put them in the room. It reads the glasses' own motion sensor at 1000 Hz,
-  paced to the glasses' display.
+- **Head tracking.** Windows stay where you put them as you turn your head. It reads the glasses' own motion sensor
+  at 1000 Hz, paced to the glasses' display. This is 3DoF (turning, not walking around); 6DoF is open for the
+  community to build (see below).
 - **3D side by side.** Each eye gets its own view, so windows sit at a real depth. Pocket XR switches the glasses
   into 3D by itself where they allow it.
 - **Your phone as the controller.** A trackpad, with taps, two-finger scroll and pinch and three-finger swipes; a
   Spatial Mouse you point like a laser; and a scroll strip. On a Galaxy Z Flip it also works on the cover screen.
-- **Hand tracking**, on glasses with a camera (the XREAL Aura): point, pinch and drag, with each hand separately.
+- **Hand tracking**, on glasses with a camera: point, pinch and drag, with each hand separately. It works on the
+  XREAL Aura today. The One and One Pro can get it through the XREAL Eye camera add-on, which is next (help wanted).
 - **An app launcher, a Control Center** (arrange layouts, presets, Wi-Fi, Bluetooth, quick settings) and **Wide
   view**, which gives phone-shaped apps a landscape screen.
 
@@ -30,13 +59,28 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 | Glasses | Status | Hand tracking |
 | --- | --- | --- |
 | XREAL Aura | Tested | Yes |
-| XREAL One | Tested | No (no camera). Turn **Stabilizer off** in the glasses' menu. |
-| XREAL One Pro | Community testing | No, unless a camera is found |
+| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Use **Follow mode** (not Anchor) with **Stabilizer off** in the glasses' menu. |
+| XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) |
 | XREAL 1S | Community testing | No |
+| XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Community testing: head tracking since 1.1.12, not yet tested by the project | No |
 | Other glasses | Help wanted | No |
 
 Details, settings for each model and how to report your glasses: [docs/GLASSES.md](docs/GLASSES.md). If you own a
 model marked "Community testing", a Glasses report from the app helps a lot (Menu, then Pocket XR Settings, then Advanced, then Glasses report).
+
+## Where the community can take it
+
+I wanted to get 1.0 into people's hands rather than wait until everything was done, so some big pieces are left open
+on purpose. These are the ones I'm most excited to see the community build:
+
+- **6DoF tracking.** Pocket XR follows your head turning (3DoF) today. With the cameras on the XREAL Aura and the
+  XREAL Eye, 6DoF is possible, so you could lean in and walk around your windows.
+- **Hand tracking on the One and One Pro**, through the XREAL Eye camera add-on.
+- **More glasses and phones.** Testing and Glasses reports from models other than the Aura, the One and the Galaxy Z
+  Flip 7.
+
+The [Roadmap](https://github.com/pocket-xr/pocket-xr/issues/11) has the full list, and
+[the testers issue](https://github.com/pocket-xr/pocket-xr/issues/12) is the easiest place to start.
 
 ## Supported phones
 
@@ -45,15 +89,40 @@ developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video 
 
 ## Setup
 
-1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases) page.
+1. **Install Pocket XR** from the [Releases](https://github.com/pocket-xr/pocket-xr/releases/latest) page.
+   You can check it's the official build with the signing fingerprint under [Updates](#updates), and all the code is
+   here to read.
 2. **Install and start [Shizuku](https://shizuku.rikka.app/)**, and allow Pocket XR in it. Pocket XR uses it to
    create a window for each app and to start the Space on the glasses. Without Shizuku, apps open as ordinary desktop
    windows instead.
-3. **Turn on the Pocket XR pointer** in Android's accessibility settings when the app asks. It draws the cursor on the
-   glasses and taps where you point. It does nothing on the phone's own screen and sends nothing off the phone.
+3. **Optional: install [the add-on](#the-add-on)** for the cursor outside the Space and the Notifications page.
 4. **Plug in the glasses.** The Space opens on them, and the phone shows the trackpad.
 5. **On Samsung phones**, if touches at the screen's edges go missing (the scroll strip), turn on Good Lock's Edge Touch
    for the trackpad.
+
+### The add-on
+
+Some features need an accessibility service or notification access. In some countries Google Play Protect blocks
+installing any sideloaded app that asks for these ("This app can request access to sensitive data"). So they live in a
+second small app, the **Pocket XR add-on**, and Pocket XR itself installs everywhere. The Space, the trackpad and hand
+tracking in the Space all work without it.
+
+The add-on gives you:
+
+- **The Pocket XR pointer** (an accessibility service): the cursor on the glasses outside the Space, in flat DeX mode.
+  It draws the cursor and taps where you point. It does nothing on the phone's own screen and sends nothing off the
+  phone. Pocket XR's Hands screen has a button for it: the add-on says what the service reads and why, and once you
+  agree it opens Android's page to switch it on.
+- **Notification access**: your phone's notifications on the Space's Notifications page, and smooth video for windows
+  playing media. Press Allow on that page, read what the add-on reads and why on the phone, agree, and switch it on in
+  Android's page.
+
+What both read and what never leaves the phone is in the [privacy policy](PRIVACY.md).
+
+Get it from the [add-on releases](https://github.com/pocket-xr/pocket-xr/releases?q=addon&expanded=true)
+(`pocketxr-addon-x.y.apk`). It is signed with the same key as Pocket XR, and Pocket XR only talks to an add-on signed
+with that key. If Play Protect blocks the add-on, install it from a computer with `adb install pocketxr-addon-x.y.apk`,
+which the block does not cover, or turn off "Scan apps with Play Protect" in the Play Store for the install.
 
 ## Updates
 
@@ -78,7 +147,7 @@ key. Every official release is, and you can check it: the release key's SHA-256 
 
 ## Building from source
 
-You need JDK 17, the Android SDK (compile SDK 36) with NDK and CMake 3.22.1, and Gradle 9.5.1.
+You need JDK 17, the Android SDK (compile SDK 37) with NDK and CMake 3.22.1, and Gradle 9.8.2.
 
 ```bash
 gradle :core:test

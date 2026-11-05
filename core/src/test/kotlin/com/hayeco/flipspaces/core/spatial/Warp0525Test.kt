@@ -121,7 +121,7 @@ class Warp0525Test {
     @Test
     fun onlyTheApprovedMessagesCanBeSentAndTheRecenterIsNot() {
         // 0.5.32: and the display commands Mike chose (duty, EDID).
-        assertEquals(setOf(GlassesControl.HEARTBEAT, GlassesControl.SCENE_MODE, GlassesControl.DEVICE_MESSAGE, GlassesControl.NET_LOG, GlassesControl.DUTY_GET, GlassesControl.DUTY_SET, GlassesControl.EDID_GET, GlassesControl.DEPTH_GET, GlassesControl.EC_COUNT, GlassesControl.EC_GET, GlassesControl.EC_SET, GlassesControl.STEREO_GET, GlassesControl.STEREO_SET, GlassesControl.CALIBRATION_GET, GlassesControl.SERIAL_GET), GlassesControl.SENDABLE)
+        assertEquals(setOf(GlassesControl.HEARTBEAT, GlassesControl.SCENE_MODE, GlassesControl.DEVICE_MESSAGE, GlassesControl.NET_LOG, GlassesControl.DUTY_GET, GlassesControl.DUTY_SET, GlassesControl.EDID_GET, GlassesControl.DEPTH_GET, GlassesControl.EC_COUNT, GlassesControl.EC_GET, GlassesControl.EC_SET, GlassesControl.STEREO_GET, GlassesControl.STEREO_SET, GlassesControl.CALIBRATION_GET, GlassesControl.SERIAL_GET, GlassesControl.SPACE_MODE), GlassesControl.SENDABLE)
         val io = Io()
         val c = warping(io)
         c.recentrePressed(2_000)

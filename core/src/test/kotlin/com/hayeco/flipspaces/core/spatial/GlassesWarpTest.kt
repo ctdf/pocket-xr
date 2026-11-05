@@ -152,7 +152,7 @@ class GlassesWarpTest {
         // 0.5.23: the recenter is built still (an old reply is read) but is no longer sendable.
         // 0.5.24: the glasses' log switch 10280 joins them, nothing else.
         // 0.5.32 (Mike chose lower persistence on turns and 72 Hz 3D): duty get / set and EDID get (0.5.35: EDID set rebooted the Aura, never sendable).
-        assertEquals(setOf(10000, 10281, 11000, 10280, 10065, 10066, 10078, 10400, 10021, 10022, 10023, 10273, 10274, 10015, 10025), GlassesControl.SENDABLE)  // 0.5.65: the 2D / 3D state, calibration and serial
+        assertEquals(setOf(10000, 10281, 11000, 10280, 10065, 10066, 10078, 10400, 10021, 10022, 10023, 10273, 10274, 10015, 10025, 10284), GlassesControl.SENDABLE)  // 0.5.65: the 2D / 3D state, calibration and serial; 1.1.0: the space mode
     }
 
     @Test
@@ -283,6 +283,21 @@ class GlassesWarpTest {
         assertTrue(io.lines.any { "sent: glasses mode LSR" in it })
         assertTrue(io.lines.any { "reply: scene mode answer" in it })
         io.lines.take(8).forEach { println("  $it") }
+    }
+
+    /** 1.1.0: with the motion blur test's switch on, the duty is read 0.2 s and 0.5 s into scene mode 1, and read only. */
+    @Test
+    fun theBlurTestReadsTheDutyInSceneModeOne() {
+        val io = FakeIo()
+        val (c, t) = active(io)
+        c.readDuty = true
+        run(c, io, t, 700)
+        val types = io.commands().map { ControlWire.typeOf(it) }
+        assertEquals(listOf(GlassesControl.SCENE_MODE, GlassesControl.DEVICE_MESSAGE, GlassesControl.DUTY_GET, GlassesControl.DUTY_GET), types)
+        val read = io.wire.last { ControlWire.typeOf(it) == GlassesControl.DUTY_GET }
+        c.received(ControlMessage.Rpc(GlassesControl.DUTY_GET, idOf(read) and 0x7FFFFFFF, 0L, 4, value = 18L), t + 710, io.ns)
+        assertEquals(18, c.dutyInWarp)
+        assertTrue(io.lines.any { "duty with the glasses warping the Space's frames: 18 %" in it })
     }
 
     @Test

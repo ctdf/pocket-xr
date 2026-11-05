@@ -14,9 +14,30 @@ import com.hayeco.flipspaces.core.spatial.FollowMode
 class TrackpadPrefs(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("trackpad", Context.MODE_PRIVATE)
 
+    /**
+     * 1.1.2: the phone is a landscape handheld such as a Retroid, read once. 1.1.9 (issue 33): its screen landscape by
+     * nature, or game controls built in ([TrackpadSettings.landscapeHandheld]); a Retroid Nova's screen is portrait by
+     * nature, run landscape by its system, so only its controls tell.
+     */
+    val landscapeDevice: Boolean by lazy {
+        val natural = runCatching {
+            val d = context.applicationContext.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(android.view.Display.DEFAULT_DISPLAY)
+            val m = android.util.DisplayMetrics().also { @Suppress("DEPRECATION") d.getRealMetrics(it) }
+            TrackpadSettings.landscapeByNature(m.widthPixels, m.heightPixels, d.rotation)
+        }.getOrDefault(false)
+        val gamepad = runCatching {
+            android.view.InputDevice.getDeviceIds().any { id ->
+                val d = android.view.InputDevice.getDevice(id)
+                d != null && !d.isVirtual && !d.isExternal && d.supportsSource(android.view.InputDevice.SOURCE_GAMEPAD)
+            }
+        }.getOrDefault(false)
+        android.util.Log.i("FlipSpaces/Trackpad", "landscape handheld: landscape by nature $natural, built in game controls $gamepad")
+        TrackpadSettings.landscapeHandheld(natural, gamepad)
+    }
+
     var settings: TrackpadSettings
         get() = TrackpadSettings(
-            mode = TrackpadSettings.modeOf(prefs.getInt(KEY_TYPE, -1)),
+            mode = TrackpadSettings.modeOf(prefs.getInt(KEY_TYPE, -1), landscapeDevice),
             cursorSpeed = TrackpadSettings.speedOf(prefs.getInt(KEY_SPEED, -1)),
             stripSide = TrackpadSettings.stripOf(prefs.getInt(KEY_STRIP, -1)),
             direction = TrackpadSettings.directionOf(prefs.getInt(KEY_DIRECTION, PadDirection.DEFAULT.stored)),
@@ -24,6 +45,7 @@ class TrackpadPrefs(context: Context) {
             coverControls = TrackpadSettings.stripOf(prefs.getInt(KEY_COVER_CONTROLS, -1)),
             scrollSpeed = TrackpadSettings.scrollSpeedOf(prefs.getInt(KEY_SCROLL_SPEED, -1), TrackpadSettings.DEFAULT_SCROLL_SPEED),
             stripSpeed = TrackpadSettings.scrollSpeedOf(prefs.getInt(KEY_STRIP_SPEED, -1), TrackpadSettings.DEFAULT_STRIP_SPEED),
+            oneFingerScroll = prefs.getBoolean(KEY_ONE_FINGER_SCROLL, true),
         )
         set(value) {
             prefs.edit()
@@ -35,6 +57,7 @@ class TrackpadPrefs(context: Context) {
                 .putInt(KEY_COVER_CONTROLS, TrackpadSettings.storedOf(value.coverControls))
                 .putInt(KEY_SCROLL_SPEED, value.scrollSpeed.coerceIn(0, 100))
                 .putInt(KEY_STRIP_SPEED, value.stripSpeed.coerceIn(0, 100))
+                .putBoolean(KEY_ONE_FINGER_SCROLL, value.oneFingerScroll)
                 .apply()
         }
 
@@ -48,6 +71,16 @@ class TrackpadPrefs(context: Context) {
         get() = prefs.getBoolean(KEY_INTRO, false)
         set(value) {
             prefs.edit().putBoolean(KEY_INTRO, value).apply()
+        }
+
+    /**
+     * 1.1.9: the glasses models ([com.hayeco.flipspaces.core.spatial.GlassesModel.key]) whose setup page was shown here,
+     * or that have none, so a new model plugged in for the first time gets its page once.
+     */
+    var glassesSetupSeen: Set<String>
+        get() = prefs.getStringSet(KEY_GLASSES_SEEN, null)?.toSet() ?: emptySet()
+        set(value) {
+            prefs.edit().putStringSet(KEY_GLASSES_SEEN, value.toSet()).apply()
         }
 
     /** 0.5.19: the curve new windows open with. 0.5.36: 0 flat to [com.hayeco.flipspaces.core.spatial.PanelCurve.MAX], the Menu's slider. */
@@ -93,6 +126,7 @@ class TrackpadPrefs(context: Context) {
         private const val KEY_CURVE = "CurveDefault"
         private const val KEY_WRAP = "CurveWrap"
         private const val KEY_NATIVE_BUFFER = "NativeBuffer"
+        private const val KEY_GLASSES_SEEN = "GlassesSetupSeen"
 
         /** 0.5.17 cover screen: the window rail's side, stored like the scrollbar's (0 left, else right). */
         private const val KEY_COVER_CONTROLS = "CoverControlsSide"
@@ -100,5 +134,8 @@ class TrackpadPrefs(context: Context) {
         /** 0.5.83: the two finger scroll's and the thin strip's speeds. */
         private const val KEY_SCROLL_SPEED = "ScrollSpeed"
         private const val KEY_STRIP_SPEED = "StripSpeed"
+
+        /** 1.1.10 (issue 35): one finger scrolls on Spatial Mouse. */
+        private const val KEY_ONE_FINGER_SCROLL = "OneFingerScroll"
     }
 }
