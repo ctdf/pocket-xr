@@ -2,6 +2,20 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- New versions are easier to find. Pocket XR checks GitHub Releases when it starts and every 12 hours in the
+  background, instead of only when Pocket XR Settings opens. Before, the check almost never ran: the app's icon opens
+  the trackpad, and the check and its card lived only on the Settings screen behind the Menu.
+- A newer version shows as "Update available: x.y.z" across the top of the trackpad and of Pocket XR Settings, with
+  Update and Later buttons. It also shows as the first line of the trackpad's Menu and as a line on the glasses'
+  Control Center. Later hides it until the next version. Update downloads it as before.
+- One notification per new version, "Pocket XR x.y.z is ready", which opens the trackpad with the banner. On Android 13
+  and later, Pocket XR asks once to allow notifications, when it first finds an update. If you say no, the banner is
+  still there.
+- "Check for updates" and the installed version are now at the top of Pocket XR Settings, not at the end of the list.
+- The Google Play version is unchanged: it never checks GitHub and shows none of this.
+
 ## 1.1.14: NPU hand tracking is back on Exynos phones
 
 - Hand tracking runs on the NPU again on phones with the Exynos 2500, like the Galaxy Z Flip 7. The 1.1.13 download

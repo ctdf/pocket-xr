@@ -233,6 +233,14 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
+        <!-- 1.1.15: the update check every 12 hours (UpdateChecker). Off in the Google Play build, which takes its
+             updates from Play. -->
+        <service
+            android:name=".UpdateJobService"
+            android:enabled="${selfUpdates}"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- 0.4.4: starts the glasses ready service after boot and after an update. -->
         <receiver
             android:name=".GlassesReadyReceiver"

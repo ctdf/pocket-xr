@@ -1038,6 +1038,64 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         coverMouseChip.visibility = if (cover && !textOpen && host.coverSpatialMouseAvailable()) View.VISIBLE else View.GONE
     }
 
+    /**
+     * 1.1.15 (Mike: updates were only found under Menu, Pocket XR Settings): "Update available: <version>" across the top of
+     * the open phone's trackpad, with Update and Later ([showUpdate]). Not on the cover screen, which has no room.
+     */
+    private var updateVersion: String? = null
+    private var onUpdate: (() -> Unit)? = null
+    private var onUpdateLater: (() -> Unit)? = null
+    private val updateText = context.padText("", 14f, WHITE, bold = true).apply { setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END }
+    private val updateLater = context.padText("Later", 14f, WHITE).apply {
+        gravity = Gravity.CENTER
+        setPadding(context.dp(12f), 0, context.dp(12f), 0)
+        setOnClickListener { onUpdateLater?.invoke() }
+    }
+    private val updateNow = context.padText("Update", 14f, DARK_TEXT, bold = true).apply {
+        gravity = Gravity.CENTER
+        setBackgroundResource(R.drawable.bg_pad_button_light)
+        setPadding(context.dp(14f), 0, context.dp(14f), 0)
+        setOnClickListener { onUpdate?.invoke() }
+    }
+    private val updateBanner = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(context.dp(16f), context.dp(8f), context.dp(8f), context.dp(8f))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = context.dpf(16f)
+            setColor(com.hayeco.flipspaces.core.Look.GLASS_RAISED or 0xFF000000.toInt())
+            setStroke(context.dp(1f), com.hayeco.flipspaces.core.Look.ACCENT)
+        }
+        addView(updateText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(updateLater, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(updateNow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT).apply { marginStart = context.dp(4f) })
+        visibility = View.GONE
+        isClickable = true
+    }
+
+    /** 1.1.15: the update banner for [version] (null hides it); also a row at the top of the Menu. */
+    fun showUpdate(version: String?, onUpdate: () -> Unit, onLater: () -> Unit) {
+        this.onUpdate = onUpdate
+        onUpdateLater = onLater
+        if (version == updateVersion) return
+        updateVersion = version
+        updateText.text = version?.let { com.hayeco.flipspaces.core.UpdateCheck.bannerLine(it) } ?: ""
+        updateBanner.visibility = if (version != null && !cover) View.VISIBLE else View.GONE
+        if (drawer.visibility == View.VISIBLE) buildDrawer()
+        requestLayout()
+    }
+
+    /** 1.1.15: whether the banner is on screen (the tests, and the notification permission's ask). */
+    val updateShown: Boolean get() = updateBanner.visibility == View.VISIBLE
+
+    /** 1.1.15: the banner's line, for the tests. */
+    val updateLine: CharSequence get() = updateText.text
+
+    /** 1.1.15: the banner's buttons, as a tap would press them (the tests). */
+    fun pressUpdate(later: Boolean) {
+        if (later) updateLater.performClick() else updateNow.performClick()
+    }
+
     // 0.5.32 (Mike: a way to recenter the Spatial Mouse's dot): a tip that stays on the page, above the Home it names,
     // rather than one shown once in the intro and forgotten.
     private val laserTip = context.padText(LASER_TIP, 12f, TEXT_80).apply { visibility = View.GONE }
@@ -1228,7 +1286,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     init {
         setBackgroundColor(BACKGROUND)
-        listOf(pad, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip).forEach { addView(it) }
+        listOf(pad, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
         mainKeys.values.forEach { addView(it) }
         coverKeys.values.forEach { addView(it) }
         listOf(textBar, mask, popup, intro, dialog, drawerScrim, drawer, toast, lock).forEach { addView(it) }
@@ -1302,6 +1360,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         drawerButton.visibility = if (cover) View.GONE else View.VISIBLE
         selector.visibility = if (cover) View.GONE else View.VISIBLE
         curveKey.visibility = if (cover) View.GONE else View.VISIBLE
+        // 1.1.15: the update banner on the open phone only.
+        updateBanner.visibility = if (!cover && updateVersion != null) View.VISIBLE else View.GONE
         // 0.5.106: the open phone's keys; landscape has room for Keyboard and Recentre only.
         for ((b, k) in mainKeys) {
             val shown = !cover && (!landscape || b == CoverButton.KEYBOARD || b == CoverButton.RECENTRE)
@@ -1436,6 +1496,12 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             val cy = pt + dp(9f) + dp(25f)
             put(selector, w - pl - dp(24f) - sw, cy - sh / 2, sw, sh)
             selectorBottom = cy + sh / 2
+            // 1.1.15: the update banner between the drawer button and the selector, over the top of the pad.
+            if (updateBanner.visibility == View.VISIBLE) {
+                val left = pl + dp(12f) + dp(50f) + dp(16f)
+                val bw = minOf(dp(440f), w - pl - dp(24f) - sw - dp(16f) - left)
+                put(updateBanner, left + ((w - pl - dp(24f) - sw - dp(16f) - left) - bw) / 2, cy - dp(26f), bw, dp(52f))
+            }
             put(sideBack, pl + dp(6f), h - pt - dp(6f) - dp(54f), dp(70f), dp(54f))
             put(sideHome, w - pl - dp(6f) - dp(70f), h - pt - dp(6f) - dp(54f), dp(70f), dp(54f))
             // 0.5.19: Curve between Back and Home, the same size, so a thumb finds it from either. 0.5.106: Keyboard on its left
@@ -1450,11 +1516,18 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         } else {
             // Portrait: the drawer button 7 / 48, the selector centred on it, the pad from 34 below
             // the selector to 10 above the bar, the 80 tall bar 20 from the bottom and the sides.
-            put(drawerButton, dp(7f), dp(48f), dp(50f), dp(50f))
+            // 1.1.15: the update banner at the very top; the drawer button, the selector and Keyboard move down under it.
+            val down = if (updateBanner.visibility == View.VISIBLE) {
+                put(updateBanner, dp(12f), dp(44f), w - dp(24f), dp(56f))
+                dp(56f) + dp(8f)
+            } else {
+                0
+            }
+            put(drawerButton, dp(7f), dp(48f) + down, dp(50f), dp(50f))
             // 0.5.19: Curve at the top right, across from the drawer button. 0.5.106: Keyboard there; Curve joins the row of
             // window keys over the bar.
-            mainKeys[CoverButton.KEYBOARD]?.let { put(it, w - dp(7f) - dp(56f), dp(45f), dp(56f), dp(56f)) }
-            val cy = dp(48f) + dp(25f)
+            mainKeys[CoverButton.KEYBOARD]?.let { put(it, w - dp(7f) - dp(56f), dp(45f) + down, dp(56f), dp(56f)) }
+            val cy = dp(48f) + dp(25f) + down
             put(selector, (w - sw) / 2, cy - sh / 2, sw, sh)
             selectorBottom = cy + sh / 2
             val barTop = h - dp(20f) - dp(80f)
@@ -1691,6 +1764,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, c.dp(14f)).apply { topMargin = c.dp(61f) })
         // The function card: Capture, Record and Scan are left out (Pocket XR has none of them).
         val functions = card()
+        // 1.1.15: a newer Pocket XR, first in the Menu until Later.
+        updateVersion?.let { v ->
+            functions.addView(row(R.drawable.ic_settings_sliders, com.hayeco.flipspaces.core.UpdateCheck.bannerLine(v), subtitle = "Tap to download it") {
+                closeDrawer()
+                onUpdate?.invoke()
+            })
+            functions.addView(c.divider(20f))
+        }
         functions.addView(row(R.drawable.ic_back_home, "Go to the phone's home screen") { host.returnHome() })
         // 0.5.87: the app's settings home (MainActivity), which the app's icon skips for the trackpad (0.5.37). 0.5.103
         // (Mike: "put Pocket XR Settings back where it was, i dont like it as its own tile"): back in this card.

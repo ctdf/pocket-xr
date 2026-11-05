@@ -425,6 +425,12 @@ class TrackpadActivity : Activity(), PadHost {
             intent.removeExtra(EXTRA_MENU)
             screen.openDrawer(atTrackpad = true)
         }
+        // 1.1.15: the update banner; opened from the update notification, it is logged.
+        if (intent?.getBooleanExtra(UpdateChecker.EXTRA_UPDATE, false) == true) {
+            intent.removeExtra(UpdateChecker.EXTRA_UPDATE)
+            Log.i(TAG, "opened from the update notification (banner for ${UpdateChecker.banner.value?.version ?: "nothing newer now"})")
+        }
+        refreshUpdate()
         // 0.5.55: each show logs its `trackpad buffer:` line once (relayout's refresh, or the first size).
         frame.forgetReport()
         // 0.5.17 cover screen: back in front (a move, or Samsung resuming it after a fold): the layout for this screen.
@@ -733,6 +739,8 @@ class TrackpadActivity : Activity(), PadHost {
                     }
                 }
             }
+            // 1.1.15: a check in the background may find a newer Pocket XR while the trackpad is open.
+            refreshUpdate()
             SpaceSession.padSpatialMouse = padMode == PadMode.SPATIAL_MOUSE
             SpaceSession.padSpatialMouseAvailable = rotation != null
             SpaceSession.padHands = gestureState() == 2
@@ -966,6 +974,34 @@ class TrackpadActivity : Activity(), PadHost {
     }
 
     /** Return to Home Screen: leaves the trackpad for the phone's home screen, after asking. */
+    private var notificationAskChecked = false
+
+    /**
+     * 1.1.15: the update banner at the top of the trackpad ([UpdateChecker.banner]): Update keeps the download as before
+     * ([UpdateChecker.open]), Later hides it until the next version. The first time one shows, on Android 13 and later,
+     * the notification permission is asked for once, with a line saying why; declined, the banner is all there is.
+     */
+    private fun refreshUpdate() {
+        val release = UpdateChecker.banner.value
+        screen.showUpdate(release?.version, onUpdate = { UpdateChecker.banner.value?.let { UpdateChecker.open(this, it) } }, onLater = {
+            UpdateChecker.later(this)
+            refreshUpdate()
+        })
+        if (release == null || notificationAskChecked || !resumed || cover) return
+        notificationAskChecked = true
+        if (!UpdateChecker.takeNotificationAsk(this)) return
+        Log.i(TAG, "notification permission asked for with the first update banner")
+        screen.showToast("Allow notifications to hear when a new Pocket XR is ready")
+        requestPermissions(arrayOf(com.hayeco.flipspaces.core.GlassesReady.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_NOTIFICATIONS) return
+        val granted = grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED
+        Log.i(TAG, "notification permission for updates ${if (granted) "granted" else "declined: the banner only"}")
+    }
+
     override fun openSettings() {
         screen.closeDrawer()
         // 0.5.104 (Mike: Settings, Trackpad, then the Menu's Pocket XR Settings "nothing happens it just closes the sidebar"):
@@ -1661,6 +1697,9 @@ class TrackpadActivity : Activity(), PadHost {
 
         /** 0.5.101: open with the Menu out (Settings' Trackpad row). */
         const val EXTRA_MENU = "com.hayeco.flipspaces.extra.TRACKPAD_MENU"
+
+        /** 1.1.15: the notification permission's ask, with the first update banner. */
+        private const val REQUEST_NOTIFICATIONS = 1115
 
         /** 1.1.9: how often the plugged-in glasses and the Anchor signal are looked at. */
         private const val GLASSES_CHECK_MS = 1_000L

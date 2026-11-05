@@ -32,5 +32,7 @@ class FlipSpacesApp : Application() {
         com.hayeco.flipspaces.hands.UsbPrompt.register(this)
         // 0.5.9: settings a plain display session changed before the process stopped are put back.
         com.hayeco.flipspaces.spatial.PlainDisplaySession.restoreLeftOver(this)
+        // 1.1.15: the GitHub update check at app start and every 12 hours, not only when Settings opens. Never on Play.
+        UpdateChecker.start(this)
     }
 }

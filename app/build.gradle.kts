@@ -24,6 +24,8 @@ android {
         // policy does not allow a link to tip the developer ([com.hayeco.flipspaces.core.Support]). Every other build,
         // the GitHub release included, shows it.
         buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())
+        // 1.1.15: the GitHub update check's background job (UpdateJobService) is disabled in the Play build.
+        manifestPlaceholders["selfUpdates"] = (!playBuild).toString()
     }
 
     // 0.5.98 (open source plan: the release signing key, kept by Mike only): official releases are signed with the

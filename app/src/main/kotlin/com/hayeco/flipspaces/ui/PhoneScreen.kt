@@ -110,7 +110,8 @@ fun PhoneScreen(
     val connected = glasses is GlassesState.Connected
     // 0.5.97: the in-app update check ([com.hayeco.flipspaces.UpdateChecker]).
     val context = androidx.compose.ui.platform.LocalContext.current
-    val update by com.hayeco.flipspaces.UpdateChecker.available.collectAsState()
+    // 1.1.15: the banner, unless put off with Later until the next version.
+    val update by com.hayeco.flipspaces.UpdateChecker.banner.collectAsState()
     var checkUpdates by remember { mutableStateOf(com.hayeco.flipspaces.UpdateChecker.enabled(context)) }
     val updateStatus by com.hayeco.flipspaces.UpdateChecker.status.collectAsState()
     // 1.1.14 (a tester asked for a way to turn head tracking on and off): saved, applied at once.
@@ -121,6 +122,24 @@ fun PhoneScreen(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // 1.1.15: a newer version first on the screen, with Update and Later.
+            update?.let { u ->
+                item {
+                    GlassCard(container = Color(Look.GLASS_RAISED)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(com.hayeco.flipspaces.core.UpdateCheck.bannerLine(u.version), style = MaterialTheme.typography.titleMedium)
+                            u.notes.lineSequence().map { it.trim().trimStart('#', '*', '-').trim() }.firstOrNull { it.isNotEmpty() }?.let {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Button(onClick = { com.hayeco.flipspaces.UpdateChecker.open(context, u) }, shape = RoundedCornerShape(22.dp)) { Text("Update") }
+                                OutlinedButton(onClick = { com.hayeco.flipspaces.UpdateChecker.later(context) }, shape = RoundedCornerShape(22.dp)) { Text("Later") }
+                            }
+                        }
+                    }
+                }
+            }
             item { Header(connected) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -130,18 +149,20 @@ fun PhoneScreen(
                     }
                 }
             }
-            update?.let { u ->
+            // 1.1.11: not on a copy from Google Play or F-Droid, which bring their own updates. 1.1.15: the version and Check
+            // for updates moved here from the end of the settings list, where few found them.
+            if (com.hayeco.flipspaces.UpdateChecker.offered(context)) {
                 item {
-                    GlassCard(container = Color(Look.GLASS_RAISED)) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("Pocket XR ${u.version} is available", style = MaterialTheme.typography.titleMedium)
-                            u.notes.lineSequence().map { it.trim().trimStart('#', '*', '-').trim() }.firstOrNull { it.isNotEmpty() }?.let {
-                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Button(onClick = { com.hayeco.flipspaces.UpdateChecker.open(context, u) }, shape = RoundedCornerShape(22.dp)) {
-                                Text(if (u.apkUrl != null) "Download" else "See the release")
-                            }
+                    GlassCard {
+                        ToggleRow("Check for updates", "Version ${com.hayeco.flipspaces.UpdateChecker.installed}. ${updateLine(checkUpdates, updateStatus)}", checkUpdates) {
+                            checkUpdates = it
+                            com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
+                        }
+                        if (checkUpdates && updateStatus?.result != com.hayeco.flipspaces.UpdateChecker.Result.CHECKING) {
+                            TextButton(
+                                onClick = { com.hayeco.flipspaces.UpdateChecker.checkIfDue(context, force = true) },
+                                modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                            ) { Text("Check now") }
                         }
                     }
                 }
@@ -171,20 +192,6 @@ fun PhoneScreen(
                     NavRow("Hands", "Hand tracking, calibrating hand aim, gestures", onOpenHands)
                     RowDivider()
                     NavRow("Trackpad", "Cursor and scroll speeds, scroll strip, window curve, in its Menu", onOpenTrackpadSettings)
-                    // 1.1.11: not on a copy from Google Play or F-Droid, which bring their own updates.
-                    if (com.hayeco.flipspaces.UpdateChecker.offered(context)) {
-                        RowDivider()
-                        ToggleRow("Check for updates", updateLine(checkUpdates, updateStatus), checkUpdates) {
-                            checkUpdates = it
-                            com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
-                        }
-                    }
-                    if (checkUpdates && updateStatus?.result != com.hayeco.flipspaces.UpdateChecker.Result.CHECKING) {
-                        TextButton(
-                            onClick = { com.hayeco.flipspaces.UpdateChecker.checkIfDue(context, force = true) },
-                            modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
-                        ) { Text("Check now") }
-                    }
                     // 1.1.14: the logs to Mike by email, the one line saying what goes.
                     RowDivider()
                     NavRow(com.hayeco.flipspaces.core.LogBundle.BUTTON, com.hayeco.flipspaces.core.LogBundle.WHAT_IS_SENT, onSendLogs)
@@ -435,7 +442,7 @@ private fun MirrorCard(
 /** 0.5.101: the update check's line: what the last check found and when, or that it is off. */
 private fun updateLine(on: Boolean, status: com.hayeco.flipspaces.UpdateChecker.Status?): String {
     if (!on) return "Off. Turn on to hear about new versions on GitHub Releases"
-    val s = status ?: return "Once a day, on GitHub Releases"
+    val s = status ?: return "Every 12 hours, on GitHub Releases"
     val now = System.currentTimeMillis()
     val ago = if (now - s.atMs < 60_000L) "just now" else android.text.format.DateUtils.getRelativeTimeSpanString(s.atMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS).toString()
     return when (s.result) {
