@@ -1,9 +1,14 @@
 package com.hayeco.flipspaces.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,12 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -41,10 +48,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.hayeco.flipspaces.BuildConfig
 import com.hayeco.flipspaces.R
 import com.hayeco.flipspaces.core.AppEntry
 import com.hayeco.flipspaces.core.ContentMode
@@ -53,6 +62,7 @@ import com.hayeco.flipspaces.core.HostingAssessment
 import com.hayeco.flipspaces.core.HostingAssessor
 import com.hayeco.flipspaces.core.Look
 import com.hayeco.flipspaces.core.SettingsTarget
+import com.hayeco.flipspaces.core.Support
 import com.hayeco.flipspaces.core.spatial.FlatBanner
 import com.hayeco.flipspaces.core.spatial.FlatFix
 
@@ -206,7 +216,51 @@ fun PhoneScreen(
                     }
                 }
             }
+            // 1.0.1 (Mike: a Ko-fi "Buy me a beer" link): last on the page, never in the way. Not in the Play build.
+            if (Support.showCard(BuildConfig.PLAY_BUILD)) {
+                item { SupportCard { openSupportPage(context) } }
+            }
         }
+    }
+}
+
+/** 1.0.1: the tip card: a beer on a glass chip, one line, that it is never required, and the Ko-fi button. */
+@Composable
+private fun SupportCard(onOpen: () -> Unit) {
+    GlassCard {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).background(Color(Look.GLASS_RAISED)).border(1.dp, Color(Look.RIM), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(painterResource(R.drawable.ic_beer), contentDescription = null, tint = Color(Look.INK), modifier = Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(Support.TITLE, style = MaterialTheme.typography.titleMedium)
+                    Text(Support.DETAIL, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            // 48 dp tall, like the screen's other buttons, for a finger, the trackpad's cursor or a hand's pinch.
+            Button(
+                onClick = onOpen,
+                modifier = Modifier.padding(start = 58.dp).height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+            ) {
+                Icon(painterResource(R.drawable.ic_beer), contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(Support.BUTTON)
+            }
+        }
+    }
+}
+
+/** Ko-fi in the browser, as the update card opens its release. */
+private fun openSupportPage(context: android.content.Context) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Support.KO_FI_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 

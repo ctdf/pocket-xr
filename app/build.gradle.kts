@@ -7,6 +7,8 @@ android {
     namespace = "com.hayeco.flipspaces"
     compileSdk = 36
 
+    val playBuild = (findProperty("pocketxr.play") as String?) == "true"
+
     defaultConfig {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
@@ -15,6 +17,10 @@ android {
         versionName = "1.0.0"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
+        // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments
+        // policy does not allow a link to tip the developer ([com.hayeco.flipspaces.core.Support]). Every other build,
+        // the GitHub release included, shows it.
+        buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())
     }
 
     // 0.5.98 (open source plan: the release signing key, kept by Mike only): official releases are signed with the
@@ -76,6 +82,13 @@ android {
         compose = true
         // IPanelHost: the Shizuku user service that hosts app panels.
         aidl = true
+        // 1.0.1: BuildConfig.PLAY_BUILD (above).
+        buildConfig = true
+    }
+
+    // 1.0.1: the unit tests check BuildConfig.PLAY_BUILD against the build that was asked for.
+    testOptions {
+        unitTests.all { it.systemProperty("pocketxr.play", playBuild.toString()) }
     }
 }
 

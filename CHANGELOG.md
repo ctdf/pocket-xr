@@ -2,6 +2,11 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- A small "Buy me a beer" card at the bottom of Pocket XR Settings opens Mike's Ko-fi page in the browser. It's never
+  required, and nothing pops up or reminds you. The Google Play build leaves it out.
+
 ## 1.0.0 (2 November 2026): the first public release
 
 Pocket XR was developed privately through 107 test versions on a Galaxy Z Flip 7 with XREAL Aura and One glasses. This

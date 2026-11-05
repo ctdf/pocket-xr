@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 1.0.1: the settings home's "Buy me a beer" card: a mug with a head of foam, in the Menu icons' line style. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- The glass and its handle. -->
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M5,9.5v9a1.5,1.5 0,0 0,1.5 1.5h7a1.5,1.5 0,0 0,1.5 -1.5v-9 M15,11.5h1.5a2.5,2.5 0,0 1,2.5 2.5v0.5a2.5,2.5 0,0 1,-2.5 2.5H15" />
+    <!-- Bubbles rising. -->
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round"
+        android:pathData="M8.5,13v4 M11.5,13v4" />
+    <!-- The foam. -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M4,9.5a2.3,2.3 0,0 1,1.8 -4.2a3,3 0,0 1,5.4 -1.2a2.6,2.6 0,0 1,4.4 1.8a1.8,1.8 0,0 1,0.4 3.6z" />
+</vector>
