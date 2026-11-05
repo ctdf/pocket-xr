@@ -16,8 +16,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 143
-        versionName = "1.1.12"
+        versionCode = 144
+        versionName = "1.1.13"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
         // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments

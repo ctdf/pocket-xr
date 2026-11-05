@@ -2,7 +2,7 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.13: a Head tracking switch, Send logs to Mike
 
 - A small "Buy me a beer" card at the bottom of Pocket XR Settings opens Mike's Ko-fi page in the browser. It's never
   required, and nothing pops up or reminds you. The Google Play build leaves it out.
