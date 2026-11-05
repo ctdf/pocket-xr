@@ -79,6 +79,8 @@ fun HeadTrackingScreen(
     /** 1.1.10: the whole screen as text ([com.hayeco.flipspaces.core.spatial.HeadDiagnosticsText]), copied or shared in full. */
     onCopyAll: () -> Unit = {},
     onShare: () -> Unit = {},
+    /** 1.1.14: the logs and this screen's text in one zip on an email to Mike ([com.hayeco.flipspaces.SendLogs]). */
+    onSendLogs: () -> Unit = {},
 ) {
     Scaffold { padding ->
         LazyColumn(
@@ -115,6 +117,8 @@ fun HeadTrackingScreen(
                             Button(onClick = onCopyAll) { Text("Copy all") }
                             OutlinedButton(onClick = onShare) { Text("Share") }
                         }
+                        OutlinedButton(onClick = onSendLogs) { Text(com.hayeco.flipspaces.core.LogBundle.BUTTON) }
+                        Text(com.hayeco.flipspaces.core.LogBundle.WHAT_IS_SENT, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -125,6 +129,7 @@ fun HeadTrackingScreen(
                         is HeadTrackingStatus.NoNetwork -> "Not found."
                         // 1.1.10: these glasses have no USB network for head tracking; nothing is missing.
                         is HeadTrackingStatus.HidGlasses -> "Not used: these glasses send head tracking over USB HID."
+                        HeadTrackingStatus.TurnedOff -> "Not looked for: head tracking is turned off in Settings."
                         HeadTrackingStatus.Searching, HeadTrackingStatus.Off -> "Looking."
                         else -> "Found."
                     },

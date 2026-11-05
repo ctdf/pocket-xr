@@ -6,6 +6,13 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
 
 - A small "Buy me a beer" card at the bottom of Pocket XR Settings opens Mike's Ko-fi page in the browser. It's never
   required, and nothing pops up or reminds you. The Google Play build leaves it out.
+- A Head tracking switch in Settings. Off, Pocket XR stops reading the glasses' motion sensor and windows stay in front
+  of you and turn with your head; on, they stay put as you turn. The choice is kept.
+- "Send logs to Mike" in Settings and on the head tracking diagnostics screen. It puts Pocket XR's own logs, the head
+  tracking diagnostics, the app version, your phone model, Android version and glasses into one zip and opens an email
+  to connect@mikehaye.com with it attached, for you to add a few words to and send. Email addresses, account names,
+  Wi-Fi names, Bluetooth device names, MAC addresses and IP addresses (other than the glasses' own link) are taken out
+  first. Nothing is sent until you tap send in your email app.
 
 ## 1.1.12: head tracking on XREAL Air glasses, ready for Google Play
 

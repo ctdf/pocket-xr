@@ -186,6 +186,28 @@ object HeadTracker {
     private val resetRequested = AtomicBoolean(false)
 
     private var thread: Thread? = null
+
+    /** 1.1.14: the tracker's thread now, for the Head tracking switch's tests. */
+    internal val worker: Thread? @Synchronized get() = thread
+
+    /**
+     * 1.1.14: Off only interrupts the tracker's thread, which could then write one last status over TurnedOff. Each
+     * thread has a generation ([threadGeneration]); [stop] ends it, and the statuses it writes after that are dropped.
+     */
+    private val generation = com.hayeco.flipspaces.core.spatial.TrackerGeneration()
+    private val threadGeneration = ThreadLocal<Long>()
+
+    /** 1.1.14: the running tracker thread's generation (null when stopped), for the tests. */
+    internal val liveGeneration: Long? get() = generation.current
+
+    /** A status from the tracker's thread: dropped if that thread's generation was stopped. */
+    private fun report(st: HeadTrackingStatus) {
+        val gen = threadGeneration.get()
+        if (gen == null) _status.value = st else reportFrom(gen, st)
+    }
+
+    /** 1.1.14: [st] from the tracker thread of [gen]; false, and the status left as it is, if that thread was stopped. */
+    internal fun reportFrom(gen: Long, st: HeadTrackingStatus): Boolean = generation.write(gen) { _status.value = st }
     private var openLink: GlassesNetwork.Link? = null
     private var users = 0
     private var appContext: Context? = null
@@ -219,13 +241,51 @@ object HeadTracker {
         if (thread?.isAlive == true) return
         val app = context.applicationContext
         appContext = app
+        // 1.1.14: Settings' Head tracking switch is off: the user is counted, nothing is read from the glasses.
+        if (!store.headTracking) {
+            _status.value = HeadTrackingStatus.TurnedOff
+            return
+        }
+        startThread(app)
+    }
+
+    /**
+     * 1.1.14 (a tester: tracking "a little jittery", and is there a way to turn it on and off): Settings' Head tracking
+     * switch, saved. Off stops the stream now and the Space draws head locked; on starts it again if anything holds the
+     * tracker.
+     */
+    @Synchronized
+    fun setEnabled(context: Context, on: Boolean) {
+        val store = SpaceStore(context)
+        if (store.headTracking == on) return
+        store.headTracking = on
+        Log.i(TAG, "head tracking turned ${if (on) "on" else "off"} in Settings")
+        appContext = context.applicationContext
+        if (!on) {
+            graceHandler.removeCallbacks(stopAfterGrace)
+            stop()
+        } else {
+            // Not TurnedOff any more: the screens said "turned off in Settings" until the new thread wrote a status.
+            _status.value = HeadTrackingStatus.Off
+            if (users > 0 && thread?.isAlive != true) {
+                settings = fromStore(store, context)
+                startThread(context.applicationContext)
+            }
+        }
+    }
+
+    private fun startThread(app: Context) {
         _ethernet.value = emptyList()
         _attempts.value = emptyList()
         _answer.value = null
         watchNetworks(app)
         graceHandler.removeCallbacks(beatTick)
         graceHandler.post(beatTick)
-        thread = Thread({ run(app) }, "head-tracker").apply {
+        val gen = generation.start()
+        thread = Thread({
+            threadGeneration.set(gen)
+            run(app)
+        }, "head-tracker").apply {
             isDaemon = true
             start()
         }
@@ -311,7 +371,8 @@ object HeadTracker {
         synchronized(predictor) { predictor.reset() }
         lastSampleHostNs = 0L
         history.clear()
-        _status.value = HeadTrackingStatus.Off
+        val off = if (appContext?.let { SpaceStore(it).headTracking } == false) HeadTrackingStatus.TurnedOff else HeadTrackingStatus.Off
+        generation.stop { _status.value = off }
         _live.value = null
         // Ethernet goes back to how it was once the bring-up (if any) has stopped.
         appContext?.let { GlassesEthernetLink.restore(it, ::ethernetLog) }
@@ -571,12 +632,12 @@ object HeadTracker {
             if (hid != null) {
                 val st = HeadTrackingStatus.HidGlasses(hid.vendorId, hid.productId, hid.infos.map { it.label() })
                 if (_status.value != st) Log.i(TAG, "head tracking: ${st.summary}")
-                _status.value = st
+                report(st)
                 _answer.value = null
                 if (!waitFor(HID_RECHECK_MS, GlassesNetwork.scan(context).fingerprint, context)) return
                 continue
             }
-            if (backoff.failures == 0) _status.value = HeadTrackingStatus.Searching
+            if (backoff.failures == 0) report(HeadTrackingStatus.Searching)
             var scan = GlassesNetwork.scan(context)
             if (scan.empty && !ethernetTried) {
                 val outcome = GlassesEthernetLink.bringUp(context, ::ethernetLog)
@@ -593,7 +654,7 @@ object HeadTracker {
             lastPrint = scan.fingerprint
             _networks.value = scan.seen
             if (scan.empty) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
+                report(HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER)))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }
@@ -605,7 +666,7 @@ object HeadTracker {
                 // 1.1.8: with the addresses, so a report says which link it was ("eth0 169.254.1.10/24").
                 val names = scan.networks.map { n -> (listOf(n.iface) + n.addresses.filter { '.' in it }).joinToString(" ") } +
                     scan.kernel.map { "${it.first} ${it.second.hostAddress} (no Android network)" }
-                _status.value = HeadTrackingStatus.NoRoute(names)
+                report(HeadTrackingStatus.NoRoute(names))
                 _answer.value = "No route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}: nothing is tried until the glasses' network changes or they are plugged in again."
                 Log.i(TAG, "head tracking: no route to ${OneImuProtocol.HOST} on ${names.joinToString(", ")}; waiting for a network change")
                 if (!waitFor(Long.MAX_VALUE, scan.fingerprint, context)) return
@@ -614,14 +675,14 @@ object HeadTracker {
             val shizuku = ShizukuBridge.status(context)
             val routes = scan.routes(shizuku == ShizukuStatus.READY, refusedDirect).filter { it.iface in reachable }
             if (routes.isEmpty()) {
-                _status.value = HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER))
+                report(HeadTrackingStatus.NoNetwork(scan.seen, PhoneSystem.name(Build.MANUFACTURER)))
                 if (!waitFor(backoff.nextDelayMs(), scan.fingerprint, context)) return
                 continue
             }
             val tried = mutableListOf<String>()
             var why: String? = null
             for (route in routes) {
-                _status.value = HeadTrackingStatus.Connecting(route.label)
+                report(HeadTrackingStatus.Connecting(route.label))
                 val link = try {
                     openRoute(route, context)
                 } catch (e: Exception) {
@@ -636,7 +697,7 @@ object HeadTracker {
                     _attempts.value = tried.toList()
                     _connectResult.value = "Failed over ${route.label}: $error" + (explained?.let { "\n$it" } ?: "")
                     Log.i(TAG, "connect over ${route.label} failed: $error" + (explained?.let { " ($it)" } ?: ""))
-                    _status.value = HeadTrackingStatus.ConnectFailed(route.label, error + (explained?.let { ". $it" } ?: ""))
+                    report(HeadTrackingStatus.ConnectFailed(route.label, error + (explained?.let { ". $it" } ?: "")))
                     continue
                 }
                 tried += "${route.label}: connected"
@@ -668,7 +729,7 @@ object HeadTracker {
             val delay = backoff.nextDelayMs()
             val last = _status.value
             val reason = why ?: (last as? HeadTrackingStatus.ConnectFailed)?.let { "Could not connect over ${it.network}." } ?: "Could not connect."
-            _status.value = HeadTrackingStatus.RetryLater(reason, (delay / 1000).toInt())
+            report(HeadTrackingStatus.RetryLater(reason, (delay / 1000).toInt()))
             Log.i(TAG, "head tracking: next try in ${delay / 1000} s (failed round ${backoff.failures}; ${GlassesNetwork.ShellHelper.started} shell helpers started so far)")
             if (!waitFor(delay, scan.fingerprint, context)) return
         }
@@ -685,7 +746,7 @@ object HeadTracker {
         val name = AirImuLink.glassesName(device)
         val print = GlassesNetwork.scan(context).fingerprint
         if (!AirImuLink.manager(context).hasPermission(device)) {
-            _status.value = HeadTrackingStatus.UsbPermission(name)
+            report(HeadTrackingStatus.UsbPermission(name))
             if (askedUsbFor != device.deviceName) {
                 askedUsbFor = device.deviceName
                 Log.i(TAG, "head tracking: $name found on USB without access to it; asking Android (its USB prompt)")
@@ -700,7 +761,7 @@ object HeadTracker {
             if (Thread.currentThread().isInterrupted) return false
             val error = "${e.javaClass.simpleName}: ${e.message}"
             val delay = backoff.nextDelayMs()
-            _status.value = HeadTrackingStatus.UsbFailed(name, error)
+            report(HeadTrackingStatus.UsbFailed(name, error))
             _attempts.value = listOf("$name over USB HID: $error")
             Log.w(TAG, "head tracking: $name over USB HID failed: $error; next try in ${delay / 1000} s")
             return waitFor(delay, print, context)
@@ -723,7 +784,7 @@ object HeadTracker {
         val delay = backoff.nextDelayMs()
         val why = if (streamed) "The stream stopped." else "The $name took the start command but sent no head tracking reports."
         _answer.value = why
-        _status.value = HeadTrackingStatus.RetryLater(why, (delay / 1000).toInt())
+        report(HeadTrackingStatus.RetryLater(why, (delay / 1000).toInt()))
         return waitFor(delay, print, context)
     }
 
@@ -975,13 +1036,13 @@ object HeadTracker {
                 source.read(reports)
             } catch (e: Exception) {
                 if (Thread.currentThread().isInterrupted) return everStreamed
-                if (everStreamed) _status.value = HeadTrackingStatus.Lost(label, "${e.javaClass.simpleName}: ${e.message}")
-                else _status.value = HeadTrackingStatus.ConnectFailed(label, "read failed: ${e.javaClass.simpleName}: ${e.message}")
+                if (everStreamed) report(HeadTrackingStatus.Lost(label, "${e.javaClass.simpleName}: ${e.message}"))
+                else report(HeadTrackingStatus.ConnectFailed(label, "read failed: ${e.javaClass.simpleName}: ${e.message}"))
                 return everStreamed
             }
             if (n < 0) {
-                _status.value = if (everStreamed) HeadTrackingStatus.Lost(label, "the glasses closed the connection")
-                else HeadTrackingStatus.NoReports(label, ((SystemClock.elapsedRealtime() - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint)
+                report(if (everStreamed) HeadTrackingStatus.Lost(label, "the glasses closed the connection")
+                else HeadTrackingStatus.NoReports(label, ((SystemClock.elapsedRealtime() - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint))
                 return everStreamed
             }
             val nowMs = SystemClock.elapsedRealtime()
@@ -1143,7 +1204,7 @@ object HeadTracker {
             val silentS = (nowMs - lastImuMs) / 1000
             if (silentS >= NO_REPORT_SECONDS) {
                 // 0.5.22: a stream that worked and went quiet is lost, not "no sensor reports".
-                _status.value = com.hayeco.flipspaces.core.spatial.HeadSilence.status(label, everStreamed, silentS, ((nowMs - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint)
+                report(com.hayeco.flipspaces.core.spatial.HeadSilence.status(label, everStreamed, silentS, ((nowMs - startMs) / 1000).toInt(), source.counts.bytes, source.counts, source.noReportsHint))
                 if (silentS >= NO_REPORT_SECONDS * 3) return everStreamed // reconnect
             } else if (everStreamed && (_status.value !is HeadTrackingStatus.Streaming || nowMs - lastStatusMs >= STATUS_EVERY_MS)) {
                 // 0.5.48 (Mike, vc68: windows shaky when looking around, the phone at severe heat): the status at most
@@ -1151,7 +1212,7 @@ object HeadTracker {
                 // this thread's time (simpleperf on the Flip), at 1000 reports a second.
                 lastStatusMs = nowMs
                 val st = HeadTrackingStatus.Streaming(label, rate.rate)
-                if (_status.value != st) _status.value = st
+                if (_status.value != st) report(st)
             }
             // 0.5.49 (Mike: "batch the glasses' motion reads"): rest [READ_BATCH_NS] before the next read, so it takes
             // the reports that came meanwhile in one go (off: see [READ_BATCH_NS]). 0.5.6 to 0.5.48 read each 1 ms report as it came: 1000

@@ -97,6 +97,7 @@ fun PhoneScreen(
     onOpenSpatial: () -> Unit,
     onOpenHeadTracking: () -> Unit,
     onGlassesReport: () -> Unit,
+    onSendLogs: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -112,6 +113,8 @@ fun PhoneScreen(
     val update by com.hayeco.flipspaces.UpdateChecker.available.collectAsState()
     var checkUpdates by remember { mutableStateOf(com.hayeco.flipspaces.UpdateChecker.enabled(context)) }
     val updateStatus by com.hayeco.flipspaces.UpdateChecker.status.collectAsState()
+    // 1.1.14 (a tester asked for a way to turn head tracking on and off): saved, applied at once.
+    var headTracking by remember { mutableStateOf(com.hayeco.flipspaces.spatial.SpaceStore(context).headTracking) }
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -156,6 +159,15 @@ fun PhoneScreen(
                     // settings are, instead of repeating the Open trackpad button.
                     NavRow("Spatial windows", "Screen size, 3D, eye distance, hand pointer; Shizuku setup", onOpenSpatial)
                     RowDivider()
+                    ToggleRow(
+                        "Head tracking",
+                        if (headTracking) "On: windows stay put as you turn your head" else "Off: windows stay in front of you and turn with your head",
+                        headTracking,
+                    ) {
+                        headTracking = it
+                        com.hayeco.flipspaces.spatial.HeadTracker.setEnabled(context, it)
+                    }
+                    RowDivider()
                     NavRow("Hands", "Hand tracking, calibrating hand aim, gestures", onOpenHands)
                     RowDivider()
                     NavRow("Trackpad", "Cursor and scroll speeds, scroll strip, window curve, in its Menu", onOpenTrackpadSettings)
@@ -173,6 +185,9 @@ fun PhoneScreen(
                             modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
                         ) { Text("Check now") }
                     }
+                    // 1.1.14: the logs to Mike by email, the one line saying what goes.
+                    RowDivider()
+                    NavRow(com.hayeco.flipspaces.core.LogBundle.BUTTON, com.hayeco.flipspaces.core.LogBundle.WHAT_IS_SENT, onSendLogs)
                 }
             }
             item {

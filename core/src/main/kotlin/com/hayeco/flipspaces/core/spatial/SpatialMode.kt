@@ -10,6 +10,14 @@ sealed interface HeadTrackingStatus {
         override val summary = "Head tracking is off."
     }
 
+    /**
+     * 1.1.14 (a tester asked for a way to turn head tracking on and off): switched off with Settings' Head tracking
+     * switch. Nothing is read from the glasses' motion sensor until it is on again.
+     */
+    data object TurnedOff : HeadTrackingStatus {
+        override val summary = "Head tracking is turned off in Settings. Windows stay in front of you and turn with your head."
+    }
+
     data object Searching : HeadTrackingStatus {
         override val summary = "Looking for the glasses' USB network."
     }

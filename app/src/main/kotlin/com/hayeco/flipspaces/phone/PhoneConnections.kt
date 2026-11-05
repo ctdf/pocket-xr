@@ -30,10 +30,12 @@ object PhoneConnections {
     private const val TAG = "FlipSpacesConnections"
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "phone-connections").apply { isDaemon = true } }
 
+    // 1.1.14: internal, so Send logs to Mike's test can give it the Wi-Fi names to take out.
     @Volatile var wifi = WifiState()
-        private set
+        internal set
+    // 1.1.14: internal too, for the Bluetooth device names Send logs to Mike's test takes out.
     @Volatile var bt = BtState()
-        private set
+        internal set
     @Volatile var version = 0L
         private set
 
@@ -75,6 +77,20 @@ object PhoneConnections {
         val bonded = runCatching { adapter.bondedDevices.toList() }.getOrDefault(emptyList())
         val connected = connectedAddresses(context, adapter)
         return BtState(true, true, bonded.map { BtDevice(it.address, runCatching { it.alias ?: it.name }.getOrNull() ?: it.address, it.address in connected) })
+    }
+
+    /**
+     * 1.1.14: the names of the phone's paired Bluetooth devices ("Jordan's Buds"), for Send logs to Mike to take out:
+     * the last read for the Control Center, and the paired list itself when Pocket XR may read it.
+     */
+    @Suppress("MissingPermission")
+    fun deviceNames(context: Context): List<String> {
+        val read = if (!permitted(context)) emptyList() else runCatching {
+            context.getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
+                .flatMap { d -> listOfNotNull(runCatching { d.alias }.getOrNull(), runCatching { d.name }.getOrNull()) }
+        }.getOrDefault(emptyList())
+        val known = bt.devices.filter { it.name != it.address }.map { it.name }
+        return (read + known).filter { it.isNotBlank() }.distinct()
     }
 
     /** The addresses connected on the audio, LE audio and input profiles; waits up to a second for the proxies. */

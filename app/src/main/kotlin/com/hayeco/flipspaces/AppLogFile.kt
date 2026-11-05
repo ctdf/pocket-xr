@@ -29,6 +29,13 @@ object AppLogFile {
     @Volatile var dir: File? = null
         private set
 
+    @Volatile private var file: RotatingLogFile? = null
+
+    /** 1.1.14: the buffered lines written out now, before Send logs to Mike reads the files. */
+    fun flush() {
+        runCatching { file?.flush() }
+    }
+
     @Synchronized
     fun start(context: Context) {
         if (started) return
@@ -49,6 +56,7 @@ object AppLogFile {
             break
         }
         if (file == null) return
+        this.file = file
         Thread({ run(file, pid) }, "fs-log-file").apply {
             isDaemon = true
             priority = Thread.MIN_PRIORITY

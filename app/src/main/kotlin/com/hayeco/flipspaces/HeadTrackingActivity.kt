@@ -146,6 +146,7 @@ class HeadTrackingActivity : ComponentActivity() {
                     onShare = {
                         HeadDiagnosticsFile.share(this, HeadDiagnosticsFile.text(this, facts.soc, facts.dynamicSensors, SpaceSession.timingLine))
                     },
+                    onSendLogs = { SendLogs.send(this, this) },
                     onRetry = {
                         HeadTracker.release()
                         HeadTracker.acquire(this)

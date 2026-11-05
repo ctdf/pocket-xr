@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
                         val file = com.hayeco.flipspaces.spatial.GlassesReportFile.share(this)
                         message = if (file != null) "Glasses report saved: ${file.name}" else "Glasses report made (not saved)"
                     },
+                    onSendLogs = { SendLogs.send(this, this) },
                 )
             }
         }

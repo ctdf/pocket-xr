@@ -65,6 +65,17 @@ object HeadDiagnosticsFile {
         ).text()
     }
 
+    /** 1.1.14: [text] from a screen that has not read the phone's facts (Send logs to Mike in Settings). */
+    fun text(context: Context): String = text(
+        context,
+        soc = if (android.os.Build.VERSION.SDK_INT >= 31) "${android.os.Build.SOC_MANUFACTURER} ${android.os.Build.SOC_MODEL}" else android.os.Build.HARDWARE,
+        dynamicSensors = runCatching {
+            context.getSystemService(android.hardware.SensorManager::class.java)?.getDynamicSensorList(android.hardware.Sensor.TYPE_ALL)
+                ?.map { "${it.name} (${it.stringType})" }.orEmpty()
+        }.getOrDefault(emptyList()),
+        timing = SpaceSession.timingLine,
+    )
+
     /** The whole text on the clipboard; false if Android refused it. */
     fun copy(context: Context, text: String): Boolean = runCatching {
         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Pocket XR head tracking diagnostics", text))

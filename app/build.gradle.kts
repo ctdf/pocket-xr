@@ -114,6 +114,8 @@ android {
     // 1.0.1: the unit tests check BuildConfig.PLAY_BUILD against the build that was asked for.
     testOptions {
         unitTests.all { it.systemProperty("pocketxr.play", playBuild.toString()) }
+        // 1.1.14: the Robolectric tests read the merged manifest and res/xml (the reports FileProvider).
+        unitTests.isIncludeAndroidResources = true
     }
 
     // 1.1.0: the add-on's link (IAddon, IAddonCallback) is compiled into both apps from the add-on's one copy.
@@ -149,4 +151,7 @@ dependencies {
     implementation("androidx.fragment:fragment:1.9.1")
 
     testImplementation(libs.junit)
+    // 1.1.14: Send logs to Mike and the Head tracking switch, tested on Robolectric (app/src/test).
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

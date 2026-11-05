@@ -1,6 +1,6 @@
 # Pocket XR privacy policy
 
-Last updated: 4 November 2026
+Last updated: 5 November 2026
 
 This policy covers two Android apps published by Haye & Co (Mike Haye): **Pocket XR** (`com.hayeco.flipspaces`) and the
 **Pocket XR add-on** (`com.hayeco.flipspaces.addon`). It says what they access on your phone and what, if anything,
@@ -54,7 +54,8 @@ the same developer can use. It is not stored and is not sent off the phone.
 - Your settings, window layouts, presets and hand calibration, in Pocket XR's private storage.
 - A diagnostic log of Pocket XR's own messages, in Pocket XR's folder on the phone's storage
   (`Android/data/com.hayeco.flipspaces/files/logs`), at most 64 MB, overwritten as it fills. It stays on the phone. It
-  leaves only if you share a glasses report yourself, with the app and to the people you choose.
+  leaves only if you share a glasses report yourself, with the app and to the people you choose, or send it with "Send
+  logs to Mike" ([below](#send-logs-to-mike)).
 - **Recordings** you start with "Record the glasses": a video of what the glasses show, without audio, saved to
   `Movies/Pocket XR` on your phone. They stay there until you delete or share them.
 
@@ -80,6 +81,15 @@ Uninstalling an app removes its private storage. Recordings in `Movies/Pocket XR
 
 Pocket XR also talks to your glasses over USB: the USB network some glasses create, or on the XREAL Air family their
 motion sensor's USB interface. That traffic stays between the phone and the glasses.
+
+## Send logs to Mike
+
+When you tap "Send logs to Mike" in Settings or on the head tracking screen, Pocket XR puts its own log, the head
+tracking diagnostics and a note of your app version, phone model, Android version and glasses into one zip. It takes out
+email addresses, account names, Wi-Fi names, Bluetooth device names, MAC addresses and IP addresses (other than the
+glasses' own link) first. Then your email app opens with the zip attached and addressed to me at connect@mikehaye.com.
+Nothing is sent until you tap send there. I read what you send only to fix the problem you tell me about, and I don't
+share it with anyone.
 
 ## Sharing
 
