@@ -172,8 +172,13 @@ has approved its release; it is not made by or affiliated with XREAL. "XREAL" an
 names are XREAL's trademarks, used here only to say what the app works with.
 
 - **Need something built?** I'm available for XR and Android work: connect@mikehaye.com.
-- **Like it?** You can leave a tip on [Ko-fi](https://ko-fi.com/mikehaye). It's never needed; a star or a glasses report
-  helps just as much.
+
+## Support
+
+[![Buy me a beer on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20beer-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/mikehaye)
+
+Enjoying Pocket XR? You can buy me a beer on [Ko-fi](https://ko-fi.com/mikehaye). It's never required; a star or a
+glasses report helps just as much.
 
 ## Licence
 

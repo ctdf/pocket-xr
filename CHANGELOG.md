@@ -2,6 +2,11 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- A small "Buy me a beer" card at the bottom of Pocket XR Settings opens Mike's Ko-fi page in the browser. It's never
+  required, and nothing pops up or reminds you. The Google Play build leaves it out.
+
 ## 1.1.12: head tracking on XREAL Air glasses, ready for Google Play
 
 - Head tracking (Body Anchor, 3DoF) now works on the XREAL Air, Air 2, Air 2 Pro and Air 2 Ultra. These models send
