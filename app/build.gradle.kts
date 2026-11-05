@@ -16,8 +16,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 144
-        versionName = "1.1.13"
+        versionCode = 145
+        versionName = "1.1.14"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
         // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments
@@ -122,6 +122,14 @@ android {
     sourceSets {
         getByName("main") {
             aidl.directories.add("../addon/src/main/aidl")
+            // 1.1.14: the Samsung NPU parts (src/npu: the hand models, our LiteRT build and the Samsung dispatch) are not
+            // in the public repository. For a GitHub release, tools/fetch-npu.sh copies them in from the private one
+            // (docs/RELEASE.md). Play builds never take them; there, and when src/npu is absent, LiteRT is the AAR's and
+            // hands run MediaPipe.
+            if (!play) {
+                jniLibs.directories.add("src/npu/jniLibs")
+                assets.directories.add("src/npu/assets")
+            }
         }
     }
 }
@@ -142,7 +150,8 @@ dependencies {
     implementation(libs.mediapipe.tasks.vision)
     // 0.5.43: the hand models on the Exynos 2500's NPU (NpuHandEngine). The AAR's libLiteRt.so is replaced by our own
     // LiteRT v2.3.2 build in jniLibs, which exports what the Samsung dispatch needs. 0.5.96: the NPU models and that
-    // build are not in the public repository; without them hand tracking runs MediaPipe on the GPU or CPU.
+    // build are not in the public repository; without them hand tracking runs MediaPipe on the GPU or CPU. 1.1.14: GitHub
+    // releases fetch them into src/npu (sourceSets below, docs/RELEASE.md).
     implementation("com.google.ai.edge.litert:litert:2.3.2")
     // 0.5.3: EGL images of the panel ImageReaders' HardwareBuffers (eglCreateImageFromHardwareBuffer).
     implementation(libs.androidx.graphics.core)

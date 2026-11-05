@@ -14,7 +14,8 @@ in this repository.
 - MediaPipe hand models, by Google: Apache License 2.0. The hand landmarker (`hand_landmarker.task`) is not in the
   repository; the app downloads it from Google's model storage on first use. The versions compiled for the Galaxy Z
   Flip 7's NPU (and the LiteRT build that runs them) are not in the public repository yet; without them hand tracking
-  runs MediaPipe on the GPU or CPU.
+  runs MediaPipe on the GPU or CPU. The official GitHub release APK includes them (docs/RELEASE.md); the Google Play
+  build does not.
 
 ## Fonts (0.5.68)
 

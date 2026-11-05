@@ -17,5 +17,9 @@ keystore.properties
 *.jks
 *.keystore
 
+# 1.1.14: the Samsung NPU parts, fetched from the private repository for a GitHub release (tools/fetch-npu.sh). Never
+# committed: the models' licence is not yet checked.
+app/src/npu/
+
 # The export's marker (the private repo's tools/export-public.py).
 .pocketxr-export

@@ -22,7 +22,9 @@ Target API: Google Play requires new apps and updates to target Android 16 (API 
 changed.
 
 The bundles are built from this public repository. The Samsung NPU hand models and the LiteRT build that runs them are
-not in it, so on Play hand tracking runs MediaPipe on the GPU or CPU, as every build from this repository does.
+not in it, so on Play hand tracking runs MediaPipe on the GPU or CPU. The GitHub release fetches them into
+`app/src/npu` before it builds (docs/RELEASE.md), but `-Ppocketxr.play=true` leaves that folder out of the build even
+when it is there.
 
 ### Two apps
 

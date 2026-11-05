@@ -2,6 +2,12 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.14: NPU hand tracking is back on Exynos phones
+
+- Hand tracking runs on the NPU again on phones with the Exynos 2500, like the Galaxy Z Flip 7. The 1.1.13 download
+  left out the hand models built for that chip, so hands ran on the GPU or CPU there, slower and using more battery.
+  This version puts them back. Other phones and the Google Play version are unchanged.
+
 ## 1.1.13: a Head tracking switch, Send logs to Mike
 
 - A small "Buy me a beer" card at the bottom of Pocket XR Settings opens Mike's Ko-fi page in the browser. It's never
