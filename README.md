@@ -62,6 +62,7 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 | XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Use **Follow mode** (not Anchor) with **Stabilizer off** in the glasses' menu. |
 | XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) |
 | XREAL 1S | Community testing | No |
+| XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Community testing: head tracking since 1.1.12, not yet tested by the project | No |
 | Other glasses | Help wanted | No |
 
 Details, settings for each model and how to report your glasses: [docs/GLASSES.md](docs/GLASSES.md). If you own a

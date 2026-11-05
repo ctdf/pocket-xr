@@ -2,9 +2,17 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## 1.1.11: ready for Google Play
+## 1.1.12: head tracking on XREAL Air glasses, ready for Google Play
 
-- Pocket XR and the add-on are prepared for Google Play (docs/PLAY.md). Nothing about how Pocket XR works changes.
+- Head tracking (Body Anchor, 3DoF) now works on the XREAL Air, Air 2, Air 2 Pro and Air 2 Ultra. These models send
+  their motion sensor over USB HID, not over the USB network the One family uses, so before this version Body Anchor
+  still said 3DoF but the Space stayed head locked and windows turned with your head. Pocket XR now reads their sensor
+  directly, and Android asks once for USB access when the glasses are plugged in. (Not yet tested by the project on
+  these glasses.)
+- A `PocketXR-Tracking` log line every second while head tracking runs: the glasses found, where the head pose comes
+  from, the tracking mode, the sensor rate, the pose, and in plain words what is wrong when there is no pose. The
+  Glasses report includes the newest line.
+- Pocket XR and the add-on are prepared for Google Play (docs/PLAY.md).
 - The add-on has its own screen. Before its accessibility service or notification access is switched on, it says what
   each one reads, what it is used for and that nothing leaves the phone, and it goes on to Android's page only when you
   tap "Agree and turn on". Pocket XR's buttons for both open that screen.

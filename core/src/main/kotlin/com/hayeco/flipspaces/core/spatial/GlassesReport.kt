@@ -20,6 +20,8 @@ data class GlassesReport(
     val calibration: String,
     val hands: String,
     val timeUtc: String,
+    /** 1.1.12: the newest PocketXR-Tracking line ([TrackingBeat]), null before one. */
+    val tracking: String? = null,
 ) {
     data class Display(val name: String, val productId: String?, val modes: List<String>, val current: String)
     /**
@@ -66,6 +68,7 @@ data class GlassesReport(
         appendLine()
         appendLine("What worked:")
         appendLine("- Head tracking: ${if (headTrackingWorks) "yes" else "no"} ($headTracking)")
+        tracking?.let { appendLine("- Tracking now: $it") }
         appendLine("- Control link: $controlLink")
         appendLine("- Glasses serial: ${serial?.let { "ends ${it.takeLast(4)}" } ?: "not read"}")
         appendLine("- 2D / 3D state: ${when (stereoState) { null -> "not read"; 1 -> "3D side by side (1)"; 0 -> "2D (0)"; else -> "$stereoState" }}")

@@ -9,10 +9,10 @@ rating answers are in [store/play/LISTING.md](../store/play/LISTING.md); the ima
 | | Pocket XR | Pocket XR add-on |
 | --- | --- | --- |
 | Package | `com.hayeco.flipspaces` (kept; it is Pocket XR's since the first build and not on Play) | `com.hayeco.flipspaces.addon` |
-| Version | 1.1.11, versionCode 142 | 1.1, versionCode 2 |
+| Version | 1.1.12, versionCode 143 | 1.1, versionCode 2 |
 | minSdk / targetSdk / compileSdk | 30 / 36 / 37 | 30 / 36 / 37 |
-| Bundle | [release/play/pocketxr-1.1.11-142.aab](../release/play/pocketxr-1.1.11-142.aab) (Git LFS) | [release/play/pocketxr-addon-1.1-2.aab](../release/play/pocketxr-addon-1.1-2.aab) (Git LFS) |
-| R8 mapping | [release/play/pocketxr-1.1.11-142-mapping.txt](../release/play/pocketxr-1.1.11-142-mapping.txt) (Git LFS): upload it with the bundle, under App bundle explorer, Downloads, ReTrace mapping file | Not shrunk, none |
+| Bundle | [release/play/pocketxr-1.1.12-143.aab](../release/play/pocketxr-1.1.12-143.aab) (Git LFS) | [release/play/pocketxr-addon-1.1-2.aab](../release/play/pocketxr-addon-1.1-2.aab) (Git LFS) |
+| R8 mapping | [release/play/pocketxr-1.1.12-143-mapping.txt](../release/play/pocketxr-1.1.12-143-mapping.txt) (Git LFS): upload it with the bundle, under App bundle explorer, Downloads, ReTrace mapping file | Not shrunk, none |
 | Declares | Camera and connectedDevice foreground services | The AccessibilityService and the notification listener |
 
 Checksums are in [release/play/SHA256SUMS](../release/play/SHA256SUMS).
@@ -179,7 +179,7 @@ Without it, everything else in Pocket XR works; the Notifications page stays emp
 **connectedDevice** (`GlassesReadyService`):
 
 - Use case: "Interacting with external devices over USB" (or the closest offered).
-- Description: `Pocket XR drives XREAL glasses connected to the phone's USB-C port. While the user has Pocket XR set up, a quiet foreground service keeps it able to answer the glasses' display connection, so that plugging the glasses in opens Pocket XR's workspace on them and its head tracking connects to the glasses' motion sensor over their USB network. The notification has an Exit action that stops it.`
+- Description: `Pocket XR drives XREAL glasses connected to the phone's USB-C port. While the user has Pocket XR set up, a quiet foreground service keeps it able to answer the glasses' display connection, so that plugging the glasses in opens Pocket XR's workspace on them and its head tracking connects to the glasses' motion sensor over USB. The notification has an Exit action that stops it.`
 - If deferred or interrupted: `Plugging in the glasses shows a blank or mirrored screen instead of the user's workspace, and head tracking does not connect, until the user opens Pocket XR on the phone by hand.`
 
 Risk to know: Play looks for foreground services the user starts. GlassesReadyService also starts after boot and waits

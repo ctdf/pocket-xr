@@ -78,8 +78,8 @@ Uninstalling an app removes its private storage. Recordings in `Movies/Pocket XR
   hand tracking (the trackpad and the Spatial Mouse do not use it). See
   [Google's privacy policy](https://policies.google.com/privacy).
 
-Pocket XR also talks to your glasses over the USB network they create. That traffic stays between the phone and the
-glasses.
+Pocket XR also talks to your glasses over USB: the USB network some glasses create, or on the XREAL Air family their
+motion sensor's USB interface. That traffic stays between the phone and the glasses.
 
 ## Sharing
 
