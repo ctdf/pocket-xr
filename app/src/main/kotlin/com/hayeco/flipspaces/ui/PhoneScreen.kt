@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -243,10 +244,11 @@ private fun SupportCard(onOpen: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            // 48 dp tall, like the screen's other buttons, for a finger, the trackpad's cursor or a hand's pinch.
+            // At least 48 dp tall, like the screen's other buttons, for a finger, the trackpad's cursor or a hand's pinch.
+            // A minimum, not a fixed height: at a large font size the label wraps instead of losing "Ko-fi" off the end.
             Button(
                 onClick = onOpen,
-                modifier = Modifier.padding(start = 58.dp).height(48.dp),
+                modifier = Modifier.padding(start = 58.dp).heightIn(min = 48.dp),
                 shape = RoundedCornerShape(24.dp),
             ) {
                 Icon(painterResource(R.drawable.ic_beer), contentDescription = null, modifier = Modifier.size(18.dp))

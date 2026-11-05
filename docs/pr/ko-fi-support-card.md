@@ -26,12 +26,17 @@ developer outside Play billing inside a Play app, so the Play build hides the ca
 - `app`: `SupportCardBuildTest` checks `BuildConfig.PLAY_BUILD` follows the Gradle property and hides the card. Run it
   both ways: `gradle :app:testDebugUnitTest` and `gradle :app:testDebugUnitTest -Ppocketxr.play=true`.
 
-## Screenshots needed
+## Screenshots
 
-1. GitHub build, phone: Pocket XR Settings scrolled to the bottom, card visible (Advanced closed).
-2. GitHub build, glasses: the settings screen in a Space window, card visible, with the trackpad cursor or hand pointer
-   on the button.
-3. Tapping the button: Ko-fi's page open in the browser.
-4. Play build (`-Ppocketxr.play=true`), phone: the same screen ending at Advanced, no card.
+Taken on an API 33 emulator set to 1080x2340 at 420 dpi, debug builds (`docs/screenshots/ko-fi/`):
+
+1. `phone-github-card.png` and `phone-github-card-closeup.png`: GitHub build, Pocket XR Settings scrolled to the
+   bottom, card visible under Advanced.
+2. `phone-github-card-font-1.3.png`: the same at 1.3x font size. The button had a fixed 48 dp height, which cut
+   "Ko-fi" off the label (`phone-github-card-font-1.3-before-fix.png`); it is now a 48 dp minimum and the label wraps.
+3. `phone-play-no-card.png`: Play build (`-Ppocketxr.play=true`), the page ends at Advanced with no card.
+
+Still needed: the card in a Space window on the glasses (the emulator has no Shizuku or glasses tracking, so only flat
+mode's home showed on its second display), and Ko-fi open in the browser after a tap.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
