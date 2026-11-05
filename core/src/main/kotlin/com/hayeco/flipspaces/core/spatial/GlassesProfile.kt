@@ -62,6 +62,10 @@ enum class GlassesModel(
     ONE_S("XREAL 1S", "1s", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT, setupHint = ONE_STABILIZER),
     // 1.1.0: the One family's axes. Every XREAL with this head tracking link but the Aura has them, and the Aura's axes
     // on a One family model turn the picture upside down (0.5.91).
+    // 1.1.12: the Air, Air 2, Air 2 Pro and Air 2 Ultra (USB [AirImuProtocol.modelName]). Their HID reports are turned
+    // into head axes as they are read ([AirImuProtocol.parse]), so the default axes; the One family's turned them half
+    // round, the Space facing behind.
+    AIR("XREAL Air", "air", tested = false, camera = false, diagonalFovDeg = 46f),
     OTHER_XREAL("XREAL glasses", "xreal", tested = false, camera = false, diagonalFovDeg = null, defaultAxes = AxisMap.XRIGHT_YDOWN_ZFRONT),
     UNKNOWN("Unknown glasses", "unknown", tested = false, camera = false, diagonalFovDeg = null);
 
@@ -131,6 +135,7 @@ enum class GlassesModel(
                 lower.contains("1s") || lower.contains("one s") -> ONE_S
                 usbProduct == USB_AURA -> AURA
                 usbProduct == USB_ONE -> ONE
+                usbProduct?.let(AirImuProtocol::modelName) != null || lower.contains("xreal air") || lower.contains("nreal air") -> AIR
                 lower.contains("xreal") || lower.contains("nreal") || usbProduct != null -> OTHER_XREAL
                 else -> UNKNOWN
             }

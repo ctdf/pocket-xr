@@ -28,12 +28,13 @@ sealed interface HeadTrackingStatus {
 
     /**
      * 1.1.10 (USB 3318:0442 on a Pixel 8a): the glasses carry their IMU over USB HID ([ImuTransport.USB_HID]), not a USB
-     * network, so no network is looked for and none is blamed. The app has no HID IMU reader yet.
+     * network, so no network is looked for and none is blamed. 1.1.12: the Air family is read over HID ([AirImuProtocol]);
+     * this is for the other HID glasses, which have no reader yet.
      */
     data class HidGlasses(val vendorId: Int, val productId: Int, val interfaces: List<String>) : HeadTrackingStatus {
         override val summary =
             "These glasses (USB %04X:%04X) send head tracking over USB HID, like XREAL's Air family, not over a USB network. ".format(java.util.Locale.ROOT, vendorId, productId) +
-                "Pocket XR reads only the One family's network stream, so head tracking is not available on them yet; the Space stays head locked. " +
+                "Pocket XR reads it over HID only on the Air, Air 2, Air 2 Pro and Air 2 Ultra, so head tracking is not available on these glasses yet; the Space stays head locked. " +
                 "USB interfaces: " + interfaces.ifEmpty { listOf("none listed") }.joinToString(", ") + "."
     }
 
@@ -47,10 +48,25 @@ sealed interface HeadTrackingStatus {
     }
 
     /** Connected, but no sensor report arrived. */
-    data class NoReports(val network: String, val seconds: Int, val bytes: Long, val counts: FramerCounts) : HeadTrackingStatus {
+    data class NoReports(val network: String, val seconds: Int, val bytes: Long, val counts: FramerCounts, val hint: String = ONE_FAMILY_HINT) : HeadTrackingStatus {
         override val summary = "Connected over $network but no sensor reports in $seconds s ($bytes bytes received, " +
-            "${counts.badLength} frames of another length, ${counts.unknownType} of another type). " +
-            "This firmware may not serve the One family stream."
+            "${counts.badLength} frames of another length, ${counts.unknownType} of another type). $hint"
+    }
+
+    /** 1.1.12: Air family glasses found on USB, but Android has not given Pocket XR access to them yet. */
+    data class UsbPermission(val glasses: String) : HeadTrackingStatus {
+        override val summary = "Found the $glasses on USB; waiting for USB access for head tracking. Allow Pocket XR in Android's prompt " +
+            "(unplug and plug the glasses in again to see it again). The Space stays head locked until then."
+    }
+
+    /** 1.1.12: the Air family's motion sensor could not be opened over USB: [error] word for word. */
+    data class UsbFailed(val glasses: String, val error: String) : HeadTrackingStatus {
+        override val summary = "Could not open the $glasses' motion sensor over USB: $error"
+    }
+
+    companion object {
+        const val ONE_FAMILY_HINT = "This firmware may not serve the One family stream."
+        const val AIR_FAMILY_HINT = "The glasses' motion sensor did not answer the start command over USB HID."
     }
 
     data class Streaming(val network: String, val rateHz: Double) : HeadTrackingStatus {
@@ -87,11 +103,14 @@ sealed interface HeadTrackingStatus {
  * and then stopped is [HeadTrackingStatus.Lost], with how long it has been silent.
  */
 object HeadSilence {
-    fun status(network: String, everStreamed: Boolean, silentS: Long, sinceStartS: Int, bytes: Long, counts: FramerCounts): HeadTrackingStatus =
+    fun status(
+        network: String, everStreamed: Boolean, silentS: Long, sinceStartS: Int, bytes: Long, counts: FramerCounts,
+        hint: String = HeadTrackingStatus.ONE_FAMILY_HINT,
+    ): HeadTrackingStatus =
         if (everStreamed) {
             HeadTrackingStatus.Lost(network, "no sensor report for $silentS s after it had streamed ($bytes bytes received in $sinceStartS s)")
         } else {
-            HeadTrackingStatus.NoReports(network, sinceStartS, bytes, counts)
+            HeadTrackingStatus.NoReports(network, sinceStartS, bytes, counts, hint)
         }
 }
 

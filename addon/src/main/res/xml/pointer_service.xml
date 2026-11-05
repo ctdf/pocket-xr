@@ -6,4 +6,5 @@
     android:canPerformGestures="true"
     android:canRetrieveWindowContent="true"
     android:description="@string/pointer_service_description"
-    android:notificationTimeout="50" />
+    android:notificationTimeout="50"
+    android:settingsActivity="com.hayeco.flipspaces.addon.SetupActivity" />

@@ -21,10 +21,20 @@ class GlassesModel0110Test {
     }
 
     @Test fun onlyTheAuraKeepsTheDefaultAxes() {
-        GlassesModel.entries.filter { it != GlassesModel.AURA && it != GlassesModel.UNKNOWN }.forEach {
+        GlassesModel.entries.filter { it != GlassesModel.AURA && it != GlassesModel.AIR && it != GlassesModel.UNKNOWN }.forEach {
             assertEquals(it.name, AxisMap.XRIGHT_YDOWN_ZFRONT, it.defaultAxes)
         }
         assertEquals(AxisMap.DEFAULT, GlassesModel.AURA.defaultAxes)
+    }
+
+    /** 1.1.12: the Air family's reports are in head axes when read ([AirImuProtocol.parse]), so it keeps the default. */
+    @Test fun theAirFamilyIsFoundByItsUsbProductAndKeepsTheDefaultAxes() {
+        for (pid in listOf(AirImuProtocol.PID_AIR, AirImuProtocol.PID_AIR_2, AirImuProtocol.PID_AIR_2_PRO, AirImuProtocol.PID_AIR_2_ULTRA)) {
+            assertEquals(GlassesModel.AIR, GlassesModel.detect(GlassesId("HDMI", ""), pid))
+            assertEquals(GlassesModel.AIR, GlassesModel.detect(null, pid))
+        }
+        assertEquals(AxisMap.DEFAULT, GlassesModel.AIR.defaultAxes)
+        assertEquals(GlassesModel.OTHER_XREAL, GlassesModel.detect(null, 0x0442))
     }
 
     @Test fun aNameThatSaysTheModelStillWins() {

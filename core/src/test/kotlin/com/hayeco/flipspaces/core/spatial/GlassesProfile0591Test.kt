@@ -16,7 +16,8 @@ class GlassesProfile0591Test {
         assertEquals(GlassesModel.ONE, GlassesModel.detect(GlassesId("XREAL One", "16641")))
         assertEquals(GlassesModel.ONE_PRO, GlassesModel.detect(GlassesId("XREAL One Pro", "")))
         assertEquals(GlassesModel.ONE_S, GlassesModel.detect(GlassesId("XREAL 1S", "")))
-        assertEquals(GlassesModel.OTHER_XREAL, GlassesModel.detect(GlassesId("XREAL Air 2", "")))
+        assertEquals(GlassesModel.AIR, GlassesModel.detect(GlassesId("XREAL Air 2", "")))
+        assertEquals(GlassesModel.OTHER_XREAL, GlassesModel.detect(GlassesId("XREAL Beam", "")))
         assertEquals(GlassesModel.UNKNOWN, GlassesModel.detect(GlassesId("LG Monitor", "1234")))
         // No EDID name: the USB product decides.
         assertEquals(GlassesModel.ONE, GlassesModel.detect(null, 0x0438))
