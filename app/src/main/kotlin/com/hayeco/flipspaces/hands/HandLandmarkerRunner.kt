@@ -153,14 +153,33 @@ class HandLandmarkerRunner(
         get() = if (npu != null) "NPU" else field
         private set
 
-    private var landmarker: HandLandmarker = build(preferGpu, 1)
+    /** 1.1.13: the landmarkers built for one delegate and hand count: the one hand follower and the two hand searcher. */
+    private class Landmarkers(val follower: HandLandmarker, val searcher: HandLandmarker?, val delegate: String) {
+        fun close() {
+            runCatching { follower.close() }
+            runCatching { searcher?.close() }
+        }
+    }
+
+    /** 1.1.13: a delegate move's new landmarkers, built on [buildThread] while these keep tracking ([moveTo]). */
+    private val swap = com.hayeco.flipspaces.core.hands.DelegateSwap<Landmarkers> { it.close() }
+    private val buildThread = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "FlipSpacesHandModelBuild") }
+
+    @Volatile private var landmarker: HandLandmarker
 
     /** 0.5.8: the two hand landmarker, in two hand mode only (see [PalmSearch]). */
-    private var searcher: HandLandmarker? = if (numHands >= 2) makeSearcher() else null
+    @Volatile private var searcher: HandLandmarker?
     private val palmSearch = PalmSearch()
 
-    /** 0.5.8: the two hand landmarker on the follower's delegate; null (one hand only) if MediaPipe cannot build it. */
-    private fun makeSearcher(): HandLandmarker? = try {
+    init {
+        val built = buildSet(preferGpu, numHands)
+        landmarker = built.follower
+        searcher = built.searcher
+        delegate = built.delegate
+    }
+
+    /** 0.5.8: the two hand landmarker on [delegate]; null (one hand only) if MediaPipe cannot build it. */
+    private fun makeSearcher(delegate: String): HandLandmarker? = try {
         create(if (delegate == "GPU") Delegate.GPU else Delegate.CPU, 2)
     } catch (e: Exception) {
         Log.w(TAG, "MediaPipe two hand landmarker unavailable, following one hand", e)
@@ -170,26 +189,37 @@ class HandLandmarkerRunner(
     /** True when the GPU delegate failed on its first frames; call [fallBackToCpu] from the feeding thread. */
     val needsCpuFallback: Boolean get() = delegate == "GPU" && resultsSeen == 0L && gpuErrors >= GPU_ERRORS_BEFORE_FALLBACK
 
-    private fun build(gpu: Boolean, hands: Int): HandLandmarker {
+    /** The one hand follower on [gpu], or on the CPU when MediaPipe cannot build the GPU one, and the delegate it got. */
+    private fun buildFollower(gpu: Boolean): Pair<HandLandmarker, String> {
         if (gpu) {
             try {
-                return create(Delegate.GPU, hands).also { delegate = "GPU" }
+                return create(Delegate.GPU, 1) to "GPU"
             } catch (e: Exception) {
                 Log.w(TAG, "MediaPipe GPU delegate unavailable, using CPU", e)
             } catch (e: UnsatisfiedLinkError) {
                 Log.w(TAG, "MediaPipe GPU delegate unavailable, using CPU", e)
             }
         }
-        return create(Delegate.CPU, hands).also { delegate = "CPU" }
+        return create(Delegate.CPU, 1) to "CPU"
     }
 
-    /** 0.5.8: the landmarkers for [numHands] on [gpu]: the one hand follower, and in two hand mode the two hand one. */
+    /** 0.5.8: the landmarkers for [hands] on [gpu]. 1.1.13: touches nothing in use, so it can run on [buildThread]. */
+    private fun buildSet(gpu: Boolean, hands: Int): Landmarkers {
+        val (follower, name) = buildFollower(gpu)
+        return Landmarkers(follower, if (hands >= 2) makeSearcher(name) else null, name)
+    }
+
+    /** Rebuilds the landmarkers for [numHands] on [gpu] in place. Call from the feeding thread while it holds every slot. */
     private fun buildAll(gpu: Boolean) {
-        runCatching { landmarker.close() }
-        runCatching { searcher?.close() }
-        searcher = null
-        landmarker = build(gpu, 1)
-        if (numHands >= 2) searcher = makeSearcher()
+        Landmarkers(landmarker, searcher, delegate).close()
+        install(buildSet(gpu, numHands))
+    }
+
+    /** Puts [built] in use. Call from the feeding thread while it holds every slot (nothing in flight). */
+    private fun install(built: Landmarkers) {
+        landmarker = built.follower
+        searcher = built.searcher
+        delegate = built.delegate
         synchronized(palmSearch) { palmSearch.reset() }
         // 0.5.42 (vc55 to vc61: on the CPU the hand model's "inference" read 90 to 140 ms, two frames in flight, so each
         // frame waited behind the other's work; the Space misses 17 to 46 % of its frames with the model on the GPU and a
@@ -225,17 +255,51 @@ class HandLandmarkerRunner(
     }
 
     /**
-     * 0.5.2: rebuilds the landmarker on [gpu] or the CPU ([com.hayeco.flipspaces.core.hands.DelegateChooser]).
-     * Call from the feeding thread while it holds the slot, so no image is in flight.
+     * 0.5.2: moves the landmarkers to [gpu] or the CPU ([com.hayeco.flipspaces.core.hands.DelegateChooser]).
+     * 1.1.13 ([com.hayeco.flipspaces.core.hands.DelegateSwap]): the new ones are built on [buildThread] while these keep
+     * tracking, then swapped in between two frames; the old ones close on [buildThread]. Call from the feeding thread on
+     * every frame while the move is wanted, without holding a slot. True when the move is done, not needed, or its build
+     * failed; false while the new landmarkers are still being built (or the frames in flight did not finish in time).
      */
-    fun useDelegate(gpu: Boolean) {
+    fun moveTo(gpu: Boolean): Boolean {
         // 0.5.43: the NPU does not change; MediaPipe stays on the CPU behind it (for the checks and the fallback).
-        if (npu != null) return
-        if ((delegate == "GPU") == gpu) return
-        buildAll(gpu)
-        // Results from the new delegate count as its first frames again.
-        resultsSeen = 0
-        gpuErrors = 0
+        if (npu != null || (delegate == "GPU") == gpu) {
+            swap.cancel()
+            return true
+        }
+        val target = com.hayeco.flipspaces.core.hands.DelegateSwap.Target(gpu, numHands)
+        if (swap.isReady) {
+            if (!awaitIdle(1_000)) return false
+            try {
+                val built = swap.take(numHands) ?: return false
+                val old = Landmarkers(landmarker, searcher, delegate)
+                install(built)
+                buildThread.execute { old.close() }
+                // Results from the new delegate count as its first frames again.
+                resultsSeen = 0
+                gpuErrors = 0
+                Log.i(TAG, "MediaPipe now on the ${built.delegate}, swapped in between two frames; the ${old.delegate} tracked until then")
+                return true
+            } finally {
+                releaseAll()
+            }
+        }
+        if (swap.failed == target) return true
+        if (swap.begin(target)) {
+            val t0 = SystemClock.uptimeMillis()
+            val tracking = delegate
+            buildThread.execute {
+                val built = try {
+                    buildSet(target.gpu, target.hands)
+                } catch (e: Exception) {
+                    Log.w(TAG, "MediaPipe for ${target.label} could not be built; it stays on the $tracking", e)
+                    null
+                }
+                if (built != null) Log.i(TAG, "MediaPipe for ${target.label} built in ${SystemClock.uptimeMillis() - t0} ms on its own thread while the $tracking kept tracking")
+                swap.finished(target, built)
+            }
+        }
+        return false
     }
 
     /**
@@ -427,6 +491,9 @@ class HandLandmarkerRunner(
         runCatching { npuThread.shutdown() }
         runCatching { npu?.close() }
         npu = null
+        // 1.1.13: a move's build still running is closed by its own thread when it finishes.
+        swap.cancel()
+        runCatching { buildThread.shutdown() }
         landmarker.close()
         runCatching { searcher?.close() }
         runCatching { idleCpu?.close() }

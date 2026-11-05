@@ -570,15 +570,19 @@ object GlassesCameraProvider {
             }
             // 0.5.2: the delegate, and 0.5.7 the hand count, change only with nothing in flight
             // (0.5.14: up to two frames are, so this waits for both answers first).
+            // 1.1.13: a delegate move builds the new landmarkers on their own thread while these keep tracking, and swaps
+            // them in between two frames (vc51: 0.4 to 1.2 s without hand frames at each move when built here).
+            switchTo?.let { gpu ->
+                val done = runCatching { runner.moveTo(gpu) }.onFailure { Log.w(TAG, "MediaPipe delegate change failed", it) }.getOrDefault(true)
+                if (done) {
+                    switchTo = null
+                    tracking.delegate = runner.delegate
+                }
+            }
             val handsChange = HandCount.change(runner.numHands, twoHands)
-            if (switchTo != null || handsChange != null) {
+            if (handsChange != null) {
                 if (runner.awaitIdle(1_000)) {
                     try {
-                        switchTo?.let { gpu ->
-                            switchTo = null
-                            runCatching { runner.useDelegate(gpu) }.onFailure { Log.w(TAG, "MediaPipe delegate change failed", it) }
-                            tracking.delegate = runner.delegate
-                        }
                         // 0.5.7: "Track two hands" switched while hands run: MediaPipe rebuilt between frames.
                         handsChange?.let { n ->
                             runCatching { runner.useHands(n) }
