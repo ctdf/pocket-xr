@@ -88,6 +88,7 @@ fun PhoneScreen(
     onOpenHeadTracking: () -> Unit,
     onGlassesReport: () -> Unit,
     onSendLogs: () -> Unit = {},
+    onGlassesCheck: () -> Unit = {},
 ) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(message) {
@@ -178,6 +179,9 @@ fun PhoneScreen(
                         headTracking = it
                         com.hayeco.flipspaces.spatial.HeadTracker.setEnabled(context, it)
                     }
+                    RowDivider()
+                    // 1.1.16 (issue 12): the settings these glasses need and the head turn check, at any time.
+                    NavRow("Glasses setup check", "The settings your glasses need, and a 10 second check that windows stay put", onGlassesCheck)
                     RowDivider()
                     NavRow("Hands", "Hand tracking, calibrating hand aim, gestures", onOpenHands)
                     RowDivider()

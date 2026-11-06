@@ -153,6 +153,12 @@ private class PanelGl(var panel: SpacePanel, private val frames: PanelDrain, bro
 
     /** 0.5.21 (Mike: back, close and refresh buttons): Refresh reloads the window's app. */
     val refresh = IconTexture()
+
+    /** 1.1.15: Lock screens' small lock, where the resize handle is while the screens are locked. */
+    val lockIcon = IconTexture()
+
+    /** 1.1.15: the last press on the window's app (uptime), for [com.hayeco.flipspaces.core.spatial.LaunchDisplay]. */
+    var pressedMs: Long? = null
     val guide = LabelTexture(512, 64)
     val holdFrame = com.hayeco.flipspaces.core.spatial.HoldFrameFade()
 
@@ -336,6 +342,7 @@ private class PanelGl(var panel: SpacePanel, private val frames: PanelDrain, bro
         reset.release()
         close.release()
         refresh.release()
+        lockIcon.release()
         broad.release()
         fit.release()
         immersive.release()
@@ -1025,6 +1032,12 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             GlassesDisplayControl.configure(context, spaceUp = true, turnDuty = store.turnDuty)
             // 0.5.36: the trackpad cursor anchored in the room or following the head (the trackpad's chip).
             pointer.snapWindows = store.snapWindows
+            // 1.1.15: Lock screens, from the trackpad's Lock button or its Menu.
+            val locked = store.windowsLocked
+            if (pointer.windowsLocked != locked) {
+                apply(pointer.lockWindows(locked, layout))
+                Log.i(tag, "Lock screens ${if (locked) "on" else "off"}")
+            }
             PanelHost.newInstance = store.newInstance
             val follows = store.cursorFollowsHead
             if (pointer.cursorFollowsHead != follows) {
@@ -1043,6 +1056,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // 0.5.22: Wide view's per app override put back for every app no window shows.
         sweepOverrides(nowMs)
         checkTasks(nowMs)
+        keepAppsOnWindows()
         updatePanelRates(nowMs)
         syncPanelRates(nowMs)
 
@@ -2640,6 +2654,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             if (blocked) return
             action
         }
+        // 1.1.15: a press on the app (a touch going down, a long press): its new screens are watched for on the phone.
+        if ((sent is SpaceAction.Touch && sent.phase == com.hayeco.flipspaces.core.spatial.TouchPhase.DOWN) || sent is SpaceAction.LongPress) pressedApp(p)
         for (m in input.map(sent, p.width, p.height)) {
             if (m.startsGesture) p.downTime = SystemClock.uptimeMillis()
             val down = if (m.source == PanelMotion.SOURCE_MOUSE) 0L else p.downTime
@@ -3255,6 +3271,60 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                         problem = "${p.panel.label} closed on its panel; Reopen or Close it there."
                         askWhyClosed(p)
                         newer?.let { checkMovedTo(p, it.id) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** 1.1.15: the windows' apps and their last presses, for [com.hayeco.flipspaces.core.spatial.LaunchDisplay]. */
+    private fun windowApps(): List<com.hayeco.flipspaces.core.spatial.LaunchDisplay.WindowApp> = panels.values.mapNotNull { q ->
+        val d = (q.state as? PanelState.Showing)?.displayId ?: return@mapNotNull null
+        if (!q.panel.isApp || q.removed) return@mapNotNull null
+        com.hayeco.flipspaces.core.spatial.LaunchDisplay.WindowApp(d, q.panel.packageName, q.pressedMs)
+    }
+
+    /** 1.1.15: what is on the phone's screen, its stray tasks moved back ([keepAppsOnWindows]). */
+    private val strayTasks = com.hayeco.flipspaces.core.spatial.StrayTaskWatch(context.packageName)
+    private var strayCheckedMs = 0L
+    @Volatile private var strayPending = false
+
+    /**
+     * 1.1.15: a press on [p]'s app. The phone's tasks are read now, with the windows as they were before this press, so
+     * what the user has open on the phone is known before the press can start anything there.
+     */
+    private fun pressedApp(p: PanelGl) {
+        val before = windowApps()
+        p.pressedMs = SystemClock.uptimeMillis()
+        readPhoneTasks(before)
+    }
+
+    /**
+     * 1.1.15 (John Davis: Gmail's and Outlook's Compose opened on the phone, not in the window): while a window was pressed
+     * in the last [com.hayeco.flipspaces.core.spatial.LaunchDisplay.WINDOW_MS], the phone's tasks are read every
+     * [com.hayeco.flipspaces.core.spatial.LaunchDisplay.CHECK_MS], and a new task of that window's app is moved onto its
+     * display ([com.hayeco.flipspaces.core.spatial.StrayTaskWatch]).
+     */
+    private fun keepAppsOnWindows() {
+        val now = SystemClock.uptimeMillis()
+        if (now - strayCheckedMs < com.hayeco.flipspaces.core.spatial.LaunchDisplay.CHECK_MS) return
+        val windows = windowApps()
+        if (!com.hayeco.flipspaces.core.spatial.LaunchDisplay.watching(windows, now)) return
+        readPhoneTasks(windows)
+    }
+
+    private fun readPhoneTasks(windows: List<com.hayeco.flipspaces.core.spatial.LaunchDisplay.WindowApp>) {
+        if (strayPending || PanelHost.state.value != PanelHost.State.Ready) return
+        strayPending = true
+        strayCheckedMs = SystemClock.uptimeMillis()
+        PanelHost.rootTasks(com.hayeco.flipspaces.core.spatial.LaunchDisplay.PHONE_DISPLAY) { phone ->
+            onGl {
+                strayPending = false
+                if (phone == null) return@onGl
+                for (m in strayTasks.check(phone, windows, SystemClock.uptimeMillis())) {
+                    PanelHost.moveTask(m.taskId, m.displayId) { err ->
+                        Log.i(PANEL_TAG, com.hayeco.flipspaces.core.spatial.LaunchDisplay.moveLine(m, err))
+                        if (err == null) PanelHost.focus(m.displayId, "${m.packageName}'s new screen moved back from the phone")
                     }
                 }
             }
@@ -4059,7 +4129,20 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // Resize handle, shown when the pointer is over the panel or resizing it. 0.5.20: an L just
         // outside the bottom right corner, apart from the window like its other controls.
         // 0.5.69: in the secondary ink, the accent while pointed at or held.
-        if (hover != null || grabbed) {
+        // 1.1.15: Lock screens: no handle, and a small lock in its place says why the window will not move.
+        if (pointer.windowsLocked) {
+            if (hover != null) {
+                val l = WindowControls.layout(panel)
+                val size = l.heightM * 0.8f
+                val du = size / PanelCurve.arcWidthM(panel).coerceAtLeast(1e-4f)
+                val dv = size / panel.heightM.coerceAtLeast(1e-4f)
+                val off = l.heightM * 0.25f
+                val u0 = 1f + off / PanelCurve.arcWidthM(panel).coerceAtLeast(1e-4f)
+                val v0 = 1f + off / panel.heightM.coerceAtLeast(1e-4f)
+                p.lockIcon.set(IconTexture.Icon.LOCK, Color.TRANSPARENT, Look.INK_2)
+                drawOn(lift(PanelCurve.rect(panel, u0 - du / 2f, v0 - dv / 2f, u0 + du / 2f, v0 + dv / 2f), Look.DEPTH_CONTROLS), viewProj, p.lockIcon.id, windowAlpha)
+            }
+        } else if (hover != null || grabbed) {
             val cornerActive = hover?.zone == PanelZone.CORNER || grabZone == PanelZone.CORNER
             val rgba = look(if (cornerActive) Look.ACCENT else Look.INK_2, 1f)
             PanelCurve.cornerBracket(panel).forEach { colorOn(it, viewProj, rgba) }

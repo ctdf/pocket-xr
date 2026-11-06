@@ -664,8 +664,12 @@ interface PadHost {
     /** 1.1.9: the Menu's "How to use the trackpad" pages, for this device ([com.hayeco.flipspaces.core.pointer.IntroPages.trackpad]). */
     fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage>
 
-    /** 1.1.9: the glasses setup page for the glasses plugged in (else the last ones used), or null when they have none. */
-    fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage?
+    /**
+     * 1.1.9: the glasses setup page for the glasses plugged in (else the last ones used), or null when they have none.
+     * 1.1.16 (issue 12): the setup check ([GlassesCheckCard]) for any glasses known, opened by [openGlassesCheck].
+     */
+    fun glassesCheckAvailable(): Boolean
+    fun openGlassesCheck()
     fun padTouch(event: MotionEvent, width: Float, height: Float)
     fun backClicked()
     fun homeDown()
@@ -779,6 +783,10 @@ interface PadHost {
     fun warpNoLsrChosen(on: Boolean)
     fun warpReenterOn(): Boolean
     fun warpReenterChosen(on: Boolean)
+
+    /** 1.1.15: Lock screens ([com.hayeco.flipspaces.core.spatial.WindowLock]), from the Lock button and the Menu. */
+    fun windowsLockedOn(): Boolean = false
+    fun windowsLockedChosen(on: Boolean) {}
 
     /** 0.5.37: window snapping, a new instance for a running app, and the window presets. */
     fun snapWindowsOn(): Boolean
@@ -936,6 +944,71 @@ internal class CoverKey(
     companion object {
         /** 0.5.19: the thumb's travel along the key that makes a press a slide (about 2 mm on the cover). */
         const val SLIDE_DP = 12f
+    }
+}
+
+/**
+ * 1.1.15 (tester John Davis: a "lock screens" option): the Lock screens quick toggle beside the window keys, in their
+ * look ([CoverKey]): a 24 dp padlock over a 10 sp label, lit in the held colour while the screens are locked. At least
+ * 48 dp each way, and read by a screen reader as one switch with its state.
+ */
+@SuppressLint("ViewConstructor")
+internal class LockKey(context: Context, private val onToggle: () -> Unit) : LinearLayout(context) {
+    private val icon = ImageView(context).apply { setImageResource(R.drawable.ic_cover_lock_open) }
+    private val label = TextView(context).apply {
+        text = com.hayeco.flipspaces.core.spatial.WindowLock.SHORT_LABEL
+        setTextColor(TEXT_B3)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, CoverLayoutMath.LABEL_SP)
+        includeFontPadding = false
+        maxLines = 1
+        gravity = Gravity.CENTER
+        setAutoSizeTextTypeUniformWithConfiguration(8, CoverLayoutMath.LABEL_SP.toInt(), 1, TypedValue.COMPLEX_UNIT_SP)
+    }
+
+    init {
+        orientation = VERTICAL
+        gravity = Gravity.CENTER
+        setBackgroundResource(R.drawable.bg_cover_button)
+        val p = context.dp(CoverLayoutMath.LABEL_PAD)
+        setPadding(p, 0, p, 0)
+        minimumWidth = context.dp(MIN_DP)
+        minimumHeight = context.dp(MIN_DP)
+        addView(icon, LayoutParams(context.dp(24f), context.dp(24f)))
+        addView(label, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(14f)).apply { topMargin = context.dp(4f) })
+        isClickable = true
+        isFocusable = true
+        for (i in 0 until childCount) getChildAt(i).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Switch::class.java.name
+                info.isCheckable = true
+                // Android 16's setChecked(int) is not on the older releases Pocket XR runs on.
+                @Suppress("DEPRECATION")
+                info.isChecked = locked
+            }
+        }
+        contentDescription = com.hayeco.flipspaces.core.spatial.WindowLock.description(false)
+        setOnClickListener { onToggle() }
+    }
+
+    var locked = false
+        set(value) {
+            if (field == value) return
+            field = value
+            setBackgroundResource(if (value) R.drawable.bg_cover_button_on else R.drawable.bg_cover_button)
+            icon.setImageResource(if (value) R.drawable.ic_cover_lock else R.drawable.ic_cover_lock_open)
+            label.text = if (value) com.hayeco.flipspaces.core.spatial.WindowLock.SHORT_LABEL_ON else com.hayeco.flipspaces.core.spatial.WindowLock.SHORT_LABEL
+            label.setTextColor(if (value) WHITE else TEXT_B3)
+            contentDescription = com.hayeco.flipspaces.core.spatial.WindowLock.description(value)
+        }
+
+    companion object {
+        /** The smallest the toggle is drawn, each way (Android's touch target). */
+        const val MIN_DP = 48f
+
+        /** The Menu's Lock screens row's tag (the tests). */
+        const val MENU_TAG = "menu:lock-screens"
     }
 }
 
@@ -1225,6 +1298,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
      */
     private val curveKey = CoverKey(context, CoverButton.CURVE, coverIcon(CoverButton.CURVE), { down -> host.coverButton(CoverButton.CURVE, down) }, host::curveSlide)
 
+    /** 1.1.15: Lock screens' quick toggle: last in the window keys' row in portrait, left of Keyboard in landscape. */
+    private val lockKey = LockKey(context) {
+        host.windowsLockedChosen(!host.windowsLockedOn())
+        refreshCover()
+        if (drawerOpen) buildDrawer()
+    }
+
     /**
      * 0.5.106 (Mike: "On the opened flip trackpad, there also needs to be a keyboard button so think about how to redesign the
      * trackpad to include more needed buttons like how the cover screen has"): the cover's keys on the open phone. Portrait:
@@ -1289,6 +1369,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         listOf(pad, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
         mainKeys.values.forEach { addView(it) }
         coverKeys.values.forEach { addView(it) }
+        addView(lockKey)
         listOf(textBar, mask, popup, intro, dialog, drawerScrim, drawer, toast, lock).forEach { addView(it) }
         pressable(barBack, barBackIcon, R.drawable.ic_back, R.drawable.ic_back_pressed, R.drawable.left_black_gradient_bg_pressed, isHome = false)
         pressable(barHome, barHomeIcon, R.drawable.ic_home_new, R.drawable.ic_home_new_pressed, R.drawable.right_black_gradient_bg_pressed, isHome = true)
@@ -1368,6 +1449,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             k.visibility = if (shown) View.VISIBLE else View.GONE
         }
         coverKeys.values.forEach { it.visibility = if (cover && !textOpen) View.VISIBLE else View.GONE }
+        // 1.1.15: Lock screens' toggle on the open phone; the cover reaches it from its Menu.
+        lockKey.visibility = if (cover) View.GONE else View.VISIBLE
         if (!cover && textOpen) showText(false)
         refreshCover()
         // 0.5.74 (Mike: the cover's Spatial Mouse pill "gets left over on the flipped open trackpad at the very top of the
@@ -1383,6 +1466,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     /** 0.5.17 cover screen: Move or Resize lit while it holds a window. 0.5.19: Curve too, on both screens. */
     fun refreshCover() {
         val hold = host.windowHold()
+        lockKey.locked = host.windowsLockedOn()
         curveKey.lit = hold == WindowAction.CURVE
         mainKeys[CoverButton.MOVE]?.lit = hold == WindowAction.MOVE
         mainKeys[CoverButton.RESIZE]?.lit = hold == WindowAction.RESIZE
@@ -1511,6 +1595,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             put(curveKey, kx, ky, dp(70f), dp(54f))
             mainKeys[CoverButton.KEYBOARD]?.let { put(it, kx - dp(8f) - dp(70f), ky, dp(70f), dp(54f)) }
             mainKeys[CoverButton.RECENTRE]?.let { put(it, kx + dp(70f) + dp(8f), ky, dp(70f), dp(54f)) }
+            // 1.1.15: Lock screens left of Keyboard.
+            put(lockKey, kx - 2 * (dp(8f) + dp(70f)), ky, dp(70f), dp(54f))
             // 1.1.8 (issue 33): Spatial Mouse's recentre tip over the keys, on a landscape handheld.
             if (laserTip.visibility == View.VISIBLE) wrap(laserTip, w).let { (tw, th) -> put(laserTip, (w - tw) / 2, ky - dp(8f) - th, tw, th) }
         } else {
@@ -1535,8 +1621,9 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             // 0.5.106: Move, Resize, Further, Closer and Curve in a row over the bar, the bar's width, 8 dp apart.
             val rowH = dp(60f)
             val rowTop = barTop - dp(10f) - rowH
-            val keys = mainRow.mapNotNull { mainKeys[it] } + curveKey
-            val kGap = dp(8f)
+            // 1.1.15: and Lock screens at the row's end; the gaps narrow on a small screen so every key keeps 48 dp.
+            val keys = mainRow.mapNotNull { mainKeys[it] } + curveKey + lockKey
+            val kGap = if (w - dp(40f) - dp(8f) * (keys.size - 1) >= dp(LockKey.MIN_DP) * keys.size) dp(8f) else dp(4f)
             val kw = (w - dp(40f) - kGap * (keys.size - 1)) / keys.size
             keys.forEachIndexed { i, k -> put(k, dp(20f) + i * (kw + kGap), rowTop, kw, rowH) }
             val padTop = selectorBottom + dp(34f)
@@ -1782,13 +1869,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // (Mike: "put Pocket XR Settings back where it was, i dont like it as its own tile"): back in this card.
         functions.addView(c.divider(20f))
         functions.addView(row(R.drawable.ic_settings_sliders, "Pocket XR Settings") { host.openSettings() })
-        // 1.1.9 (issue 31): the glasses' own settings the Space needs, the same page as at first run; only for glasses that have one.
-        host.glassesSetupPage()?.let { page ->
+        // 1.1.9 (issue 31): the glasses' own settings the Space needs. 1.1.16 (issue 12): with the head turn check, for
+        // any glasses known (plugged in or last used), at any time.
+        if (host.glassesCheckAvailable()) {
             functions.addView(c.divider(20f))
-            functions.addView(row(R.drawable.ic_usage_intro, "Glasses setup") {
+            functions.addView(row(R.drawable.ic_usage_intro, GLASSES_CHECK_ROW, subtitle = "The settings your glasses need, and a 10 second check") {
                 closeDrawer()
-                showIntro(listOf(page))
-            })
+                host.openGlassesCheck()
+            }.apply { tag = MENU_GLASSES_CHECK })
         }
         // 0.5.102 (Mike): the Glasses report moved to Advanced on the settings home.
         functions.addView(c.divider(20f))
@@ -1915,6 +2003,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 buildDrawer()
             })
         }
+        // 1.1.15 (John Davis: a "lock screens" option): Lock screens, also the Lock button by the window keys.
+        space.addView(c.divider(20f))
+        val lockedOn = host.windowsLockedOn()
+        space.addView(row(R.drawable.ic_cover_lock, com.hayeco.flipspaces.core.spatial.WindowLock.rowLabel(lockedOn), tick = lockedOn, subtitle = com.hayeco.flipspaces.core.spatial.WindowLock.SUBTITLE) {
+            host.windowsLockedChosen(!lockedOn)
+            refreshCover()
+            buildDrawer()
+        }.apply { tag = LockKey.MENU_TAG })
         // 0.5.37 (Mike: a setting for window snapping; the "Open a new instance" switch in the Menu). 1.1.10: its subtitle
         // says what it is for, as a window whose app moved away names it.
         space.addView(c.divider(20f))
@@ -2392,8 +2488,26 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         requestLayout()
     }
 
+    /**
+     * 1.1.16 (issue 12): the glasses setup check ([GlassesCheckCard], built by the activity) in the tutorial's frame. It
+     * closes itself through [closeIntro].
+     */
+    fun showGlassesCheck(build: (close: () -> Unit) -> View) {
+        closePopup()
+        intro.removeAllViews()
+        intro.background = null
+        intro.addView(build { closeIntro() }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        mask.visibility = View.VISIBLE
+        intro.visibility = View.VISIBLE
+        requestLayout()
+    }
+
+    /** 1.1.16: the glasses check open now, or null (the tests). */
+    internal val glassesCheck: GlassesCheckCard? get() = intro.getChildAt(0) as? GlassesCheckCard
+
     private fun closeIntro() {
         intro.visibility = View.GONE
+        intro.removeAllViews()
         if (dialog.visibility != View.VISIBLE && popup.visibility != View.VISIBLE) mask.visibility = View.GONE
     }
 
@@ -2586,7 +2700,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     fun closeTop(): Boolean = when {
         textOpen -> { showText(false); true }
         dialog.visibility == View.VISIBLE -> { closeDialog(); true }
-        intro.visibility == View.VISIBLE -> { closeIntro(); true }
+        intro.visibility == View.VISIBLE -> { glassesCheck?.skip() ?: closeIntro(); true }
         popup.visibility == View.VISIBLE -> { closePopup(); true }
         drawer.visibility == View.VISIBLE -> { closeDrawer(); true }
         else -> false
@@ -2599,6 +2713,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         /** 1.1.15: the Menu's Ko-fi pill and update row ([menuRowTags]). */
         const val MENU_KO_FI = "menu:ko-fi"
         const val MENU_UPDATE = "menu:update"
+        const val MENU_GLASSES_CHECK = "menu:glasses-check"
+        const val GLASSES_CHECK_ROW = "Glasses setup check"
 
         /** 0.5.28: a toast with a one-tap action stays this long. */
         const val ACTION_TOAST_MS = 5000L

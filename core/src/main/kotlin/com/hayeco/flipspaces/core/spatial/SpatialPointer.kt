@@ -205,6 +205,12 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     }
     private data class Moving(val panelId: Int, val dYaw: Float, val dPitch: Float) : Grab
     private data class Resizing(val panelId: Int) : Grab
+
+    /**
+     * 1.1.15: a press on the resize handle, not yet a resize ([CornerDrag]): the press's ray [dir], when it went down, and
+     * where it clicks the app ([u], [v]; [touched] when a touch went down there).
+     */
+    private data class CornerPress(val panelId: Int, val dir: Vec3, val sinceMs: Long, val u: Float, val v: Float, val touched: Boolean) : Grab
     private data class Scaling(val panelId: Int, val start: SpacePanel) : Grab
     private data class Scrolling(val panelId: Int, val u: Float, val v: Float, val pxW: Int, val pxH: Int) : Grab
     private data class Turning(var lastDx: Float) : Grab
@@ -439,7 +445,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     val heldPanelId: Int? get() = (main.grab as? Holding)?.panelId
 
     /** 0.5.17: the main pointer holds a press down (the long press, a corner drag): the reticle's press scale. */
-    val pressing: Boolean get() = main.grab is Touching || main.grab is Resizing
+    val pressing: Boolean get() = main.grab is Touching || main.grab is Resizing || main.grab is CornerPress
 
     /** 0.5.17: the title bar's alpha for [panelId] now ([BarFade]). */
     fun barAlpha(panelId: Int): Float = bars.alpha(panelId, clockMs)
@@ -454,6 +460,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
         is Touching -> g.panelId
         is Moving -> g.panelId
         is Resizing -> g.panelId
+        is CornerPress -> g.panelId
         is Scaling -> g.panelId
         is Scrolling -> g.panelId
         is Wheeling -> g.panelId
@@ -594,6 +601,35 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     /** 0.5.37: the window the held one last snapped to, for one buzz a snap. */
     private var snappedTo: Int? = null
 
+    /** 1.1.15: Lock screens ([WindowLock]): no window moves or resizes from the pointer. Set with [lockWindows]. */
+    var windowsLocked = false
+        private set
+
+    /**
+     * 1.1.15: Lock screens on or off. Turning it on lets go of any window being moved, resized or held where it is now (a
+     * resize handle press still waiting to be a drag stays a click), and of every window held together.
+     */
+    fun lockWindows(locked: Boolean, layout: SpaceLayout): List<SpaceAction> {
+        val out = mutableListOf<SpaceAction>()
+        if (locked == windowsLocked) return out
+        windowsLocked = locked
+        if (locked) {
+            allHold?.let { allEnd(it, layout, out, cancel = false) }
+            for (a in listOf(main) + hands.values) {
+                if (a.grab is Moving || a.grab is Resizing || a.grab is Scaling || a.grab is Holding || a.grab is Stretching) release(a, latest(layout, out), out, cancel = false)
+            }
+            tweens.clear()
+        }
+        out += SpaceAction.Note("Lock screens ${if (locked) "on: windows stay where they are" else "off: windows move and resize again"}")
+        return out
+    }
+
+    /** 1.1.15: the notice for a move or resize tried while locked. */
+    private fun lockedNotice(out: MutableList<SpaceAction>, what: String) {
+        out += SpaceAction.Notice(WindowLock.NOTICE)
+        out += SpaceAction.Note("$what: Lock screens is on, nothing moved")
+    }
+
     /** 0.5.36: with [cursorFollowsHead] off, the trackpad cursor's head relative aim fixed in the room as it is now. */
     private fun anchorIfFixed(head: Quat) {
         if (cursorFollowsHead || padMode == PadMode.SPATIAL_MOUSE) return
@@ -694,6 +730,10 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     fun arrange(kind: ArrangeKind, layout: SpaceLayout, mainId: Int?): List<SpaceAction> {
         if (kind == ArrangeKind.ADJUST_ALL) return holdAll(layout)
         val out = mutableListOf<SpaceAction>()
+        if (windowsLocked) {
+            lockedNotice(out, kind.label)
+            return out
+        }
         if (main.grab is Holding) release(main, layout, out, cancel = false)
         val l = latest(layout, out)
         val headYaw = Angles.of(lastHead.forward).yawDeg
@@ -740,6 +780,11 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     fun holdAll(layout: SpaceLayout, byHands: Boolean = false): List<SpaceAction> {
         val out = mutableListOf<SpaceAction>()
         allHold?.let { allEnd(it, layout, out, cancel = false) }
+        // 1.1.15: Lock screens: nothing is held; both hands up says nothing (they may only be resting).
+        if (windowsLocked) {
+            if (!byHands) lockedNotice(out, "Adjust all")
+            return out
+        }
         if (layout.panels.isEmpty()) {
             if (!byHands) out += SpaceAction.Notice("Open a window first.")
             return out
@@ -1197,6 +1242,10 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
 
     /** 0.5.19: a slide along a Curve button: the window held to curve, else the one under the cursor (each step saved). */
     private fun curveSlide(s: PadSignal.Curve, held: Holding?, head: Quat, layout: SpaceLayout, out: MutableList<SpaceAction>) {
+        if (windowsLocked) {
+            if (s.phase == Phase.BEGIN) lockedNotice(out, "Curve button slide")
+            return
+        }
         if (s.phase != Phase.UPDATE || s.delta == 0f) {
             if (s.phase == Phase.BEGIN) {
                 slideRaw = null
@@ -1231,6 +1280,8 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
      * the cursor, by [CoverWindowStep] without picking it up.
      */
     private fun window(s: PadSignal.Window, held: Holding?, head: Quat, layout: SpaceLayout, out: MutableList<SpaceAction>) {
+        // 1.1.15: Lock screens: the window buttons pick nothing up and step nothing.
+        if (windowsLocked) return lockedNotice(out, "${s.action.name.lowercase()} window button")
         when (s.action) {
             WindowAction.MOVE, WindowAction.RESIZE, WindowAction.CURVE -> {
                 val adjust = s.action == WindowAction.RESIZE
@@ -1746,7 +1797,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
 
     /** The frontmost panel along [ray], or null when the launcher is in front of it. */
     private fun panelHit(ray: Ray, layout: SpaceLayout, marginDeg: Float = 0f): PanelHit? =
-        if (underLauncher(ray)) null else PanelHitTester.nearest(ray, if (hiddenPanels.isEmpty()) layout.panels else layout.panels.filter { it.id !in hiddenPanels }, marginDeg)
+        if (underLauncher(ray)) null else WindowLock.view(PanelHitTester.nearest(ray, if (hiddenPanels.isEmpty()) layout.panels else layout.panels.filter { it.id !in hiddenPanels }, marginDeg), windowsLocked)
 
     /** 0.5.37: windows that take no presses now (the others while one is Immersive). */
     @Volatile var hiddenPanels: Set<Int> = emptySet()
@@ -1757,6 +1808,8 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
      * apart the two rays point now over at the start.
      */
     private fun startStretch(a: Aim, head: Quat, layout: SpaceLayout, out: MutableList<SpaceAction>): Boolean {
+        // 1.1.15: Lock screens: the second hand's pinch is a press of its own, never a stretch.
+        if (windowsLocked) return false
         val hand = a.hand ?: return false
         val other = hands.entries.firstOrNull { it.key != hand }?.value ?: return false
         val held = grabbedPanelId(other) ?: return false
@@ -1803,7 +1856,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
             out += SpaceAction.Claimed(ray, a.hand)
             return
         }
-        val hit = PanelHitTester.nearest(ray, layout.panels, settings.pressMarginDeg)
+        val hit = WindowLock.view(PanelHitTester.nearest(ray, layout.panels, settings.pressMarginDeg), windowsLocked)
         out += SpaceAction.Pressed(PressReport.of(ray, hit, layout.panels))
         if (hit == null) return
         // The pointer that pressed is the one whose hover the apps get from now on.
@@ -1829,8 +1882,12 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                     }
                 }
             }
-            // 0.5.17: the trackpad picks the window up, with a 1 ms buzz.
-            PanelZone.TITLE_BAR -> if (pad && a === main) {
+            // 1.1.15: Lock screens: the Move pill moves nothing (the grab band was taken out above).
+            PanelZone.TITLE_BAR -> if (windowsLocked) {
+                lockedNotice(out, "window ${hit.panel.id} ${hit.panel.label}'s Move pill")
+                Button
+            } else if (pad && a === main) {
+                // 0.5.17: the trackpad picks the window up, with a 1 ms buzz.
                 tweens.remove(hit.panel.id)
                 out += SpaceAction.Haptic(PadHaptic.PICKUP)
                 out += SpaceAction.Note("window ${hit.panel.id} ${hit.panel.label} picked up from the trackpad")
@@ -1843,7 +1900,15 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                 val angles = Angles.of(ray.dir)
                 Moving(hit.panel.id, wrapDegrees(hit.panel.yawDeg - angles.yawDeg), hit.panel.pitchDeg - angles.pitchDeg)
             }
-            PanelZone.CORNER -> Resizing(hit.panel.id)
+            // 1.1.15: the handle waits for a clear drag ([CornerDrag]); until then the press is a click on the app there.
+            PanelZone.CORNER -> {
+                val click = CornerDrag.clickAt(hit.u, hit.v, PanelHitTester.FRAME_INSET_DEG / hit.panel.widthDeg, PanelHitTester.FRAME_INSET_DEG / hit.panel.heightDeg)
+                if (click != null) {
+                    liftThrow(hit.panel.id, out)
+                    out += SpaceAction.Touch(hit.panel.id, TouchPhase.DOWN, click.first, click.second)
+                }
+                CornerPress(hit.panel.id, ray.dir.normalized(), clockMs, click?.first ?: hit.u, click?.second ?: hit.v, touched = click != null)
+            }
             PanelZone.BACK -> {
                 out += SpaceAction.Back(hit.panel.id)
                 Button
@@ -1857,7 +1922,10 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                 Button
             }
             // 0.5.17: the window's Reset (in front, 0.2 m below the eyes, a 0.5 s tween) and Close.
-            PanelZone.RESET -> {
+            PanelZone.RESET -> if (windowsLocked) {
+                lockedNotice(out, "window ${hit.panel.id} ${hit.panel.label}'s Reset")
+                Button
+            } else {
                 val p = latest(layout, out).panel(hit.panel.id) ?: hit.panel
                 tweens[p.id] = PanelTween(p, PadWindowMath.resetPose(p, Angles.of(lastHead.forward).yawDeg), clockMs)
                 out += SpaceAction.Note("window ${p.id} ${p.label} reset in front")
@@ -1978,6 +2046,20 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                 val moved = SpaceLayout.moveTo(panel, Vec3.direction(angles.yawDeg + g.dYaw, (angles.pitchDeg + g.dPitch).coerceIn(-89f, 89f)))
                 if (moved != panel) out += SpaceAction.Layout(layout.replace(moved), commit = false)
                 a.hover = null
+            }
+            // 1.1.15: a press on the handle turns into a resize once held and dragged far enough ([CornerDrag]); the app's
+            // touch under it is cancelled then. Until then nothing moves, and the app's button under it keeps its press.
+            is CornerPress -> {
+                val panel = layout.panel(g.panelId) ?: return
+                val moved = angleDeg(g.dir, ray.dir.normalized())
+                if (windowsLocked || !CornerDrag.starts(clockMs - g.sinceMs, moved)) {
+                    a.hover = PanelHitTester.hit(ray, panel)
+                    return
+                }
+                if (g.touched) out += SpaceAction.Touch(g.panelId, TouchPhase.CANCEL, g.u, g.v)
+                out += SpaceAction.Note("window ${panel.id} ${panel.label}: resize handle dragged %.1f deg after %d ms, resizing".fmt(moved, clockMs - g.sinceMs))
+                a.grab = Resizing(g.panelId)
+                follow(a, ray, layout, out)
             }
             is Resizing -> {
                 val panel = layout.panel(g.panelId) ?: return
@@ -2160,6 +2242,8 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
     private fun release(a: Aim, layout: SpaceLayout, out: MutableList<SpaceAction>, cancel: Boolean) {
         when (val g = a.grab) {
             is Touching -> out += SpaceAction.Touch(g.panelId, if (cancel) TouchPhase.CANCEL else TouchPhase.UP, g.u, g.v)
+            // 1.1.15: a handle press let go before it was a drag: the click on the app ends where it went down.
+            is CornerPress -> if (g.touched) out += SpaceAction.Touch(g.panelId, if (cancel) TouchPhase.CANCEL else TouchPhase.UP, g.u, g.v)
             is Moving, is Resizing, is Scaling -> {
                 val latest = out.filterIsInstance<SpaceAction.Layout>().lastOrNull()?.layout ?: layout
                 out += SpaceAction.Layout(latest, commit = true)
@@ -2283,6 +2367,8 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
                     out += SpaceAction.Zoom(hit.panel.id, hit.u, hit.v, s.factor, Phase.BEGIN)
                     return
                 }
+                // 1.1.15: Lock screens: a two hand pinch does not scale the window.
+                if (windowsLocked) return lockedNotice(out, "window ${hit.panel.id} ${hit.panel.label} scale")
                 a.grab = Scaling(hit.panel.id, hit.panel)
             }
             Phase.UPDATE, Phase.END -> {

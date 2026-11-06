@@ -150,8 +150,8 @@ class SendLogs1114Test {
         assertTrue(all.contains("fe80::1c2b:3cff:fe4d:5e6f%ncm0"))
         assertTrue(all.contains("type=com.google"))
         assertTrue(all.contains("joined <wifi>"))
-        assertTrue(all.contains("playing on <bluetooth>"))
-        assertTrue(all.contains("device name=<bluetooth>, bonded"))
+        assertTrue(Regex("playing on <bt-device-\\d+>").containsMatchIn(all))
+        assertTrue(Regex("device name=<bt-device-\\d+>, bonded").containsMatchIn(all))
     }
 
     /** The folder [SendLogs] reads when the app's own log writer has not started (as here). */

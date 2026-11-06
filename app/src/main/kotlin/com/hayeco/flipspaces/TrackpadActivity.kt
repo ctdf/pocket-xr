@@ -205,11 +205,15 @@ class TrackpadActivity : Activity(), PadHost {
         // First open: the usage instructions, as the drawer shows them at any time.
         // 0.5.17 cover screen: not over a trackpad that opened by itself (the glasses plugged in folded).
         // 1.1.9: the plugged-in glasses' setup first when they have one (issue 31), and Spatial Mouse for this device (issue 33).
+        // 1.1.16 (issue 12): the glasses' setup is the setup check now, which opens by itself once the tutorial closes.
         if (!prefs.introShown && !intent.getBooleanExtra(EXTRA_AUTO, false)) {
             prefs.introShown = true
-            val plugged = pluggedGlasses()
-            plugged?.let { glassesSeen(it) }
-            screen.showIntro(com.hayeco.flipspaces.core.pointer.IntroPages.firstRun(plugged, prefs.landscapeDevice, rotation != null, settings.oneFingerScroll))
+            screen.showIntro(com.hayeco.flipspaces.core.pointer.IntroPages.firstRun(prefs.landscapeDevice, rotation != null, settings.oneFingerScroll))
+        }
+        // 1.1.16: Settings' "Glasses setup check" row.
+        if (intent?.getBooleanExtra(EXTRA_GLASSES_CHECK, false) == true) {
+            intent.removeExtra(EXTRA_GLASSES_CHECK)
+            if (!cover) openGlassesCheck()
         }
     }
 
@@ -897,24 +901,70 @@ class TrackpadActivity : Activity(), PadHost {
 
     private val spaceStore by lazy { com.hayeco.flipspaces.spatial.SpaceStore(this) }
 
-    /** The XREAL glasses on USB now ([com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged]), or null when none are. */
-    private fun pluggedGlasses(): com.hayeco.flipspaces.core.spatial.GlassesModel? = runCatching {
+    /** The XREAL glasses on USB now: the model ([com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged]) and the USB device. */
+    private class Plugged(val model: com.hayeco.flipspaces.core.spatial.GlassesModel, val productId: Int, val line: String)
+
+    private fun plugged(): Plugged? = runCatching {
         val usb = getSystemService(android.hardware.usb.UsbManager::class.java)
-        val d = usb?.deviceList?.values?.firstOrNull { com.hayeco.flipspaces.core.hands.GlassesUsb.isXreal(it.vendorId) }
-        com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged(d?.productId, d?.productName)
+        val d = usb?.deviceList?.values?.firstOrNull { com.hayeco.flipspaces.core.hands.GlassesUsb.isXreal(it.vendorId) } ?: return@runCatching null
+        val model = com.hayeco.flipspaces.core.spatial.GlassesSetup.plugged(d.productId, d.productName) ?: return@runCatching null
+        // How they were recognised: the name, the USB ids and the device's version (its firmware's, as USB reports it).
+        val line = "Seen as ${d.productName?.trim()?.ifEmpty { null } ?: model.label}, USB %04X:%04X%s".format(
+            java.util.Locale.ROOT, d.vendorId, d.productId, runCatching { d.version }.getOrNull()?.takeIf { it.isNotBlank() }?.let { ", version $it" } ?: "",
+        )
+        Plugged(model, d.productId, line)
     }.getOrNull()
 
     override fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage> =
         com.hayeco.flipspaces.core.pointer.IntroPages.trackpad(prefs.landscapeDevice, rotation != null, settings.oneFingerScroll)
 
-    /** The glasses plugged in, else the ones the Space last ran on (the model from their display's EDID). */
-    override fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage? =
-        com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(pluggedGlasses() ?: spaceStore.model)
+    /**
+     * 1.1.16: this device as the setup check sees it ([com.hayeco.flipspaces.core.spatial.SetupHost.detect]): a Beam Pro,
+     * and XREAL's apps among the launchable ones (the manifest's launcher query lets them be seen).
+     */
+    private val setupHost by lazy {
+        val installed = runCatching {
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            packageManager.queryIntentActivities(launcher, 0).associate { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }
+        }.getOrDefault(emptyMap())
+        com.hayeco.flipspaces.core.spatial.SetupHost.detect(Build.MANUFACTURER, Build.BRAND, Build.MODEL, installed).also {
+            Log.i(TAG, "setup host: ${Build.MANUFACTURER} ${Build.MODEL}, Beam Pro ${it.beamPro}, XREAL apps ${it.xrealApps.ifEmpty { listOf("none") }}")
+        }
+    }
 
-    /** The glasses setup page of [model] was shown, or it has none: it is not shown again when they are plugged in. */
-    private fun glassesSeen(model: com.hayeco.flipspaces.core.spatial.GlassesModel) {
-        val seen = prefs.glassesSetupSeen
-        if (model.key !in seen) prefs.glassesSetupSeen = seen + model.key
+    /** The glasses plugged in, else the ones the Space last ran on (the model from their display's EDID). */
+    private fun checkTarget(): Pair<com.hayeco.flipspaces.core.spatial.GlassesModel, Plugged?>? {
+        val p = plugged()
+        val model = p?.model ?: spaceStore.model.takeIf { it != com.hayeco.flipspaces.core.spatial.GlassesModel.UNKNOWN } ?: return null
+        return model to p
+    }
+
+    override fun glassesCheckAvailable(): Boolean = checkTarget() != null
+
+    override fun openGlassesCheck() {
+        val (model, p) = checkTarget() ?: run {
+            screen.showToast("Plug in your glasses first.")
+            return
+        }
+        openGlassesCheck(model, p, "the Menu")
+    }
+
+    private fun openGlassesCheck(model: com.hayeco.flipspaces.core.spatial.GlassesModel, p: Plugged?, from: String) {
+        val host = setupHost
+        val page = com.hayeco.flipspaces.core.spatial.GlassesSetup.page(model, host, p?.productId)
+        checkShownThisRun += model.key
+        Log.i(TAG, "glasses check opened from $from: ${model.label} (${page.family}), ${page.steps.size} steps, ${page.hostNotes.size} host notes")
+        val checkHost = object : GlassesCheckHost {
+            override fun headYawDeg(): Float? = if (SpaceSession.active) SpaceSession.aim?.head?.yawPitchRoll()?.first else null
+            override fun follow() = SpaceSession.follow
+            override fun checkFinished(result: com.hayeco.flipspaces.core.spatial.GlassesCheck.CheckResult?) {
+                val states = prefs.glassesCheck
+                val next = com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.after(states[model.key], result)
+                prefs.glassesCheck = states + (model.key to next)
+                Log.i(TAG, "glasses check for ${model.label}: ${result?.let { if (it.passed) "passed" else "failed (${it.fix})" } ?: "skipped"}; now $next")
+            }
+        }
+        screen.showGlassesCheck { close -> GlassesCheckCard(this, page, p?.line, host, checkHost, close) }
     }
 
     private var glassesCheckedMs = 0L
@@ -923,33 +973,33 @@ class TrackpadActivity : Activity(), PadHost {
      * 1.1.9, once a second from [ticker]: (issue 31) a glasses model plugged in for the first time shows its setup page
      * by itself, and glasses that are likely in their own Anchor mode get a card with one tap to that page. Never over
      * another card or the Menu, and not on the cover screen, so the page waits for the open phone.
+     * 1.1.16 (issue 12): the setup check instead of the page, with what applies to this host too; once passed or skipped
+     * it never opens by itself, and once passed the Anchor card is not shown either.
      */
     private fun checkGlassesSetup(now: Long) {
         if (now - glassesCheckedMs < GLASSES_CHECK_MS) return
         glassesCheckedMs = now
         if (cover || screen.introOpen || screen.dialogOpen || screen.drawerOpen) return
-        val plugged = pluggedGlasses()
-        if (plugged != null && plugged.key !in prefs.glassesSetupSeen) {
-            val page = com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(plugged)
-            glassesSeen(plugged)
-            if (page != null) {
-                Log.i(TAG, "glasses setup page shown: ${plugged.label} plugged in for the first time here")
-                screen.showIntro(listOf(page))
+        val p = plugged()
+        if (p != null) {
+            val hasAdvice = com.hayeco.flipspaces.core.spatial.GlassesSetup.page(p.model, setupHost, p.productId).hasAdvice
+            if (com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.showOnConnect(p.model.key, hasAdvice, prefs.glassesCheck, checkShownThisRun)) {
+                openGlassesCheck(p.model, p, "${p.model.label} connected (not passed here yet)")
                 return
             }
         }
         if (anchorAskedThisRun || !SpaceSession.active) return
         val model = spaceStore.model
+        if (!com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.anchorCardAllowed(model.key, prefs.glassesCheck)) return
         val duty = com.hayeco.flipspaces.spatial.GlassesDisplayControl.glassesDuty
         if (!com.hayeco.flipspaces.core.spatial.GlassesSetup.anchorLikely(model, duty, com.hayeco.flipspaces.spatial.GlassesDisplayControl.dutyOurs)) return
         anchorAskedThisRun = true
-        val page = com.hayeco.flipspaces.core.pointer.IntroPages.glassesSetup(model) ?: return
         Log.i(TAG, "${model.label} answered a duty of $duty % (their world lock range, at most ${com.hayeco.flipspaces.core.spatial.GlassesSetup.WORLD_LOCK_DUTY_MAX} %): likely in their own Anchor mode; card shown")
         screen.showDialog(
             com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD,
             ok = com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD_OK,
             cancel = com.hayeco.flipspaces.core.spatial.GlassesSetup.ANCHOR_CARD_LATER,
-        ) { screen.showIntro(listOf(page)) }
+        ) { openGlassesCheck(model, plugged(), "the Anchor card") }
     }
 
     override fun followChosen(mode: FollowMode) {
@@ -1207,6 +1257,15 @@ class TrackpadActivity : Activity(), PadHost {
         com.hayeco.flipspaces.spatial.SpaceStore(this).warpReenter = on
         Log.i(TAG, "glasses warp back in after a drop: ${if (on) "on" else "off"} (Developer; applied at the next switch on)")
         screen.showToast(if (on) "Warp goes back in after a drop." else "Warp pauses at the first drop.")
+    }
+
+    override fun windowsLockedOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).windowsLocked
+
+    override fun windowsLockedChosen(on: Boolean) {
+        com.hayeco.flipspaces.spatial.SpaceStore(this).windowsLocked = on
+        Log.i(TAG, "Lock screens: ${if (on) "on" else "off"} (the trackpad)")
+        if (on) buzz(PadHaptic.COVER_BUTTON)
+        screen.showToast(if (on) "Screens locked" else "Screens unlocked")
     }
 
     override fun snapWindowsOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).snapWindows
@@ -1700,6 +1759,9 @@ class TrackpadActivity : Activity(), PadHost {
         /** 0.5.101: open with the Menu out (Settings' Trackpad row). */
         const val EXTRA_MENU = "com.hayeco.flipspaces.extra.TRACKPAD_MENU"
 
+        /** 1.1.16: open with the glasses setup check (Settings' "Glasses setup check"). */
+        const val EXTRA_GLASSES_CHECK = "com.hayeco.flipspaces.extra.GLASSES_CHECK"
+
         /** 1.1.15: the notification permission's ask, with the first update banner. */
         private const val REQUEST_NOTIFICATIONS = 1115
 
@@ -1708,6 +1770,9 @@ class TrackpadActivity : Activity(), PadHost {
 
         /** 1.1.9: the Anchor card was offered in this run of the app (the trackpad may open more than once). */
         @Volatile private var anchorAskedThisRun = false
+
+        /** 1.1.16: models whose glasses check opened in this run of the app, so a failed one is asked again only on the next. */
+        private val checkShownThisRun: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     }
 }
 

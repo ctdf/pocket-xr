@@ -37,14 +37,15 @@ class LogBundle1114Test {
     @Test
     fun bluetoothDeviceNamesAreTakenOut() {
         assertEquals(
-            "I FlipSpacesConnections: BtDevice(address=<mac>, name=<bluetooth>, connected=true)",
+            "I FlipSpacesConnections: BtDevice(address=<mac>, name=<bt-device-1>, connected=true)",
             LogScrub.line("I FlipSpacesConnections: BtDevice(address=AA:BB:CC:DD:EE:FF, name=Jordan's Buds, connected=true)"),
         )
-        assertEquals("Bluetooth: connected to \"<bluetooth>\"", LogScrub.line("Bluetooth: connected to \"Jordan's Buds\""))
-        assertEquals("bluetooth alias: <bluetooth> address=<mac>", LogScrub.line("bluetooth alias: Jordan's Buds address=00:11:22:33:44:55"))
+        assertEquals("Bluetooth: connected to \"<bt-device-1>\"", LogScrub.line("Bluetooth: connected to \"Jordan's Buds\""))
+        assertEquals("bluetooth alias: <bt-device-1> address=<mac>", LogScrub.line("bluetooth alias: Jordan's Buds address=00:11:22:33:44:55"))
         // The names the phone has paired, wherever they come, on any line.
-        assertEquals("audio now on <bluetooth> (A)", LogScrub.line("audio now on Jordan's Buds (A)", devices = listOf("Jordan's Buds")))
-        assertEquals("routed to <bluetooth>", LogScrub.line("routed to Jordan's Buds", devices = listOf("Jordan's Buds")))
+        val known = BtNames(listOf("Jordan's Buds"))
+        assertEquals("audio now on <bt-device-1> (A)", LogScrub.line("audio now on Jordan's Buds (A)", bt = known))
+        assertEquals("routed to <bt-device-1>", LogScrub.line("routed to Jordan's Buds", bt = known))
         // A name= on a line that is not about Bluetooth stays, and so does a Bluetooth line with no name in it.
         val plain = "I FlipSpaces: thread name=head-tracker, user count 1"
         assertEquals(plain, LogScrub.line(plain))
@@ -57,10 +58,10 @@ class LogBundle1114Test {
         try {
             RotatingLogFile(dir).file(0).writeText("headset Jordan's Buds connected\n")
             val out = ByteArrayOutputStream()
-            LogBundle.write(out, info, "audio: Jordan's Buds", LogBundle.logFiles(dir), devices = listOf("Jordan's Buds"))
+            LogBundle.write(out, info, "audio: Jordan's Buds", LogBundle.logFiles(dir), btNames = listOf("Jordan's Buds"))
             val entries = unzip(out.toByteArray())
-            assertEquals("headset <bluetooth> connected\n", entries["logs/flipspaces.log"])
-            assertEquals("audio: <bluetooth>", entries["head-tracking.txt"])
+            assertEquals("headset <bt-device-1> connected\n", entries["logs/flipspaces.log"])
+            assertEquals("audio: <bt-device-1>", entries["head-tracking.txt"])
             assertFalse(entries.values.any { it.contains("Jordan") })
             assertTrue(entries["about.txt"]!!.contains("Bluetooth device names"))
         } finally {

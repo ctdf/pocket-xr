@@ -92,7 +92,10 @@ object IntroPages {
         return pages.dropLast(1) + last.copy(note = last.note?.let { "$it. $EXIT_NOTE_SHORT" } ?: EXIT_NOTE)
     }
 
-    /** First run: the plugged-in glasses' setup first (if they have one), then [trackpad]. */
-    fun firstRun(plugged: GlassesModel?, landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> =
-        listOfNotNull(glassesSetup(plugged)) + trackpad(landscapeHandheld, spatialMouse, oneFingerScroll)
+    /**
+     * First run: [trackpad]. 1.1.9 put the plugged-in glasses' setup page first; 1.1.16 (issue 12) moved it to the glasses
+     * setup check, which opens by itself once these pages close, with a head turn check after the steps.
+     */
+    fun firstRun(landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> =
+        trackpad(landscapeHandheld, spatialMouse, oneFingerScroll)
 }

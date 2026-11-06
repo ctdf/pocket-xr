@@ -30,18 +30,36 @@ With Stabilizer on, the windows lag each head turn and then glide back into plac
 its own picture against the head while Pocket XR already moves the picture to match the head, so the two fight.
 
 Found by Mike on his One on 30 October 2026: "it was the xreal ones Stabilizer setting in the glasses causing the issue
-because it was on. i turned it off". The One Pro and 1S have the same menu; that they need the same setting is
-assumed, not yet confirmed.
+because it was on. i turned it off". The One Pro needs the same (issue 31), and so does the 1S: on a Beam Pro its
+windows turned faster than the room and were cut off past an angle until the glasses left Anchor mode (issue 12,
+thejoeba spotted the Anchor and Follow setting as the cause).
 
-The app cannot change these settings. It shows a Glasses setup page on the phone (`GlassesSetup` in
-`core/.../spatial/GlassesSetup.kt`): first in the first-run tutorial when One-family glasses are plugged in, by itself
-the first time a new model is plugged in, and from the trackpad's Menu under **Glasses setup**. It also says it on the
-glasses for the first three sessions, and the Glasses report lists it under "Check on the glasses".
+The buttons, in XREAL's own words for the One, One Pro and 1S ([tutorials.xreal.com](https://tutorials.xreal.com/docs/glasses/one-series/first-use/buttons/)):
+press **X** once to switch between Follow and Anchor; press **X** twice to open or close the menu; **Stabilizer** is
+under **Spatial Screen** (under **Display** on older firmware); in the menu **+** and **-** move, **X** picks and **X**
+twice goes back. Holding **X** recentres the picture.
+
+The app cannot change these settings. It shows the **Glasses setup check** on the phone (`GlassesSetup` and
+`GlassesCheck` in `core/.../spatial/`): by itself the first time a new model connects, and any time from Pocket XR
+Settings or the trackpad's Menu. It lists only the steps that model needs (none for the Air, the Aura or glasses the app
+does not know), what on the host can also move the picture (a Beam Pro's spatial view, XREAL's apps on a phone), then a
+10 second head turn while Pocket XR measures its own head pose, and two questions on what the windows did. A failure
+names the one setting to change. Once it passes it never opens by itself again; a skip also stops it opening by itself.
+The One series is told from its name or, failing that, its USB product (One Pro 0x0435/0x0436, One 0x0437/0x0438, 1S
+0x043D/0x043E). The app also says the setting on the glasses for the first three sessions, and the Glasses report lists
+it under "Check on the glasses".
+
+### Beam Pro and XREAL's apps
+
+A Beam Pro runs XREAL's own spatial view, which turns the picture with your head as Pocket XR does. Close it before
+opening the Space from Pocket XR, or the windows move twice. The Beam Pro may also switch One series glasses back to
+Anchor. On a phone, XREAL's own app does no harm while closed; if it is open, close it from Recents.
+Android does not tell an app which other apps are running, so Pocket XR says this whenever such an app is installed.
 
 The app cannot read the mode either. The one hint it has is the panel duty the glasses answer when the control link opens
 (10065, already read for Sharper turns): about 90 % in head lock, and 16 to 32 % in the glasses' own world lock modes
 (measured on the Aura). A One-family pair that answers 40 % or less is taken as likely in Anchor mode, and the trackpad
-shows a card with one tap to the Glasses setup page, once per run of the app. That a One in Anchor mode reads low is
+shows a card with one tap to the Glasses setup check, once per run of the app and never once the check has passed. That a One in Anchor mode reads low is
 inferred, not measured, so the card says "may be". No other control message is sent to find out.
 
 ### 3D mode

@@ -73,7 +73,8 @@ object PanelHost {
      * and the service's lines go to the app through IPanelEvents.onLogLines).
      */
     // 0.5.37: 14, launchNew (a new instance of a running app); a new version restarts the user service with this code.
-    private const val SERVICE_VERSION = 15
+    // 1.1.15: 16, rootTaskLines and moveTaskToDisplay (an app's new screen that landed on the phone, back to its window).
+    private const val SERVICE_VERSION = 16
 
     /**
      * 0.5.52: window displays on the shell's virtual device (Developer: "Windows stay awake when the phone sleeps (test)"),
@@ -515,6 +516,22 @@ object PanelHost {
         calls.execute {
             val h = host ?: return@execute done(null)
             done(DisplayTasks.of(runCatching { h.displayTasks(displayId) }.getOrNull()))
+        }
+    }
+
+    /** 1.1.15: the root tasks on [displayId] ([LaunchDisplay.parse]); null when the service could not tell. */
+    fun rootTasks(displayId: Int, done: (List<com.hayeco.flipspaces.core.spatial.LaunchDisplay.PhoneTask>?) -> Unit) {
+        calls.execute {
+            val h = host ?: return@execute done(null)
+            done(runCatching { h.rootTaskLines(displayId) }.getOrNull()?.let { com.hayeco.flipspaces.core.spatial.LaunchDisplay.parse(it) })
+        }
+    }
+
+    /** 1.1.15: moves root task [taskId] onto [displayId]; [done] gets null or why not. */
+    fun moveTask(taskId: Int, displayId: Int, done: (String?) -> Unit) {
+        calls.execute {
+            val h = host ?: return@execute done("The panel service is not connected")
+            done(runCatching { h.moveTaskToDisplay(taskId, displayId) }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" })
         }
     }
 

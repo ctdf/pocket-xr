@@ -2,6 +2,69 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.1.16: a glasses setup check, Lock screens, and Send logs keeps Bluetooth names private
+
+Reported by tester John Davis (his report was not posted on GitHub, so there is no issue to link).
+
+- **Lock screens.** A Lock button sits at the end of the window keys on the open phone (Move, Resize, Further,
+  Closer, Curve, Lock), and a "Lock screens" switch is in the Menu, which is also how the cover screen reaches it.
+  While it is on, no window moves or resizes: press and hold, dragging by the edge, the resize handle, the window
+  keys, a two hand stretch, Reset, Arrange and Adjust all: none of them shift a window. The blue resize
+  handle is hidden, and a small lock shows at a window's corner instead, so it is clear why the window won't move.
+  Clicks, scrolls, zooms and typing still reach the apps, and Close, Back, Refresh, Switch app, Wide view and Fit
+  video still work. The setting is kept after Pocket XR or the phone restarts. The Lock button is 48 dp or larger
+  and a screen reader reads it as a switch with its state.
+- **The resize handle no longer covers app buttons.** The blue handle at a window's bottom right now catches the
+  pointer only outside the window and on its very edge (0.3 degrees in), where before it took a block about 12 % of
+  the window inside the corner, over the app. Hovering over it does nothing. A resize starts only after the handle
+  is held for 150 ms and dragged at least 1 degree; a plain click or a long press there without a drag goes to the
+  app, at the window's edge. A long press inside a window never resizes it.
+- **Compose in Gmail and Outlook stays in the window.** These apps open the email editor as a new screen in a task
+  of its own, started in a way Android does not tie to the window it came from, so Android put it on the phone's
+  screen, where the phone last had focus. Pocket XR cannot choose the display for a screen another app starts, so
+  for 6 seconds after a press in a window it watches the phone's screen, and a new screen of that same app that
+  shows up there is moved back onto the window's display (as `am display move-stack` does, through Shizuku). Screens
+  that were already open on the phone, and other apps, are never moved.
+  Where Android still gets in the way: the editor can flash on the phone for a moment before it moves, since Android
+  shows it there first. Without Shizuku running there is no way to move it, so it stays on the phone. If Android
+  refuses the move, or sends the screen back to the phone, Pocket XR leaves it there rather than fight Android, and
+  writes why in its log.
+
+From [the testers issue](https://github.com/pocket-xr/pocket-xr/issues/12): on an XREAL 1S plugged into a Beam Pro,
+windows turned faster than the room and were cut off past a certain angle. thejoeba spotted the cause: the glasses' own
+Anchor or Follow setting.
+
+- **Glasses setup check.** The first time a new glasses model connects, Pocket XR opens one short screen with only the
+  steps those glasses need, then a 10 second check: turn your head left and right, and say whether the windows stayed
+  put. Pocket XR measures its own head pose during the turn, so a yes with no real turn does not count. If the check
+  fails, it names the one setting to change: Anchor mode on the glasses, their Stabilizer, XREAL's own software on the
+  host, or Pocket XR's own Smooth Follow. It can be skipped, and once it passes it never comes up by itself again. It is
+  also in Pocket XR Settings and the trackpad's Menu as "Glasses setup check", at any time. Buttons are 52 dp tall and a
+  screen reader reads them as buttons, and reads the countdown and the result.
+- **Steps for each model, in XREAL's words.** One, One Pro and 1S: press X on the glasses once and pick Follow mode, not
+  Anchor; press X twice to open the menu and turn Stabilizer off under Spatial Screen (under Display on older
+  firmware). The Air family, the Aura and glasses Pocket XR does not know get no steps for the glasses, since they have
+  nothing to set. The One series is now also recognised by its USB product when its name says nothing.
+- **Beam Pro and XREAL's apps.** On a Beam Pro the check says plainly that XREAL's spatial view also turns the picture
+  with your head and should be closed before opening the Space, and that the Beam Pro may put One series glasses back in
+  Anchor. On a phone with XREAL's app installed, it names the app and says it does no harm while closed, but to close it
+  from Recents if it is open.
+- The first run tutorial no longer starts with the glasses page; the check opens after it instead. The Anchor card
+  (glasses that may be in Anchor mode) opens the check, and no longer shows once the check has passed.
+- README: per model setup steps and a "Windows drift or get cut off" item. The Glasses report issue form says the same.
+
+Privacy and John's Android 11 phone:
+
+- **Send logs keeps Bluetooth names private.** "Send logs to Mike" already took out the names of the phone's paired
+  devices. It now also takes out names it finds in the logs by their shape: "device name:", alias=, "connected to ...",
+  and the device list and Name lines Android prints for Bluetooth, and it scrubs about.txt too. Each device becomes
+  `<bt-device-1>`, `<bt-device-2>` and so on, the same marker in every file of the zip, so a log can still show that the
+  same headset dropped twice without saying whose headset it is.
+- **John's Android 11 head tracking fix, written up.** Since 1.1.9, head tracking and the control link also try the
+  glasses at 169.254.1.1 on their second USB link when no network reaches 169.254.2.1, as on John's Galaxy S20 FE, and
+  the "No route" line names the interface's addresses. What was found and what to check next is now in
+  [docs/findings-john-s20fe-android11.md](docs/findings-john-s20fe-android11.md).
+
 ## 1.1.15: updates show up on their own, the beer row moves to the Menu
 
 - New versions are easier to find. Pocket XR checks GitHub Releases when it starts and every 12 hours in the

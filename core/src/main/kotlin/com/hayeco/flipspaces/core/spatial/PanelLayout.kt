@@ -190,6 +190,13 @@ object PanelHitTester {
     const val FRAME_DEG = 1.6f
 
     /**
+     * 1.1.15 (John Davis: the blue resize handle covered an app's own button at the window's bottom right): the handle
+     * catches the pointer outside the window, where it is drawn ([PanelCurve.cornerBracket]), and only this far inside its
+     * very edge. 0.5.20 to 1.1.14 took 12 % of the window's smaller side inside the corner, over the app.
+     */
+    const val CORNER_EDGE_DEG = 0.3f
+
+    /**
      * [marginDeg] widens the body and title bar by that many degrees on every side (0.3.6, for
      * presses), so a press just outside an icon at the panel's edge still lands; u and v then
      * run a little past 0..1 and are clamped when turned into pixels.
@@ -232,8 +239,12 @@ object PanelHitTester {
             if (y > controlsBottom || (panel.isApp && y < broadTop)) return null
             return PanelHit(panel, PanelZone.TITLE_BAR, u, v, t, p, frame = true)
         }
+        // 1.1.15: the handle's own area is outside the body, or within [CORNER_EDGE_DEG] of its edge.
+        val edgeX = CORNER_EDGE_DEG / panel.widthDeg
+        val edgeY = CORNER_EDGE_DEG / panel.heightDeg
         val zone = when {
-            x in (0.5f - cornerX)..(0.5f + CORNER_REACH) && y in (-0.5f - CORNER_REACH)..(-0.5f + cornerY) -> PanelZone.CORNER
+            x in (0.5f - cornerX)..(0.5f + CORNER_REACH) && y in (-0.5f - CORNER_REACH)..(-0.5f + cornerY) &&
+                (x >= 0.5f - edgeX || y <= -0.5f + edgeY) -> PanelZone.CORNER
             y > 0.5f -> WindowControls.at(panel, x, y, cmx, cmy)?.zone
                 ?: if (x in across && y <= minOf(0.5f + my, controlsBottom)) PanelZone.BODY else return frame()
             y < -0.5f && panel.isApp -> WindowControls.at(panel, x, y, cmx, cmy)?.zone

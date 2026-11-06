@@ -41,6 +41,10 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 
 - **Windows in space.** Any Android app opens as a window around you, at its own size and distance. You can drag a
   window by its edge, snap it next to others, curve it, or push it further and pull it closer.
+- **Lock screens.** One tap on the Lock button by the window keys, or in the Menu, keeps every window where it is:
+  nothing moves or resizes, while clicks, scrolls and typing still reach the apps. A small lock shows on a locked
+  window, and the setting is kept after a restart. Unlocked, a window resizes only from a clear drag on the blue handle
+  at its bottom right corner.
 - **All windows at once.** Hold both hands up, or use Adjust all, to move, push, pull or resize every window together.
 - **Head tracking.** Windows stay where you put them as you turn your head. It reads the glasses' own motion sensor
   at 1000 Hz, paced to the glasses' display. This is 3DoF (turning, not walking around); 6DoF is open for the
@@ -59,7 +63,7 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 | Glasses | Status | Hand tracking |
 | --- | --- | --- |
 | XREAL Aura | Tested | Yes |
-| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Use **Follow mode** (not Anchor) with **Stabilizer off** in the glasses' menu. |
+| XREAL One | Tested | Not yet: possible with the XREAL Eye add-on (help wanted). Use **Follow mode** (not Anchor) with **Stabilizer off** in the glasses' menu ([Setup](#set-up-your-glasses)). |
 | XREAL One Pro | Community testing | Not yet: possible with the XREAL Eye add-on (help wanted) |
 | XREAL 1S | Community testing | No |
 | XREAL Air, Air 2, Air 2 Pro, Air 2 Ultra | Community testing: head tracking since 1.1.12, not yet tested by the project | No |
@@ -99,6 +103,38 @@ developed on a **Samsung Galaxy Z Flip 7** with One UI. Other phones with video 
 4. **Plug in the glasses.** The Space opens on them, and the phone shows the trackpad.
 5. **On Samsung phones**, if touches at the screen's edges go missing (the scroll strip), turn on Good Lock's Edge Touch
    for the trackpad.
+6. **Run the glasses setup check.** It opens by itself the first time a new glasses model connects, and any time from
+   Pocket XR Settings or the trackpad's Menu ("Glasses setup check"). It shows only the steps your glasses need, then
+   asks you to turn your head for 10 seconds and say what the windows did. Once it passes it never comes up again.
+
+### Set up your glasses
+
+Pocket XR holds the windows in place as you turn your head. Glasses that can do this on their own must leave it to
+Pocket XR, or the windows move twice.
+
+- **XREAL One, One Pro and 1S:**
+  1. Press the **X** button on the glasses once to switch display mode. Pick **Follow** mode, not Anchor.
+  2. Press **X** twice to open the glasses' menu. Go to **Spatial Screen**, then **Stabilizer**, and turn it **off**
+     (on older firmware Stabilizer is under **Display**). In the menu, **+** and **-** move, **X** picks, and **X**
+     twice goes back.
+- **XREAL Air, Air 2, Air 2 Pro and Air 2 Ultra:** nothing to set on the glasses.
+- **XREAL Aura:** nothing to set; Pocket XR sets the Aura's display itself.
+- **On a Beam Pro:** XREAL's own spatial view can also turn the picture with your head. Close it, then open the Space
+  from Pocket XR. The Beam Pro may switch One series glasses back to Anchor, so check Follow again if windows misbehave.
+- **XREAL's app on a phone** (Nebula and the like) does no harm while closed. If it is open, close it from Recents
+  before you open the Space.
+
+### Windows drift or get cut off
+
+If windows move faster than your head, slide back after you stop turning, or get cut off past a certain angle, the
+glasses (or XREAL's software on the phone) are moving the picture as well as Pocket XR:
+
+- Moving faster than your head, or cut off at the sides: the glasses are in **Anchor** mode. Press **X** once for
+  **Follow** mode.
+- Sliding back slowly after each turn: **Stabilizer** is on. Turn it off as in step 2 above.
+- On a Beam Pro, or with XREAL's app open: close XREAL's spatial view or app as above.
+
+The glasses setup check walks through this and points to the one setting to change.
 
 ### The add-on
 

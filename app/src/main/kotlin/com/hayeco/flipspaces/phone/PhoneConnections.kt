@@ -80,11 +80,11 @@ object PhoneConnections {
     }
 
     /**
-     * 1.1.14: the names of the phone's paired Bluetooth devices ("Jordan's Buds"), for Send logs to Mike to take out:
-     * the last read for the Control Center, and the paired list itself when Pocket XR may read it.
+     * 1.1.14: the paired devices' names (alias and name, "Jordan's Buds"), read now, for Send logs to Mike to take out;
+     * with the last list read for the Control Center, which may be older. Empty without Bluetooth access.
      */
     @Suppress("MissingPermission")
-    fun deviceNames(context: Context): List<String> {
+    fun pairedNames(context: Context): List<String> {
         val read = if (!permitted(context)) emptyList() else runCatching {
             context.getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
                 .flatMap { d -> listOfNotNull(runCatching { d.alias }.getOrNull(), runCatching { d.name }.getOrNull()) }
