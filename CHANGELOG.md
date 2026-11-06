@@ -30,6 +30,30 @@ Reported by tester John Davis (his report was not posted on GitHub, so there is 
   refuses the move, or sends the screen back to the phone, Pocket XR leaves it there rather than fight Android, and
   writes why in its log.
 
+## 1.1.15: updates show up on their own, the beer row moves to the Menu
+
+- New versions are easier to find. Pocket XR checks GitHub Releases when it starts and every 12 hours in the
+  background, instead of only when Pocket XR Settings opens. Before, the check almost never ran: the app's icon opens
+  the trackpad, and the check and its card lived only on the Settings screen behind the Menu.
+- A newer version shows as "Update available: x.y.z" across the top of the trackpad and of Pocket XR Settings, with
+  Update and Later buttons. It also shows as the first line of the trackpad's Menu and as a line on the glasses'
+  Control Center. Later hides it until the next version. Update downloads it as before.
+- One notification per new version, "Pocket XR x.y.z is ready", which opens the trackpad with the banner. On Android 13
+  and later, Pocket XR asks once to allow notifications, when it first finds an update. If you say no, the banner is
+  still there.
+- "Check for updates" and the installed version are now at the top of Pocket XR Settings, not at the end of the list.
+- The Google Play version is unchanged: it never checks GitHub and shows none of this.
+- "Buy me a beer" moved from the bottom of Pocket XR Settings to the top of the trackpad's Menu. It is now one slim
+  row with a small beer mug that opens Mike's Ko-fi page in the browser, with "Update available" right under it when
+  there is one. The card in Settings is gone. The Google Play version still leaves it out.
+- "Hands on the NPU" in the Developer card now applies right away. Before, turning it off only took effect the next
+  time hand tracking started, which in a long session never happened, so the NPU kept running. Off now means no NPU
+  work at all from the next camera frame. On builds the NPU models in the background while tracking carries on, so
+  switching either way never pauses tracking.
+- The hand tracking log no longer looks like the glasses camera restarts every 30 seconds. Its repeated camera line
+  now says "Camera still open" with how long the stream has run, and the Tracking line says NPU when the NPU did the
+  work instead of CPU.
+
 ## 1.1.14: NPU hand tracking is back on Exynos phones
 
 - Hand tracking runs on the NPU again on phones with the Exynos 2500, like the Galaxy Z Flip 7. The 1.1.13 download

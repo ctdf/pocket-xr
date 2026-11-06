@@ -88,6 +88,8 @@ class HandLandmarkerRunner(
         val delegateWasGpu: Boolean = false,
         /** 0.5.24: the frame went to the idle search's CPU landmarker ([prepareIdleCpu]). */
         val idleSearch: Boolean = false,
+        /** 1.1.15: the NPU's hand models ran the frame (1.1.14 counted it as a CPU frame). */
+        val ranOnNpu: Boolean = false,
     ) {
         /** The first hand, for the detection crop and the preview. */
         val hand: HandFrame? get() = hands.firstOrNull()
@@ -302,6 +304,80 @@ class HandLandmarkerRunner(
         return false
     }
 
+    /** 1.1.15: NPU models built on [buildThread] for "Hands on the NPU" switched on while hands run, until swapped in. */
+    @Volatile private var npuBuilt: NpuHandEngine? = null
+    @Volatile private var npuBuilding = false
+    @Volatile private var npuBuildFailed = false
+
+    /**
+     * 1.1.15 ([com.hayeco.flipspaces.core.hands.NpuHandsSwitch]): applies "Hands on the NPU" ([wanted]) to the running
+     * hands. Call from the feeding thread between two frames, without holding a slot; [build] makes the NPU's models (null
+     * when this phone has none) and runs on [buildThread] while the frames keep going to MediaPipe. Returns the step taken;
+     * on [com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.MEDIAPIPE_TO_CPU] the caller moves MediaPipe ([moveTo]).
+     */
+    fun applyNpu(wanted: Boolean, build: () -> NpuHandEngine?): com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step {
+        val step = com.hayeco.flipspaces.core.hands.NpuHandsSwitch.step(
+            wanted = wanted,
+            npuActive = npu != null,
+            built = npuBuilt != null,
+            building = npuBuilding,
+            failed = npuBuildFailed,
+            mediaPipeOnGpu = delegate == "GPU",
+        )
+        when (step) {
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.KEEP -> if (!wanted) npuBuildFailed = false
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.MEDIAPIPE_TO_CPU -> Unit
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.DISCARD -> npuBuilt?.let { built ->
+                npuBuilt = null
+                buildThread.execute { runCatching { built.close() } }
+            }
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.DROP -> {
+                // The NPU's frame in flight holds a slot until its hands are delivered: none is lost.
+                if (!awaitIdle(1_000)) return com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.KEEP
+                try {
+                    val engine = npu
+                    npu = null
+                    resultsSeen = 0
+                    gpuErrors = 0
+                    engine?.let { buildThread.execute { runCatching { it.close() } } }
+                    Log.i(TAG, "Hands on the NPU: off now (Developer card): MediaPipe on the $delegate takes the frames from this one, nothing more goes to the NPU (no frames, no checks)")
+                } finally {
+                    releaseAll()
+                }
+            }
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.BUILD -> {
+                npuBuilding = true
+                val t0 = SystemClock.uptimeMillis()
+                buildThread.execute {
+                    val engine = try {
+                        build()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Hands on the NPU could not be built; MediaPipe keeps tracking", e)
+                        null
+                    }
+                    if (engine != null) Log.i(TAG, "Hands on the NPU: built in ${SystemClock.uptimeMillis() - t0} ms on its own thread while MediaPipe on the $delegate kept tracking")
+                    npuBuildFailed = engine == null
+                    // Hands stopped while it was built: nobody will swap it in.
+                    if (closed) runCatching { engine?.close() } else npuBuilt = engine
+                    npuBuilding = false
+                }
+            }
+            com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.INSTALL -> {
+                if (!awaitIdle(1_000)) return com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.KEEP
+                try {
+                    val behind = delegate
+                    npu = npuBuilt
+                    npuBuilt = null
+                    swap.cancel()
+                    Log.i(TAG, "Hands on the NPU: on now (Developer card), swapped in between two frames; MediaPipe on the $behind stays behind it for the checks")
+                } finally {
+                    releaseAll()
+                }
+            }
+        }
+        return step
+    }
+
     /**
      * 0.5.7: rebuilds the landmarker for [hands] hands on the same delegate ("Track two hands"
      * switched while hands run). Call from the feeding thread while it holds the slot.
@@ -403,7 +479,7 @@ class HandLandmarkerRunner(
                 }
                 if (hands.isNotEmpty() && npu != null && ++npuHandFrames % COMPARE_EVERY == 0L) compareWithMediaPipe(frame, ts, hands)
                 val now = SystemClock.uptimeMillis()
-                onResult(Result(hands.map { window.toUpright(it) }, capturedAtMs, submittedAt, decodeMs, now, window, delegateWasGpu = false))
+                onResult(Result(hands.map { window.toUpright(it) }, capturedAtMs, submittedAt, decodeMs, now, window, delegateWasGpu = false, ranOnNpu = true))
             } finally {
                 npuPendingCount.decrementAndGet()
                 slot.release()
@@ -487,10 +563,15 @@ class HandLandmarkerRunner(
             e?.lastPalmMs ?: 0.0, e?.lastLandmarkMs ?: 0.0, e?.palmRuns ?: 0L, e?.frames ?: 0L))
     }
 
+    @Volatile private var closed = false
+
     override fun close() {
+        closed = true
         runCatching { npuThread.shutdown() }
         runCatching { npu?.close() }
         npu = null
+        runCatching { npuBuilt?.close() }
+        npuBuilt = null
         // 1.1.13: a move's build still running is closed by its own thread when it finishes.
         swap.cancel()
         runCatching { buildThread.shutdown() }

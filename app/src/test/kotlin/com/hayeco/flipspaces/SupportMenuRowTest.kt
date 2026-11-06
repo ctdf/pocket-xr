@@ -1,0 +1,93 @@
+package com.hayeco.flipspaces
+
+import android.app.Application
+import android.content.Intent
+import androidx.test.core.app.ApplicationProvider
+import com.hayeco.flipspaces.core.Support
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
+import org.junit.Assume.assumeTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import java.lang.reflect.Proxy
+
+/**
+ * 1.0.1, 1.1.15: the "Buy me a beer" row, first in the trackpad's Menu ([PadScreen]) in a plain build (GitHub,
+ * contributors, CI), the update row right under it, and none of it in a build made with -Ppocketxr.play=true for Google
+ * Play. Run both: `gradle :app:testDebugUnitTest` and `gradle :app:testDebugUnitTest -Ppocketxr.play=true`.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], application = Application::class)
+class SupportMenuRowTest {
+    private val app: Application = ApplicationProvider.getApplicationContext()
+    private val askedForPlay = System.getProperty("pocketxr.play") == "true"
+
+    /** A Menu with a host that answers every question with a plain default. */
+    private fun menu(update: String?): PadScreen {
+        val host = Proxy.newProxyInstance(PadHost::class.java.classLoader, arrayOf(PadHost::class.java)) { proxy, m, args ->
+            val t = m.returnType
+            when {
+                m.name == "equals" -> proxy === args?.get(0)
+                m.name == "hashCode" -> System.identityHashCode(proxy)
+                m.name == "toString" -> "test host"
+                t == java.lang.Boolean.TYPE -> false
+                t == Integer.TYPE -> 0
+                t == java.lang.Float.TYPE -> 0f
+                t == java.lang.Long.TYPE -> 0L
+                t == java.lang.Double.TYPE -> 0.0
+                t == List::class.java -> emptyList<Any>()
+                t == Pair::class.java -> Pair(2f, "2 m")
+                t.isEnum -> t.enumConstants!![0]
+                else -> null
+            }
+        } as PadHost
+        return PadScreen(app, host).apply {
+            showUpdate(update, onUpdate = {}, onLater = {})
+            openDrawer()
+        }
+    }
+
+    @Test
+    fun playBuildFollowsTheGradleProperty() {
+        assertEquals(askedForPlay, BuildConfig.PLAY_BUILD)
+    }
+
+    @Test
+    fun koFiIsTheMenusFirstRowInTheGitHubBuild() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        assertEquals(listOf(PadScreen.MENU_KO_FI), menu(update = null).menuRowTags())
+        val row = menu(update = null).menuRow(PadScreen.MENU_KO_FI)!!
+        assertEquals(Support.DESCRIPTION, row.contentDescription)
+        assertTrue("at least 48 dp tall", row.minimumHeight >= (48 * app.resources.displayMetrics.density).toInt())
+    }
+
+    @Test
+    fun theUpdateRowFollowsIt() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        assertEquals(listOf(PadScreen.MENU_KO_FI, PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags())
+    }
+
+    @Test
+    fun thePlayBuildHasNoKoFiRow() {
+        assumeTrue(BuildConfig.PLAY_BUILD)
+        assertNull(menu(update = null).menuRow(PadScreen.MENU_KO_FI))
+        assertEquals(listOf(PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags())
+    }
+
+    @Test
+    fun aTapOpensKoFi() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        assertTrue(menu(update = null).menuRow(PadScreen.MENU_KO_FI)!!.performClick())
+        val opened = shadowOf(app).nextStartedActivity
+        assertNotNull(opened)
+        assertEquals(Intent.ACTION_VIEW, opened.action)
+        assertEquals("https://ko-fi.com/mikehaye", opened.dataString)
+        assertEquals(Support.KO_FI_URL, SupportLink.intent().dataString)
+    }
+}

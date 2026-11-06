@@ -33,6 +33,8 @@ data class ControlCenterState(
     val bt: BtState = BtState(),
     /** 0.5.46: the minute now, so the notifications' "5 min" is painted again as time passes. */
     val minute: Long = 0,
+    /** 1.1.15: a newer Pocket XR on GitHub Releases the user has not put off with Later; a line under the title. */
+    val update: String? = null,
 )
 
 sealed interface ControlItem {
@@ -181,6 +183,11 @@ object ControlCenterLayout {
         val recordRight = WIDTH_PX - PAD - TITLE_H - GAP - RECENTRE_W - GAP
         zones += ControlZone(ControlItem.Record, recordRight - RECORD_W, y + 4f, recordRight, y + TITLE_H - 4f)
         y += TITLE_H + GAP
+        // 1.1.15: a newer Pocket XR, one line under the title; it is installed from the phone.
+        s.update?.let { v ->
+            headings += ControlHeading("${com.hayeco.flipspaces.core.UpdateCheck.bannerLine(v)}. Update from Pocket XR on the phone.", PAD, y + HEADING_H * 0.62f, message = true)
+            y += HEADING_H
+        }
         val top = y
 
         // Left column: tracking, one segmented control; then the arrange layouts, two a row.

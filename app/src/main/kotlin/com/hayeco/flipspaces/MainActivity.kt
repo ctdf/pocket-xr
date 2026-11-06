@@ -205,7 +205,7 @@ class MainActivity : ComponentActivity() {
         GlassesAutoOpen.resumed(this)
         // 1.0.1: if the last run crashed, offer to send the report.
         CrashCatcher.offer(this)
-        // 0.5.97: a newer Pocket XR on GitHub Releases, checked at most once a day.
+        // 0.5.97: a newer Pocket XR on GitHub Releases. 1.1.15: at most every 12 hours, also at app start and in the background.
         UpdateChecker.checkIfDue(this)
         // 0.4.4: always allowed from a screen in front, should the app start's try have been refused.
         GlassesReadyService.start(this, GlassesReady.From.PHONE_SCREEN)

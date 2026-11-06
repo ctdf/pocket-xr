@@ -16,14 +16,16 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 145
-        versionName = "1.1.14"
+        versionCode = 146
+        versionName = "1.1.15"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
-        // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments
+        // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the Ko-fi row (1.1.15: atop the trackpad's Menu), as Play's payments
         // policy does not allow a link to tip the developer ([com.hayeco.flipspaces.core.Support]). Every other build,
         // the GitHub release included, shows it.
         buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())
+        // 1.1.15: the GitHub update check's background job (UpdateJobService) is disabled in the Play build.
+        manifestPlaceholders["selfUpdates"] = (!playBuild).toString()
     }
 
     // 0.5.98 (open source plan: the release signing key, kept by Mike only): official releases are signed with the

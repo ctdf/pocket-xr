@@ -3,7 +3,7 @@ package com.hayeco.flipspaces.core
 /**
  * 0.5.97 (free updates for everyone): is a newer Pocket XR on GitHub Releases?
  *
- * The app asks GitHub's public API for the latest release ([RELEASES_URL]) at most once a day ([due]). It sends no data
+ * The app asks GitHub's public API for the latest release ([RELEASES_URL]) at most every 12 hours ([due]). It sends no data
  * of its own: the request carries only what any web request does. The answer's tag (`v1.0.0`) is compared with the
  * installed version ([newer]), and a newer release is offered with its APK, or else its release page ([parse]). Pure
  * Kotlin, so it is tested on the JVM; the app does the networking.
@@ -14,8 +14,14 @@ object UpdateCheck {
     const val RELEASES_URL = "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
     const val RELEASES_PAGE = "https://github.com/$OWNER/$REPO/releases"
 
-    /** At most one check a day. */
-    const val EVERY_MS = 24L * 60 * 60 * 1000
+    /** At most one check every 12 hours (1.1.15: was a day, and only when the settings screen opened). */
+    const val EVERY_MS = 12L * 60 * 60 * 1000
+
+    /**
+     * 1.1.15: whether this copy checks GitHub at all: not the Google Play build ([playBuild]), not a copy Play or F-Droid
+     * installed ([selfUpdates]), and only while the user's "Check for updates" switch is on.
+     */
+    fun runs(playBuild: Boolean, installer: String?, switchOn: Boolean): Boolean = !playBuild && selfUpdates(installer) && switchOn
 
     /** The installer Google Play records for a copy it installed. */
     const val PLAY_INSTALLER = "com.android.vending"
@@ -32,8 +38,20 @@ object UpdateCheck {
     /** What the latest release offers. */
     data class Release(val version: String, val pageUrl: String, val apkUrl: String?, val notes: String)
 
-    /** Whether a check is due: never checked, a day since the last one, or the clock went back. */
-    fun due(lastCheckMs: Long, nowMs: Long): Boolean = lastCheckMs <= 0L || nowMs - lastCheckMs >= EVERY_MS || nowMs < lastCheckMs
+    /**
+     * 1.1.15: after a failed check (offline, GitHub not answering) the next one waits this long, so a phone without a
+     * network makes one failed request, not one per app start or screen.
+     */
+    const val RETRY_MS = 30L * 60 * 1000
+
+    /**
+     * Whether a check is due: never checked, 12 hours since the last answer, or the clock went back; and not within
+     * [RETRY_MS] of a failed one ([failedAtMs], 0 when the last one did not fail).
+     */
+    fun due(lastCheckMs: Long, nowMs: Long, failedAtMs: Long = 0L): Boolean {
+        if (failedAtMs > 0L && nowMs >= failedAtMs && nowMs - failedAtMs < RETRY_MS) return false
+        return lastCheckMs <= 0L || nowMs - lastCheckMs >= EVERY_MS || nowMs < lastCheckMs
+    }
 
     /**
      * A version's numbers: "v1.2.3", "1.2.3-launcher" and "0.5.96-launcher" give [1, 2, 3] and [0, 5, 96]. Anything
@@ -72,6 +90,27 @@ object UpdateCheck {
 
     /** The newer release in [json] for [installed], or null when there is none (or the answer cannot be read). */
     fun offer(json: String, installed: String): Release? = parse(json)?.takeIf { newer(it.version, installed) }
+
+    /**
+     * 1.1.15: the release the banner shows: [offer], unless the user tapped Later on that version or a newer one
+     * ([dismissed]). Later hides it until the next version.
+     */
+    fun banner(offer: Release?, dismissed: String?): Release? =
+        offer?.takeIf { dismissed == null || newer(it.version, dismissed) }
+
+    /** 1.1.15: whether [version] gets its notification: one per new version, never again for one already posted ([posted]). */
+    fun notifies(version: String, posted: String?): Boolean = posted == null || newer(version, posted)
+
+    /**
+     * 1.1.15: whether to ask for POST_NOTIFICATIONS now that an update is on screen: Android 13 (API 33) or later, not
+     * granted, and never asked for updates before. Declined, the banner is all there is.
+     */
+    fun asksForNotifications(sdkInt: Int, granted: Boolean, askedBefore: Boolean): Boolean = sdkInt >= 33 && !granted && !askedBefore
+
+    /** 1.1.15: the banner's and the Control Center's line, and the notification's title. */
+    fun bannerLine(version: String): String = "Update available: $version"
+    fun notificationTitle(version: String): String = "Pocket XR $version is ready"
+    const val NOTIFICATION_TEXT = "Tap to see the update."
 
     private fun string(json: String, key: String): String? =
         Regex("\"" + Regex.escape(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(json)?.groupValues?.get(1)?.let(::unescape)

@@ -1,14 +1,10 @@
 package com.hayeco.flipspaces.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,20 +12,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,12 +42,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import com.hayeco.flipspaces.BuildConfig
 import com.hayeco.flipspaces.R
 import com.hayeco.flipspaces.core.AppEntry
 import com.hayeco.flipspaces.core.ContentMode
@@ -63,7 +54,6 @@ import com.hayeco.flipspaces.core.HostingAssessment
 import com.hayeco.flipspaces.core.HostingAssessor
 import com.hayeco.flipspaces.core.Look
 import com.hayeco.flipspaces.core.SettingsTarget
-import com.hayeco.flipspaces.core.Support
 import com.hayeco.flipspaces.core.spatial.FlatBanner
 import com.hayeco.flipspaces.core.spatial.FlatFix
 
@@ -110,7 +100,8 @@ fun PhoneScreen(
     val connected = glasses is GlassesState.Connected
     // 0.5.97: the in-app update check ([com.hayeco.flipspaces.UpdateChecker]).
     val context = androidx.compose.ui.platform.LocalContext.current
-    val update by com.hayeco.flipspaces.UpdateChecker.available.collectAsState()
+    // 1.1.15: the banner, unless put off with Later until the next version.
+    val update by com.hayeco.flipspaces.UpdateChecker.banner.collectAsState()
     var checkUpdates by remember { mutableStateOf(com.hayeco.flipspaces.UpdateChecker.enabled(context)) }
     val updateStatus by com.hayeco.flipspaces.UpdateChecker.status.collectAsState()
     // 1.1.14 (a tester asked for a way to turn head tracking on and off): saved, applied at once.
@@ -121,6 +112,24 @@ fun PhoneScreen(
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // 1.1.15: a newer version first on the screen, with Update and Later.
+            update?.let { u ->
+                item {
+                    GlassCard(container = Color(Look.GLASS_RAISED)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text(com.hayeco.flipspaces.core.UpdateCheck.bannerLine(u.version), style = MaterialTheme.typography.titleMedium)
+                            u.notes.lineSequence().map { it.trim().trimStart('#', '*', '-').trim() }.firstOrNull { it.isNotEmpty() }?.let {
+                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Button(onClick = { com.hayeco.flipspaces.UpdateChecker.open(context, u) }, shape = RoundedCornerShape(22.dp)) { Text("Update") }
+                                OutlinedButton(onClick = { com.hayeco.flipspaces.UpdateChecker.later(context) }, shape = RoundedCornerShape(22.dp)) { Text("Later") }
+                            }
+                        }
+                    }
+                }
+            }
             item { Header(connected) }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -130,18 +139,20 @@ fun PhoneScreen(
                     }
                 }
             }
-            update?.let { u ->
+            // 1.1.11: not on a copy from Google Play or F-Droid, which bring their own updates. 1.1.15: the version and Check
+            // for updates moved here from the end of the settings list, where few found them.
+            if (com.hayeco.flipspaces.UpdateChecker.offered(context)) {
                 item {
-                    GlassCard(container = Color(Look.GLASS_RAISED)) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("Pocket XR ${u.version} is available", style = MaterialTheme.typography.titleMedium)
-                            u.notes.lineSequence().map { it.trim().trimStart('#', '*', '-').trim() }.firstOrNull { it.isNotEmpty() }?.let {
-                                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(10.dp))
-                            Button(onClick = { com.hayeco.flipspaces.UpdateChecker.open(context, u) }, shape = RoundedCornerShape(22.dp)) {
-                                Text(if (u.apkUrl != null) "Download" else "See the release")
-                            }
+                    GlassCard {
+                        ToggleRow("Check for updates", "Version ${com.hayeco.flipspaces.UpdateChecker.installed}. ${updateLine(checkUpdates, updateStatus)}", checkUpdates) {
+                            checkUpdates = it
+                            com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
+                        }
+                        if (checkUpdates && updateStatus?.result != com.hayeco.flipspaces.UpdateChecker.Result.CHECKING) {
+                            TextButton(
+                                onClick = { com.hayeco.flipspaces.UpdateChecker.checkIfDue(context, force = true) },
+                                modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
+                            ) { Text("Check now") }
                         }
                     }
                 }
@@ -171,20 +182,6 @@ fun PhoneScreen(
                     NavRow("Hands", "Hand tracking, calibrating hand aim, gestures", onOpenHands)
                     RowDivider()
                     NavRow("Trackpad", "Cursor and scroll speeds, scroll strip, window curve, in its Menu", onOpenTrackpadSettings)
-                    // 1.1.11: not on a copy from Google Play or F-Droid, which bring their own updates.
-                    if (com.hayeco.flipspaces.UpdateChecker.offered(context)) {
-                        RowDivider()
-                        ToggleRow("Check for updates", updateLine(checkUpdates, updateStatus), checkUpdates) {
-                            checkUpdates = it
-                            com.hayeco.flipspaces.UpdateChecker.setEnabled(context, it)
-                        }
-                    }
-                    if (checkUpdates && updateStatus?.result != com.hayeco.flipspaces.UpdateChecker.Result.CHECKING) {
-                        TextButton(
-                            onClick = { com.hayeco.flipspaces.UpdateChecker.checkIfDue(context, force = true) },
-                            modifier = Modifier.padding(start = 8.dp, bottom = 4.dp),
-                        ) { Text("Check now") }
-                    }
                     // 1.1.14: the logs to Mike by email, the one line saying what goes.
                     RowDivider()
                     NavRow(com.hayeco.flipspaces.core.LogBundle.BUTTON, com.hayeco.flipspaces.core.LogBundle.WHAT_IS_SENT, onSendLogs)
@@ -235,52 +232,8 @@ fun PhoneScreen(
                     }
                 }
             }
-            // 1.0.1 (Mike: a Ko-fi "Buy me a beer" link): last on the page, never in the way. Not in the Play build.
-            if (Support.showCard(BuildConfig.PLAY_BUILD)) {
-                item { SupportCard { openSupportPage(context) } }
-            }
+            // 1.1.15: the Ko-fi card that sat here is now the first row of the trackpad's Menu.
         }
-    }
-}
-
-/** 1.0.1: the tip card: a beer on a glass chip, one line, that it is never required, and the Ko-fi button. */
-@Composable
-private fun SupportCard(onOpen: () -> Unit) {
-    GlassCard {
-        Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(44.dp).clip(CircleShape).background(Color(Look.GLASS_RAISED)).border(1.dp, Color(Look.RIM), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(painterResource(R.drawable.ic_beer), contentDescription = null, tint = Color(Look.INK), modifier = Modifier.size(24.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(Support.TITLE, style = MaterialTheme.typography.titleMedium)
-                    Text(Support.DETAIL, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-            // At least 48 dp tall, like the screen's other buttons, for a finger, the trackpad's cursor or a hand's pinch.
-            // A minimum, not a fixed height: at a large font size the label wraps instead of losing "Ko-fi" off the end.
-            Button(
-                onClick = onOpen,
-                modifier = Modifier.padding(start = 58.dp).heightIn(min = 48.dp),
-                shape = RoundedCornerShape(24.dp),
-            ) {
-                Icon(painterResource(R.drawable.ic_beer), contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(Support.BUTTON)
-            }
-        }
-    }
-}
-
-/** Ko-fi in the browser, as the update card opens its release. */
-private fun openSupportPage(context: android.content.Context) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Support.KO_FI_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
@@ -435,7 +388,7 @@ private fun MirrorCard(
 /** 0.5.101: the update check's line: what the last check found and when, or that it is off. */
 private fun updateLine(on: Boolean, status: com.hayeco.flipspaces.UpdateChecker.Status?): String {
     if (!on) return "Off. Turn on to hear about new versions on GitHub Releases"
-    val s = status ?: return "Once a day, on GitHub Releases"
+    val s = status ?: return "Every 12 hours, on GitHub Releases"
     val now = System.currentTimeMillis()
     val ago = if (now - s.atMs < 60_000L) "just now" else android.text.format.DateUtils.getRelativeTimeSpanString(s.atMs, now, android.text.format.DateUtils.MINUTE_IN_MILLIS).toString()
     return when (s.result) {
