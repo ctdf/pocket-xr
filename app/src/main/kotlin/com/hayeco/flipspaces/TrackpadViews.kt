@@ -756,7 +756,7 @@ interface PadHost {
     fun headCursorMode(): com.hayeco.flipspaces.core.spatial.HeadCursorMode
     fun headCursorChosen(mode: com.hayeco.flipspaces.core.spatial.HeadCursorMode)
 
-    /** 0.5.43: hand tracking on the NPU (Developer); applied when hands start again. */
+    /** 0.5.43: hand tracking on the NPU (Developer). 1.1.15: applied to the running hands at once. */
     fun npuHandsOn(): Boolean = true
     fun npuHandsChosen(on: Boolean) {}
 

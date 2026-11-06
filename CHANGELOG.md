@@ -18,6 +18,13 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
 - "Buy me a beer" moved from the bottom of Pocket XR Settings to the top of the trackpad's Menu. It is now one slim
   row with a small beer mug that opens Mike's Ko-fi page in the browser, with "Update available" right under it when
   there is one. The card in Settings is gone. The Google Play version still leaves it out.
+- "Hands on the NPU" in the Developer card now applies right away. Before, turning it off only took effect the next
+  time hand tracking started, which in a long session never happened, so the NPU kept running. Off now means no NPU
+  work at all from the next camera frame. On builds the NPU models in the background while tracking carries on, so
+  switching either way never pauses tracking.
+- The hand tracking log no longer looks like the glasses camera restarts every 30 seconds. Its repeated camera line
+  now says "Camera still open" with how long the stream has run, and the Tracking line says NPU when the NPU did the
+  work instead of CPU.
 
 ## 1.1.14: NPU hand tracking is back on Exynos phones
 

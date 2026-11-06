@@ -65,13 +65,18 @@ object GlassesCameraProvider {
     private const val TAG = "FlipSpacesHands"
     private const val PREVIEW_EVERY_MS = 200L
 
-    /** 0.5.55: an unchanged "Camera:" line is repeated this often (it was every second). */
-    private const val CAMERA_LINE_REPEAT_MS = 30_000L
+    /**
+     * 0.5.55: an unchanged "Camera" line every 30 s (it was every second). 1.1.15: it says whether the camera opened or
+     * the same stream is still open (vc145 read as a restart every 30.5 s, see core's CameraLineGate).
+     */
+    private val cameraLine = com.hayeco.flipspaces.core.hands.CameraLineGate()
 
-    /** 0.5.55: what the last "Camera:" line said (its window object and delegate) and when, on the detection thread. */
-    private var loggedCameraWindow: DetectionWindow? = null
-    private var loggedCameraDelegate: String? = null
-    private var loggedCameraAt = 0L
+    /**
+     * 1.1.15: "Hands on the NPU" as last set ([HandsPrefs.npuHands]); the detection thread applies a change between two
+     * frames (core's NpuHandsSwitch). 1.1.14 read it only when hands started, so turning it off left the NPU running.
+     */
+    @Volatile
+    var npuHandsWanted: Boolean = true
 
     /** Largest square bitmap handed to MediaPipe (core's DetectionWindow.maxOutputSide). */
     private const val MAX_INPUT_SIDE = 640
@@ -289,12 +294,14 @@ object GlassesCameraProvider {
         switchTo = null
         trackingLine = null
         usbLine = null
+        cameraLine.reset()
         try {
             twoHands = HandsPrefs(context).twoHands
             val hands = HandCount.wanted(twoHands)
             // 0.5.43: the hand models on the NPU when this phone has one for them; MediaPipe then waits on the CPU behind it
             // (the NPU's checks and its fallback), so the GPU is the Space's.
-            val npu = if (HandsPrefs(context).npuHands) NpuHandEngine.create(context) else null.also { Log.i(TAG, "Hands on the NPU: off (Developer card)") }
+            npuHandsWanted = HandsPrefs(context).npuHands
+            val npu = if (npuHandsWanted) NpuHandEngine.create(context) else null.also { Log.i(TAG, "Hands on the NPU: off (Developer card)") }
             val mediaPipe = HandLandmarkerRunner(
                 context,
                 preferGpu = npu == null,
@@ -304,7 +311,7 @@ object GlassesCameraProvider {
                 npu = npu,
             ).also { runner = it; activeRunner = it }
             tracking.delegate = mediaPipe.delegate
-            Log.i(TAG, "MediaPipe Hand Landmarker on ${mediaPipe.delegate}, ${HandCount.line(hands)}")
+            Log.i(TAG, "Hand Landmarker: ${CameraDebugLine.runsOn(mediaPipe.delegate)}, ${HandCount.line(hands)}")
             link.start()
             while (!stopRequested) {
                 val now = SystemClock.uptimeMillis()
@@ -396,7 +403,8 @@ object GlassesCameraProvider {
                 tracking.dropped()
             }.also { mailbox = it }
             val cameraId = "${device.deviceName} ${GlassesUsbAccess.label(device)} video interface ${streaming.interfaceNumber}"
-            worker = Thread({ detect(box, frameDecoder, runner, cameraId) }, "FlipSpacesDetect").also { it.start() }
+            cameraLine.opened(SystemClock.uptimeMillis())
+            worker = Thread({ detect(box, frameDecoder, runner, cameraId, context) }, "FlipSpacesDetect").also { it.start() }
             var first = true
             var brokenSeen = 0L
             s.stream(
@@ -412,7 +420,7 @@ object GlassesCameraProvider {
                         // 0.5.19: how long a reconnect took, for the retry delay check.
                         if (link.reconnects != wasLost) Log.i(TAG, "Camera link back after ${link.lastReconnectMs ?: -1} ms (reconnect ${link.reconnects}, first retry after ${link.backoffMs.first()} ms)")
                         HandFeed.reset()
-                        _status.value = ProviderStatus.Running("${choice.label}, MediaPipe on ${runner.delegate}")
+                        _status.value = ProviderStatus.Running("${choice.label}, ${CameraDebugLine.runsOn(runner.delegate)}")
                     }
                     if (frameDecoder.needsEveryFrame) {
                         // H.264 and HEVC frames depend on the ones before: decode all of them here, skip only decoded ones.
@@ -454,12 +462,11 @@ object GlassesCameraProvider {
      * frame costs the longer of the two instead of their sum (0.3.1 ran them one after the other
      * and reached 22 to 23 fps of 30 with 36 ms inference).
      */
-    private fun detect(box: LatestFrameMailbox<Captured>, decoder: FrameDecoder, runner: HandLandmarkerRunner, cameraId: String) {
+    private fun detect(box: LatestFrameMailbox<Captured>, decoder: FrameDecoder, runner: HandLandmarkerRunner, cameraId: String, context: Context) {
         // 0.5.3: a normal priority again. 0.5.2 ran decode and MediaPipe at display priority,
         // ahead of the threads that hand SurfaceFlinger its buffers.
         val square = ViewCanvas()
         var lastPreview = 0L
-        var lastCameraLine = 0L
         var pausedForStall = false
         // 0.5.24: the palm search is on the runner's CPU landmarker now (no hand up, the Space drawing).
         var searchingOnCpu = false
@@ -549,24 +556,32 @@ object GlassesCameraProvider {
                 }
                 val view = synchronized(cycle) { cycle.current }
                 val window = square.place(bitmap, rotation, view)
-                if (CameraDebugLine.due(now, lastCameraLine)) {
-                    lastCameraLine = now
-                    // 0.5.55: the Camera line only when what it says changes, or every CAMERA_LINE_REPEAT_MS (it was
-                    // every second, the same words each time).
-                    val delegate = runner.delegate
-                    if (window !== loggedCameraWindow || delegate != loggedCameraDelegate || now - loggedCameraAt >= CAMERA_LINE_REPEAT_MS) {
-                        loggedCameraWindow = window
-                        loggedCameraDelegate = delegate
-                        loggedCameraAt = now
-                        Log.i(TAG, CameraDebugLine.line(cameraId, null, window, delegate))
-                    }
-                }
+                // 0.5.55: the Camera line only when what it says changes, or every 30 s. 1.1.15: led by "opened",
+                // "view changed" or "still open" (core's CameraLineGate).
+                val delegate = runner.delegate
+                cameraLine.lead(now, window, delegate)?.let { lead -> Log.i(TAG, CameraDebugLine.line(cameraId, null, window, delegate, lead)) }
                 preparedImage = square.image
                 preparedWindow = window
                 preparedDecodeMs = decodeMs
             } catch (e: Exception) {
                 Log.w(TAG, "Frame skipped", e)
                 continue
+            }
+            // 1.1.15: "Hands on the NPU" switched while hands run, applied between two frames; the frames keep flowing
+            // (MediaPipe is built behind the NPU, and the NPU's models are built on their own thread).
+            when (runner.applyNpu(npuHandsWanted) { NpuHandEngine.create(context) }) {
+                com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.DROP -> {
+                    tracking.delegate = runner.delegate
+                    synchronized(delegates) { delegates.reset() }
+                    // As at a start without the NPU: MediaPipe on the GPU, unless the Space's guard has it on the CPU.
+                    switchTo = if (SpaceSession.handsOffGpu) null else true
+                }
+                com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.MEDIAPIPE_TO_CPU -> if (switchTo == null) switchTo = false
+                com.hayeco.flipspaces.core.hands.NpuHandsSwitch.Step.INSTALL -> {
+                    tracking.delegate = runner.delegate
+                    switchTo = null
+                }
+                else -> Unit
             }
             // 0.5.2: the delegate, and 0.5.7 the hand count, change only with nothing in flight
             // (0.5.14: up to two frames are, so this waits for both answers first).
@@ -614,7 +629,8 @@ object GlassesCameraProvider {
             // after a hold, so it is tracked at 30 fps; the Space's guard moves it off again if the Space really waits behind it.
             // 0.5.31: not while the phone is severe or hotter with the Space drawing.
             val handUp = synchronized(cycle) { cycle.hasHand }
-            if (SpaceSession.handsOffGpu && runner.delegate == "CPU" && switchTo == null && gpuReturn.shouldReturn(item.capturedAtMs, true, handUp, heatStatus, SpaceSession.active)) {
+            // 1.1.15: not while the NPU is wanted (MediaPipe waits on the CPU behind it).
+            if (SpaceSession.handsOffGpu && runner.delegate == "CPU" && switchTo == null && !npuHandsWanted && gpuReturn.shouldReturn(item.capturedAtMs, true, handUp, heatStatus, SpaceSession.active)) {
                 SpaceSession.handsOffGpu = false
                 switchTo = true
                 Log.i(TAG, gpuReturn.line())
@@ -673,7 +689,8 @@ object GlassesCameraProvider {
             }
         }
         // 0.5.24: the idle search's CPU frames are not the runner's delegate, so they do not feed the delegate choice.
-        if (!r.idleSearch) synchronized(delegates) {
+        // 1.1.15: nor the NPU's frames (1.1.14 timed them as MediaPipe on the CPU), nor any while the NPU is wanted.
+        if (!r.idleSearch && !r.ranOnNpu && !npuHandsWanted) synchronized(delegates) {
             val was = delegates.line
             // 0.5.3: the trial waits for a steady Space (no graph rebuild at plug-in).
             val trial = SpaceSession.steady && !SpaceSession.stalled
@@ -689,6 +706,7 @@ object GlassesCameraProvider {
             score = hand?.score ?: 0f,
             // 0.5.25: what ran this inference, so the Tracking line says CPU during the idle search.
             ranOn = when {
+                r.ranOnNpu -> com.hayeco.flipspaces.core.hands.TrackingStats.NPU
                 r.idleSearch -> com.hayeco.flipspaces.core.hands.TrackingStats.CPU_SEARCH
                 r.delegateWasGpu -> com.hayeco.flipspaces.core.hands.TrackingStats.GPU
                 else -> com.hayeco.flipspaces.core.hands.TrackingStats.CPU

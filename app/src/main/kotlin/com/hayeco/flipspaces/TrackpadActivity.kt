@@ -1394,8 +1394,10 @@ class TrackpadActivity : Activity(), PadHost {
 
     override fun npuHandsChosen(on: Boolean) {
         com.hayeco.flipspaces.hands.HandsPrefs(this).npuHands = on
-        Log.i(TAG, "hands on the NPU: ${if (on) "on" else "off"} (Developer; from the next hands start)")
-        screen.showToast(if (on) "Hands on the NPU: on from the next time hands start." else "Hands on the NPU: off from the next time hands start.")
+        // 1.1.15: applied to the running hands between two frames (1.1.14 waited for a hands start that never came).
+        com.hayeco.flipspaces.hands.GlassesCameraProvider.npuHandsWanted = on
+        Log.i(TAG, "hands on the NPU: ${if (on) "on" else "off"} (Developer; applied now, between two hand frames)")
+        screen.showToast(if (on) "Hands on the NPU: on." else "Hands on the NPU: off.")
     }
 
     override fun stillLockOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).stillLock

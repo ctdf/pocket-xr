@@ -106,6 +106,12 @@ class TrackingStats(val window: Int = 30) {
         const val GPU = "GPU"
         const val CPU = "CPU"
 
+        /**
+         * 1.1.15: the NPU's hand models ran the frame. 1.1.14 counted those frames as [CPU] (vc145, 11-05: every Tracking
+         * line said CPU while the NPU ran each frame), so the log could not tell the NPU from MediaPipe on the CPU.
+         */
+        const val NPU = NpuHandsSwitch.NPU
+
         /** 0.5.25: the idle palm search's own CPU landmarker, while the Space has the GPU. */
         const val CPU_SEARCH = "CPU palm search"
 
