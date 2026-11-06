@@ -2,7 +2,7 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.15: updates show up on their own, the beer row moves to the Menu
 
 - New versions are easier to find. Pocket XR checks GitHub Releases when it starts and every 12 hours in the
   background, instead of only when Pocket XR Settings opens. Before, the check almost never ran: the app's icon opens
