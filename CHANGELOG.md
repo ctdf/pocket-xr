@@ -15,6 +15,9 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
   still there.
 - "Check for updates" and the installed version are now at the top of Pocket XR Settings, not at the end of the list.
 - The Google Play version is unchanged: it never checks GitHub and shows none of this.
+- "Buy me a beer" moved from the bottom of Pocket XR Settings to the top of the trackpad's Menu. It is now one slim
+  row with a small beer mug that opens Mike's Ko-fi page in the browser, with "Update available" right under it when
+  there is one. The card in Settings is gone. The Google Play version still leaves it out.
 
 ## 1.1.14: NPU hand tracking is back on Exynos phones
 

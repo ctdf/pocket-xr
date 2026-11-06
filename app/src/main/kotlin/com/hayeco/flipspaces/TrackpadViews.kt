@@ -1762,14 +1762,19 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         drawerBody.addView(c.padText("POCKET XR", 11f, WHITE, bold = true).apply {
             letterSpacing = 0.12f
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, c.dp(14f)).apply { topMargin = c.dp(61f) })
+        // 1.1.15 (Mike: the Ko-fi link at the very top of the Menu): one slim pill, then the update row when there is one.
+        // Never in the Play build.
+        val top = com.hayeco.flipspaces.core.Support.menuTop(BuildConfig.PLAY_BUILD, updateVersion)
+        val koFi = com.hayeco.flipspaces.core.Support.MenuTop.KO_FI in top
+        if (koFi) drawerBody.addView(supportPill(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, c.dp(48f)).apply { topMargin = c.dp(20f) })
         // The function card: Capture, Record and Scan are left out (Pocket XR has none of them).
         val functions = card()
-        // 1.1.15: a newer Pocket XR, first in the Menu until Later.
-        updateVersion?.let { v ->
+        // 1.1.15: a newer Pocket XR, first in the Menu's card until Later.
+        updateVersion?.takeIf { com.hayeco.flipspaces.core.Support.MenuTop.UPDATE in top }?.let { v ->
             functions.addView(row(R.drawable.ic_settings_sliders, com.hayeco.flipspaces.core.UpdateCheck.bannerLine(v), subtitle = "Tap to download it") {
                 closeDrawer()
                 onUpdate?.invoke()
-            })
+            }.apply { tag = MENU_UPDATE })
             functions.addView(c.divider(20f))
         }
         functions.addView(row(R.drawable.ic_back_home, "Go to the phone's home screen") { host.returnHome() })
@@ -1799,7 +1804,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             closeDrawer()
             host.unlockPhone()
         })
-        drawerBody.addView(functions, cardParams(25f))
+        drawerBody.addView(functions, cardParams(if (koFi) 12f else 25f))
 
         trackpadHeading = c.padText("Trackpad", 14f, WHITE)
         drawerBody.addView(trackpadHeading, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(30f) })
@@ -2235,6 +2240,56 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         setBackgroundResource(R.drawable.bg_drawer_card)
     }
 
+    /**
+     * 1.1.15: the Menu's "Buy me a beer" pill: 48 tall, the cards' own fill and rim, an 18 beer, the 14 sp line, and a quiet
+     * "Ko-fi" at its end. No accent colour, so it reads as part of the Menu rather than an ad. Opens Ko-fi in the browser.
+     */
+    private fun supportPill(): View = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(context.dp(18f), 0, context.dp(18f), 0)
+        minimumHeight = context.dp(48f)
+        background = GradientDrawable().apply {
+            cornerRadius = context.dpf(24f)
+            setColor(com.hayeco.flipspaces.core.Look.CARD)
+            setStroke(context.dp(1f), com.hayeco.flipspaces.core.Look.RIM)
+        }
+        addView(context.icon(R.drawable.ic_beer, 18f).apply { alpha = 0.7f })
+        addView(context.padText(com.hayeco.flipspaces.core.Support.LABEL, 14f, TEXT_B3).apply { setSingleLine(true) },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(10f) })
+        addView(context.padText(com.hayeco.flipspaces.core.Support.WHERE, 12f, TEXT_80))
+        // TalkBack reads one button, not its parts.
+        contentDescription = com.hayeco.flipspaces.core.Support.DESCRIPTION
+        for (i in 0 until childCount) getChildAt(i).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name
+            }
+        }
+        tag = MENU_KO_FI
+        pressLight(this, 24f)
+        setOnClickListener {
+            tick(this)
+            closeDrawer()
+            SupportLink.open(context)
+        }
+    }
+
+    /** 1.1.15: the tags of the Menu's tagged rows, top down (the tests). */
+    internal fun menuRowTags(): List<String> {
+        val out = ArrayList<String>()
+        fun walk(v: View) {
+            (v.tag as? String)?.let { out += it }
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(drawerBody)
+        return out
+    }
+
+    /** 1.1.15: the Menu row tagged [tag], for the tests. */
+    internal fun menuRow(tag: String): View? = drawerBody.findViewWithTag(tag)
+
     private fun cardParams(topDp: Float) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = context.dp(topDp) }
 
     /**
@@ -2540,6 +2595,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     companion object {
         const val DRAWER_MS = 250L
         const val TOAST_MS = 2000L
+
+        /** 1.1.15: the Menu's Ko-fi pill and update row ([menuRowTags]). */
+        const val MENU_KO_FI = "menu:ko-fi"
+        const val MENU_UPDATE = "menu:update"
 
         /** 0.5.28: a toast with a one-tap action stays this long. */
         const val ACTION_TOAST_MS = 5000L

@@ -20,7 +20,7 @@ android {
         versionName = "1.1.14"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.
         ndk { abiFilters += "arm64-v8a" }
-        // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the settings home's Ko-fi card, as Play's payments
+        // 1.0.1: the Google Play build (-Ppocketxr.play=true) hides the Ko-fi row (1.1.15: atop the trackpad's Menu), as Play's payments
         // policy does not allow a link to tip the developer ([com.hayeco.flipspaces.core.Support]). Every other build,
         // the GitHub release included, shows it.
         buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())

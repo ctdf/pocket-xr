@@ -183,7 +183,8 @@ names are XREAL's trademarks, used here only to say what the app works with.
 [![Buy me a beer on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20beer-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/mikehaye)
 
 Enjoying Pocket XR? You can buy me a beer on [Ko-fi](https://ko-fi.com/mikehaye). It's never required; a star or a
-glasses report helps just as much.
+glasses report helps just as much. In the app, it's the "Buy me a beer" row at the top of the trackpad's Menu (left
+out of the Google Play version).
 
 ## Licence
 
