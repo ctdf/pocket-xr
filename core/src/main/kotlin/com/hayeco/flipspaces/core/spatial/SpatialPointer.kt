@@ -595,6 +595,22 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
             }
         }
 
+    /**
+     * Unreleased (Mike, 1.1.17-mouse-test: "after clicking in a window and typing, [the cursor] moves to another window if
+     * i look toward another window even though i have head cursor setting off"): a physical mouse has moved or clicked
+     * the pointer, and is still connected. Set by the Space. The Aura's camera saw his hands on the keyboard, so a hand
+     * cursor took the place of the mouse's pointer (its hover too, [follow]), aimed through a camera wider than the view,
+     * so it partly turned with the head; and its stray pinches pressed other windows, which took the keyboard.
+     */
+    var mouseLeads = false
+
+    /**
+     * With [cursorFollowsHead] off and the mouse leading ([mouseLeads]), the hands are set aside: no hand cursor, hover,
+     * press or gesture, so only the mouse or the trackpad moves the pointer and the keys stay with the window last
+     * clicked. With Cursor follows head on, or the mouse gone, the hands work as before.
+     */
+    val handsSetAside: Boolean get() = mouseLeads && !cursorFollowsHead
+
     /** 0.5.37: dragged windows snap to their neighbours ([WindowSnap]); the Menu's and the Control Center's switch. */
     var snapWindows = true
 
@@ -651,6 +667,7 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
         // (until then its aim was head relative, so a hidden dot hovered along the gaze); and while the Space has the dot
         // hidden ([hoverSuspended]) it hovers nothing, as nothing is shown there.
         if (anchoredCursor(main) && main.worldAim == null) anchorIfFixed(head)
+        if (handsSetAside) setHandsAside(layout, out)
         if (hoverSuspended && main.grab == null) hoverTo(main, null, out) else follow(main, ray(main, head), layout, out)
         for (a in hands.values.toList()) {
             applyInterp(a)
@@ -983,6 +1000,14 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
         return out
     }
 
+    /** Unreleased ([handsSetAside]): every aiming hand let go of as if it left the camera, and a hold of every window by the hands ended where it is. */
+    private fun setHandsAside(layout: SpaceLayout, out: MutableList<SpaceAction>) {
+        allHold?.takeIf { it.byHands }?.let { allEnd(it, layout, out, cancel = false) }
+        if (hands.isEmpty()) return
+        for (side in hands.keys.toList()) out += dropHand(side, lastHead, latest(layout, out))
+        out += SpaceAction.Note("a mouse moves the pointer with Cursor follows head off: hand cursors and pinches set aside until the mouse goes or Cursor follows head is on")
+    }
+
     /**
      * [headAt] gives the head pose at a time on the hand camera's clock, or null when head
      * tracking is not live; it places hand signals that carry a time in the world.
@@ -1026,6 +1051,11 @@ class SpatialPointer(var frustum: ViewFrustum, settings: PointerSettings = Point
         origin: Vec3? = null,
         dir: Vec3? = null,
     ) {
+        // Unreleased: the mouse leads with Cursor follows head off ([handsSetAside]): a hand's signals go nowhere.
+        if (handsSetAside && (signal is PointerSignal.ForHand || signal is PointerSignal.AllWindows)) {
+            setHandsAside(layout, out)
+            return
+        }
         // 0.5.88: while every window is held from the trackpad, its gestures move them all ([allSignal]).
         allHold?.let { h -> if (allSignal(h, signal, head, layout, out)) return }
         when (signal) {

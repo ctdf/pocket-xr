@@ -13,6 +13,12 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
   the mouse, so Android's arrow is hidden and can't wander off to another screen; when the Space closes, or you leave
   Pocket XR, the mouse goes back to Android. The trackpad's cursor speed sets the mouse's speed too. The
   trackpad and Spatial Mouse work as before.
+- **With Cursor follows head off, the mouse's pointer stays where you put it.** On glasses with a camera, your hands
+  on the keyboard were taken for hand input: a hand cursor took over from the mouse's pointer and partly turned with
+  your head, so looking at another window seemed to move the pointer there, and a stray pinch could click that
+  window and take your typing. Now, while a mouse is in use and Cursor follows head is off, hand cursors and pinches
+  are set aside: only the mouse or the trackpad moves the pointer, and your keys stay with the window you clicked.
+  Turn Cursor follows head on, or disconnect the mouse, and hands work as before.
 
 ## 1.1.16: a glasses setup check, Lock screens, and Send logs keeps Bluetooth names private
 

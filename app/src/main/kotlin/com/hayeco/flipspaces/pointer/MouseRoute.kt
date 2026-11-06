@@ -68,6 +68,7 @@ object MouseRoute {
             logged = true
             Log.i(TAG, "a mouse reached the Space (${if (captured) "captured" else "not captured"}): it moves the Space's pointer")
         }
+        used = true
         // A mouse connected after the window took focus: the first event it sends uncaptured asks for the capture.
         if (!captured) views.mapNotNull { it.get() }.forEach(::capture)
         mouse.speed = SpaceSession.padCursorSpeed
@@ -87,6 +88,19 @@ object MouseRoute {
 
     private fun submit(signal: PointerSignal) {
         if (SpaceSession.active) SpaceSession.submit(signal)
+    }
+
+    /** A mouse has reached the Space since it last went away ([leads]). */
+    @Volatile private var used = false
+
+    /**
+     * The mouse leads the Space's pointer ([com.hayeco.flipspaces.core.spatial.SpatialPointer.mouseLeads]): it has moved
+     * or clicked, and it is still connected. Once it goes it leads again only from its next event. Any thread.
+     */
+    fun leads(): Boolean {
+        if (!used) return false
+        if (!mouseConnected()) used = false
+        return used
     }
 
     /** A mouse is connected: an external, non virtual input device that is a mouse. */
