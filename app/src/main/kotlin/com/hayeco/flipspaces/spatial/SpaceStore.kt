@@ -466,6 +466,14 @@ class SpaceStore(context: Context) {
         get() = prefs.getBoolean(KEY_NEW_INSTANCE, false)
         set(value) = prefs.edit().putBoolean(KEY_NEW_INSTANCE, value).apply()
 
+    /**
+     * 1.1.15 (John Davis: a "lock screens" option): Lock screens ([com.hayeco.flipspaces.core.spatial.WindowLock]), off by
+     * default; saved, so the windows are still locked after the app or the phone restarts.
+     */
+    var windowsLocked: Boolean
+        get() = prefs.getBoolean(com.hayeco.flipspaces.core.spatial.WindowLock.KEY, false)
+        set(value) = prefs.edit().putBoolean(com.hayeco.flipspaces.core.spatial.WindowLock.KEY, value).apply()
+
     /** 0.5.37 (Mike: snap a dragged window to the one it nears, with a setting to turn it off): on by default. */
     var snapWindows: Boolean
         get() = prefs.getBoolean(KEY_SNAP_WINDOWS, true)

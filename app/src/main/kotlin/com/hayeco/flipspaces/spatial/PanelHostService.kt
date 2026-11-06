@@ -1199,6 +1199,31 @@ class PanelHostService : IPanelHost.Stub() {
         intArrayOf(infos.size, visible, top)
     }
 
+    /** 1.1.15: the display's root tasks as "taskId package" lines, top first ([com.hayeco.flipspaces.core.spatial.LaunchDisplay]). */
+    override fun rootTaskLines(displayId: Int): Array<String>? = guard(null) {
+        val infos = rootTaskInfos(displayId) ?: return@guard null
+        infos.filterNotNull().mapNotNull { r ->
+            val id = taskField(r, "taskId") as? Int ?: return@mapNotNull null
+            val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { (field(r, it) as? android.content.ComponentName)?.packageName }
+                ?: return@mapNotNull null
+            com.hayeco.flipspaces.core.spatial.LaunchDisplay.line(id, pkg)
+        }.toTypedArray()
+    }
+
+    /**
+     * 1.1.15: root task [taskId] onto [displayId]: IActivityTaskManager.moveRootTaskToDisplay (Android 12 and up), else
+     * Android 11's moveStackToDisplay, as the shell (MANAGE_ACTIVITY_TASKS), what `am display move-stack` runs.
+     */
+    override fun moveTaskToDisplay(taskId: Int, displayId: Int): String? = guardText {
+        val m = taskManager.javaClass.methods.firstOrNull { m ->
+            (m.name == "moveRootTaskToDisplay" || m.name == "moveStackToDisplay") &&
+                m.parameterTypes.size == 2 && m.parameterTypes.all { it == Int::class.javaPrimitiveType }
+        } ?: return@guardText "IActivityTaskManager has no moveRootTaskToDisplay on Android ${Build.VERSION.SDK_INT}"
+        m.invoke(taskManager, taskId, displayId)
+        logI("task $taskId moved to display $displayId (${m.name})")
+        null
+    }
+
     override fun describeDisplay(displayId: Int): String? = runCatching {
         method(displayManager, "getDisplayInfo") { it.parameterTypes.size == 1 }.invoke(displayManager, displayId)?.toString()
     }.getOrNull()

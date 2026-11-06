@@ -1173,6 +1173,15 @@ class TrackpadActivity : Activity(), PadHost {
         screen.showToast(if (on) "Warp goes back in after a drop." else "Warp pauses at the first drop.")
     }
 
+    override fun windowsLockedOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).windowsLocked
+
+    override fun windowsLockedChosen(on: Boolean) {
+        com.hayeco.flipspaces.spatial.SpaceStore(this).windowsLocked = on
+        Log.i(TAG, "Lock screens: ${if (on) "on" else "off"} (the trackpad)")
+        if (on) buzz(PadHaptic.COVER_BUTTON)
+        screen.showToast(if (on) "Screens locked" else "Screens unlocked")
+    }
+
     override fun snapWindowsOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).snapWindows
 
     override fun snapWindowsChosen(on: Boolean) {
