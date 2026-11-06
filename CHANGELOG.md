@@ -2,7 +2,7 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.16: a glasses setup check, Lock screens, and Send logs keeps Bluetooth names private
 
 Reported by tester John Davis (his report was not posted on GitHub, so there is no issue to link).
 
@@ -52,6 +52,18 @@ Anchor or Follow setting.
 - The first run tutorial no longer starts with the glasses page; the check opens after it instead. The Anchor card
   (glasses that may be in Anchor mode) opens the check, and no longer shows once the check has passed.
 - README: per model setup steps and a "Windows drift or get cut off" item. The Glasses report issue form says the same.
+
+Privacy and John's Android 11 phone:
+
+- **Send logs keeps Bluetooth names private.** "Send logs to Mike" already took out the names of the phone's paired
+  devices. It now also takes out names it finds in the logs by their shape: "device name:", alias=, "connected to ...",
+  and the device list and Name lines Android prints for Bluetooth, and it scrubs about.txt too. Each device becomes
+  `<bt-device-1>`, `<bt-device-2>` and so on, the same marker in every file of the zip, so a log can still show that the
+  same headset dropped twice without saying whose headset it is.
+- **John's Android 11 head tracking fix, written up.** Since 1.1.9, head tracking and the control link also try the
+  glasses at 169.254.1.1 on their second USB link when no network reaches 169.254.2.1, as on John's Galaxy S20 FE, and
+  the "No route" line names the interface's addresses. What was found and what to check next is now in
+  [docs/findings-john-s20fe-android11.md](docs/findings-john-s20fe-android11.md).
 
 ## 1.1.15: updates show up on their own, the beer row moves to the Menu
 

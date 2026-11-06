@@ -79,10 +79,10 @@ object SendLogs {
         // The Wi-Fi names the phone knows (read through Shizuku for the Control Center), taken out wherever they appear.
         val wifi = com.hayeco.flipspaces.phone.PhoneConnections.wifi
         val secrets = (listOfNotNull(wifi.connected) + wifi.saved.map { it.ssid }).distinct()
-        // 1.1.14: and the names of the phone's paired Bluetooth devices.
-        val devices = com.hayeco.flipspaces.phone.PhoneConnections.deviceNames(context)
+        // The paired Bluetooth names, likewise, each the same <bt-device-N> in every file of the zip.
+        val btNames = com.hayeco.flipspaces.phone.PhoneConnections.pairedNames(context)
         val written = file.outputStream().use { out ->
-            LogBundle.write(out, info, HeadDiagnosticsFile.text(context), LogBundle.logFiles(logDir), secrets, devices = devices)
+            LogBundle.write(out, info, HeadDiagnosticsFile.text(context), LogBundle.logFiles(logDir), secrets, btNames = btNames)
         }
         Log.i(TAG, "logs zipped for Mike: ${file.name}, ${written.bytes / 1024} KB, ${written.included.size} log files" +
             if (written.leftOut.isEmpty()) "" else ", ${written.leftOut.size} older ones left out")
