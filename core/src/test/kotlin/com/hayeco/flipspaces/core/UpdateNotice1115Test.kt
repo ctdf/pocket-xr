@@ -37,6 +37,22 @@ class UpdateNotice1115Test {
     }
 
     @Test
+    fun aFailedCheckWaitsBeforeTheNextRequest() {
+        val failedAt = 10_000_000L
+        assertEquals(30L * 60 * 1000, UpdateCheck.RETRY_MS)
+        // Offline at the first check (never answered): app starts and screens within 30 min make no request.
+        assertFalse(UpdateCheck.due(0L, failedAt + 1, failedAt))
+        assertFalse(UpdateCheck.due(0L, failedAt + UpdateCheck.RETRY_MS - 1, failedAt))
+        assertTrue(UpdateCheck.due(0L, failedAt + UpdateCheck.RETRY_MS, failedAt))
+        // 12 hours since the last answer, but it just failed: still waits.
+        assertFalse(UpdateCheck.due(1L, failedAt + 1, failedAt))
+        // The clock went back past the failure: due again.
+        assertTrue(UpdateCheck.due(0L, failedAt - 1, failedAt))
+        // No failure: as before.
+        assertTrue(UpdateCheck.due(0L, failedAt, 0L))
+    }
+
+    @Test
     fun checksRunOnlyOutsidePlayAndWhileTheSwitchIsOn() {
         assertTrue(UpdateCheck.runs(playBuild = false, installer = null, switchOn = true))
         assertTrue(UpdateCheck.runs(playBuild = false, installer = "com.google.android.packageinstaller", switchOn = true))

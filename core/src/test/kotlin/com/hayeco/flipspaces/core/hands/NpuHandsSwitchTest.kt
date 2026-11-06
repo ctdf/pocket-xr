@@ -105,6 +105,26 @@ class NpuHandsSwitchTest {
     }
 
     @Test
+    fun offNeverBuildsOrInstallsTheNpuInAnyState() {
+        val b = listOf(false, true)
+        for (active in b) for (built in b) for (building in b) for (failed in b) for (gpu in b) {
+            val step = NpuHandsSwitch.step(false, active, built, building, failed, gpu)
+            val state = "active=$active built=$built building=$building failed=$failed gpu=$gpu: $step"
+            assertTrue(state, step in setOf(Step.KEEP, Step.DROP, Step.DISCARD))
+            assertEquals(state, active, step == Step.DROP)
+        }
+    }
+
+    @Test
+    fun offFromTheHandsStartSendsNothingToTheNpuAllSession() {
+        // Off at the start (no NPU engine made) and left off: no step at all, every frame on MediaPipe.
+        val r = session({ false }, readOnlyAtStart = false)
+        assertTrue(r.steps.isEmpty())
+        assertEquals(0, r.npuFrames)
+        assertEquals(-1L, r.lastNpuFrameAt)
+    }
+
+    @Test
     fun theTrackingLineNamesTheNpu() {
         val npu = List(30) { FrameSample(20, 8, 6, true, 0.98f, ranOn = TrackingStats.NPU) }
         assertEquals("NPU", TrackingStats.delegateLabel(npu, TrackingStats.CPU))

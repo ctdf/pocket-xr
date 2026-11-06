@@ -62,6 +62,30 @@ class CameraLineGateTest {
     }
 
     @Test
+    fun anHourWornWithFramesFlowingNeverReopensTheCamera() {
+        // The glasses on the head for an hour, the stream never failing: the link never asks to connect again and
+        // never gives up, and the Camera line says "opened" once, then "still open" every 30 s.
+        val link = CameraLink()
+        link.start()
+        assertTrue(link.shouldConnect(0))
+        link.connecting()
+        link.streaming(100)
+        val gate = CameraLineGate()
+        gate.opened(100)
+        var opened = 0
+        var now = 100L
+        while (now < 60 * 60_000L) {
+            assertFalse("no reconnect at $now ms", link.shouldConnect(now))
+            assertTrue(link.checkGiveUp(now) is LinkState.Streaming)
+            gate.lead(now, window, "CPU")?.let { if (it.startsWith("Camera opened")) opened++ }
+            now += 33
+        }
+        assertEquals(1, opened)
+        assertEquals(1, gate.opens)
+        assertEquals(0, link.reconnects)
+    }
+
+    @Test
     fun aRealChangeIsSaidAtOnceAndAnOpenResetsTheCount() {
         val gate = CameraLineGate()
         gate.opened(0)

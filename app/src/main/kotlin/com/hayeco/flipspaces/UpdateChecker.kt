@@ -42,6 +42,7 @@ object UpdateChecker {
     private const val KEY_LATER = "later_version"
     private const val KEY_NOTIFIED = "notified_version"
     private const val KEY_ASKED = "notifications_asked"
+    private const val KEY_FAILED_AT = "failed_at_ms"
     private const val TIMEOUT_MS = 10_000
 
     /**
@@ -163,17 +164,19 @@ object UpdateChecker {
             if (last > 0L && result != null) _status.value = Status(result, last)
         }
         val now = System.currentTimeMillis()
-        if (running || (!force && !UpdateCheck.due(prefs(app).getLong(KEY_LAST, 0L), now))) return false
+        // 1.1.15: offline, a failed check waits UpdateCheck.RETRY_MS before the next request (Check now still asks).
+        if (running || (!force && !UpdateCheck.due(prefs(app).getLong(KEY_LAST, 0L), now, prefs(app).getLong(KEY_FAILED_AT, 0L)))) return false
         running = true
         _status.value = Status(Result.CHECKING, now)
         Thread({
             var result = Result.FAILED
             try {
-                val answer = fetch()
+                val answer = fetcher()
                 result = answered(app, answer.code, answer.json, now)
             } catch (e: Exception) {
                 Log.i(TAG, "update check failed: ${e.javaClass.simpleName}: ${e.message}")
             } finally {
+                prefs(app).edit().apply { if (result == Result.FAILED) putLong(KEY_FAILED_AT, now) else remove(KEY_FAILED_AT) }.apply()
                 prefs(app).edit().putString(KEY_RESULT, result.name).apply()
                 _status.value = Status(result, System.currentTimeMillis())
                 running = false
@@ -286,7 +289,11 @@ object UpdateChecker {
         running = false
     }
 
-    private class Answer(val code: Int, val json: String?)
+    internal class Answer(val code: Int, val json: String?)
+
+    /** 1.1.15: the request to GitHub ([fetch]); the tests count and fail it here instead of going to the network. */
+    internal val realFetcher: () -> Answer = ::fetch
+    @Volatile internal var fetcher: () -> Answer = realFetcher
 
     /** GitHub's answer: its code, and the release's JSON when it answered 200 (404: no release published yet). */
     private fun fetch(): Answer {

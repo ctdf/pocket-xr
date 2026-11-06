@@ -38,8 +38,20 @@ object UpdateCheck {
     /** What the latest release offers. */
     data class Release(val version: String, val pageUrl: String, val apkUrl: String?, val notes: String)
 
-    /** Whether a check is due: never checked, a day since the last one, or the clock went back. */
-    fun due(lastCheckMs: Long, nowMs: Long): Boolean = lastCheckMs <= 0L || nowMs - lastCheckMs >= EVERY_MS || nowMs < lastCheckMs
+    /**
+     * 1.1.15: after a failed check (offline, GitHub not answering) the next one waits this long, so a phone without a
+     * network makes one failed request, not one per app start or screen.
+     */
+    const val RETRY_MS = 30L * 60 * 1000
+
+    /**
+     * Whether a check is due: never checked, 12 hours since the last answer, or the clock went back; and not within
+     * [RETRY_MS] of a failed one ([failedAtMs], 0 when the last one did not fail).
+     */
+    fun due(lastCheckMs: Long, nowMs: Long, failedAtMs: Long = 0L): Boolean {
+        if (failedAtMs > 0L && nowMs >= failedAtMs && nowMs - failedAtMs < RETRY_MS) return false
+        return lastCheckMs <= 0L || nowMs - lastCheckMs >= EVERY_MS || nowMs < lastCheckMs
+    }
 
     /**
      * A version's numbers: "v1.2.3", "1.2.3-launcher" and "0.5.96-launcher" give [1, 2, 3] and [0, 5, 96]. Anything

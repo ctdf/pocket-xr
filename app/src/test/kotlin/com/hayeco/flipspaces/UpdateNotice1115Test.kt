@@ -15,12 +15,17 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeFalse
 import org.junit.Assume.assumeTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.net.UnknownHostException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 1.1.15: the update check found without opening Settings ([UpdateChecker]): the background check every 12 hours and
@@ -41,9 +46,75 @@ class UpdateNotice1115Test {
          "body":"Fixes."}
     """.trimIndent()
 
+    /** Requests that would have gone to GitHub; each one fails as it would offline. */
+    private val requests = AtomicInteger()
+
     @Before
     fun setUp() {
         UpdateChecker.resetForTest()
+        UpdateChecker.fetcher = { requests.incrementAndGet(); throw UnknownHostException("api.github.com (offline)") }
+    }
+
+    @After
+    fun tearDown() {
+        UpdateChecker.fetcher = UpdateChecker.realFetcher
+    }
+
+    /** Runs a check and waits for its thread; returns whether one started. */
+    private fun check(force: Boolean = false): Boolean {
+        val done = CountDownLatch(1)
+        val started = UpdateChecker.checkIfDue(app, force) { done.countDown() }
+        if (started) assertTrue("the check ended", done.await(5, TimeUnit.SECONDS))
+        return started
+    }
+
+    @Test
+    fun offlineMakesOneFailedRequestNotOnePerStartOrScreen() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        assertTrue(check())
+        assertEquals(1, requests.get())
+        assertEquals(UpdateChecker.Result.FAILED, UpdateChecker.status.value?.result)
+        // App start again, the settings screen, the background job: no more requests within UpdateCheck.RETRY_MS.
+        UpdateChecker.start(app)
+        assertFalse(check())
+        UpdateChecker.resetForTest()
+        assertFalse("remembered over a restart of the process", check())
+        assertEquals(1, requests.get())
+        // Check now still asks.
+        assertTrue(check(force = true))
+        assertEquals(2, requests.get())
+    }
+
+    @Test
+    fun theOffSwitchStopsEveryCheck() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        UpdateChecker.setEnabled(app, false)
+        UpdateChecker.start(app)
+        assertFalse(check())
+        assertFalse("not even Check now", check(force = true))
+        assertNull(jobs.getPendingJob(UpdateChecker.JOB_ID))
+        assertEquals(0, requests.get())
+        // On again: it checks at once and schedules the job.
+        UpdateChecker.setEnabled(app, true)
+        assertNotNull(jobs.getPendingJob(UpdateChecker.JOB_ID))
+        val until = System.currentTimeMillis() + 5_000
+        while (UpdateChecker.status.value?.result == UpdateChecker.Result.CHECKING && System.currentTimeMillis() < until) Thread.sleep(10)
+        assertEquals(1, requests.get())
+    }
+
+    @Test
+    fun theSameVersionIsNotNotifiedAgainAfterARestart() {
+        assumeFalse(BuildConfig.PLAY_BUILD)
+        val now = System.currentTimeMillis()
+        shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        UpdateChecker.answered(app, 200, release("99.0.0"), now)
+        assertEquals(1, notifications.allNotifications.size)
+        app.getSystemService(NotificationManager::class.java).cancelAll()
+        UpdateChecker.resetForTest()
+        UpdateChecker.checkIfDue(app)
+        UpdateChecker.answered(app, 200, release("99.0.0"), now + UpdateCheck.EVERY_MS)
+        assertEquals("99.0.0", UpdateChecker.banner.value?.version)
+        assertEquals(0, notifications.allNotifications.size)
     }
 
     @Test
