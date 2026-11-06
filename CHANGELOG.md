@@ -2,7 +2,7 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## Unreleased
+## 1.1.17: a real mouse in the Space
 
 - **A real mouse works in the Space.** Asked by tester John Davis. Before this, a Bluetooth or USB mouse did nothing
   in the Space: Android drew its own arrow, the Space ignored it, and on the phone a click on the trackpad counted as
