@@ -9,7 +9,7 @@ Reported by tester John Davis (his report was not posted on GitHub, so there is 
 - **Lock screens.** A Lock button sits at the end of the window keys on the open phone (Move, Resize, Further,
   Closer, Curve, Lock), and a "Lock screens" switch is in the Menu, which is also how the cover screen reaches it.
   While it is on, no window moves or resizes: press and hold, dragging by the edge, the resize handle, the window
-  keys, a two hand stretch, Reset, Arrange and Adjust all all leave the windows where they are. The blue resize
+  keys, a two hand stretch, Reset, Arrange and Adjust all: none of them shift a window. The blue resize
   handle is hidden, and a small lock shows at a window's corner instead, so it is clear why the window won't move.
   Clicks, scrolls, zooms and typing still reach the apps, and Close, Back, Refresh, Switch app, Wide view and Fit
   video still work. The setting is kept after Pocket XR or the phone restarts. The Lock button is 48 dp or larger
