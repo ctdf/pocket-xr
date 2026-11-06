@@ -457,7 +457,25 @@ class HeadPredictor(
     private val predictTurn = FloatArray(3)
 
     /** The orientation at [targetNs] (host clock), or null before the first sample. */
-    fun predict(targetNs: Long): Quat? {
+    fun predict(targetNs: Long): Quat? = predict(targetNs, count = true)
+
+    /**
+     * 1.1.17: the head's turn rate at [targetNs] as the prediction has it (body frame, rad/s): the turn between the
+     * poses predicted [RATE_SPAN_NS] either side of it. The gyro's rate is now's; a frame's pose is predicted to its light
+     * time, 20 to 40 ms on, and in a quick turn the rate there differs. Null before the first sample; the smoothed rate
+     * now when [targetNs] is too close to the sample or too far ahead for the span to fit.
+     */
+    fun rateAt(targetNs: Long): Vec3? {
+        if (orientation == null) return null
+        val lo = targetNs - RATE_SPAN_NS
+        val hi = targetNs + RATE_SPAN_NS
+        if (lo <= sampleNs || (hi - sampleNs) / 1e6f > maxAheadMs) return rate
+        val a = predict(lo, count = false) ?: return rate
+        val b = predict(hi, count = false) ?: return rate
+        return RestLock.turnVector(a, b) * (1e9f / (2 * RATE_SPAN_NS))
+    }
+
+    private fun predict(targetNs: Long, count: Boolean): Quat? {
         val q = orientation ?: return null
         val dt = ((targetNs - sampleNs) / 1e9f).coerceIn(0f, maxAheadMs / 1000f)
         if (dt <= 0f) return q
@@ -466,13 +484,13 @@ class HeadPredictor(
             // 0.5.55: the turn into a kept array and the product in one step ([HeadMath.turnedBy]): this runs several
             // times a frame on the render thread, and made a Vec3, a scaled Vec3 and four Quats each time.
             if (tremor.turnInto(dt * 1000.0, tremorShare.toDouble(), predictTurn)) {
-                tremorFrames++
+                if (count) tremorFrames++
                 // 0.5.30: times the still blend's share (1 moving, toward 0 when the prediction is mostly noise).
                 val blend = if (stillBlend) blendShare else 1f
                 val s = share * blend
                 return HeadMath.turnedBy(q, predictTurn[0] * s, predictTurn[1] * s, predictTurn[2] * s, 1f)
             }
-            fallbackFrames++
+            if (count) fallbackFrames++
         }
         val ramp = if (restRamp <= 0f) (if (activity >= restRate) 1f else 0f) else ((activity - restRate) / restRamp).coerceIn(0f, 1f)
         if (ramp <= 0f) return q
@@ -512,6 +530,9 @@ class HeadPredictor(
 
 /** 0.5.30: the still blend's ring, samples (at 1 kHz it holds the [HeadPredictor.blendRefMs] in flight several times over). */
 private const val BLEND_CAP = 256
+
+/** 1.1.17: half the span [HeadPredictor.rateAt] reads the predicted turn over, ns. */
+private const val RATE_SPAN_NS = 2_000_000L
 
 /** 0.5.30: finished turns before the still blend's gain is used. */
 private const val BLEND_WARMUP = 200

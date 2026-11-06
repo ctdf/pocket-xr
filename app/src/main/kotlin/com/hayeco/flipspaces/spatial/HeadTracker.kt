@@ -408,6 +408,9 @@ object HeadTracker {
     fun renderPose(presentNs: Long = System.nanoTime(), record: Boolean = true): Quat? {
         val sampleNs = lastSampleHostNs
         val since = if (sampleNs == 0L) Long.MAX_VALUE else (System.nanoTime() - sampleNs) / 1_000_000L
+        // 1.1.17: the head's turn rate at the light time, which carries the draw smoothing along with a real turn (none
+        // while held).
+        var rate: com.hayeco.flipspaces.core.spatial.Vec3? = null
         val q = synchronized(predictor) {
             when (HeadHold.use(since, predictor.orientation != null)) {
                 // 0.5.15: the chain line's horizon is the frame's own
@@ -415,6 +418,7 @@ object HeadTracker {
                 // row's, 8 ms high at 60 Hz).
                 HeadHold.Use.PREDICT -> predictor.predict(presentNs).also {
                     if (record) {
+                        rate = predictor.rateAt(presentNs)
                         lastPredictMs = (presentNs - predictor.sampleNs) / 1e6f
                         predictAhead.add(lastPredictMs.toDouble())
                     }
@@ -431,7 +435,7 @@ object HeadTracker {
         val smoothed = synchronized(drawSmoothing) {
             when {
                 usable == null -> null.also { drawSmoothing.free() }
-                record -> drawSmoothing.update(usable, presentNs)
+                record -> drawSmoothing.update(usable, presentNs, rate ?: com.hayeco.flipspaces.core.spatial.Vec3.ZERO)
                 else -> drawSmoothing.apply(usable)
             }
         }
