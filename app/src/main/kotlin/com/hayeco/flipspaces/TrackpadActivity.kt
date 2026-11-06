@@ -74,6 +74,7 @@ import com.hayeco.flipspaces.core.spatial.TrackpadLine
 import com.hayeco.flipspaces.core.spatial.TrackpadStatus
 import com.hayeco.flipspaces.hands.GlassesCameraProvider
 import com.hayeco.flipspaces.hands.HandInputManager
+import com.hayeco.flipspaces.pointer.MouseRoute
 import com.hayeco.flipspaces.pointer.PointerHub
 import com.hayeco.flipspaces.spatial.SpaceActivity
 import com.hayeco.flipspaces.spatial.SpaceCommand
@@ -523,6 +524,8 @@ class TrackpadActivity : Activity(), PadHost {
         // 0.5.17 cover screen: while its text field is open the trackpad takes focus, so the
         // cover's own keyboard opens for it; the keys it types are sent on to the window.
         if (resumed && !typing && PanelFocus.trackpadKeySink(active)) keySink.show() else keySink.hide()
+        // A mouse on the phone moves the Space's pointer while the Space is up (MouseRoute): Android's arrow is hidden over the pad.
+        frame.pointerIcon = if (active) android.view.PointerIcon.getSystemIcon(this, android.view.PointerIcon.TYPE_NULL) else null
         val flag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         val focusable = typing || PanelFocus.trackpadFocusable(active)
         val now = window.attributes.flags and flag == 0
@@ -531,6 +534,12 @@ class TrackpadActivity : Activity(), PadHost {
     }
 
     // ---- input ----
+
+    /** A mouse's clicks and drags on the phone go to the Space's pointer while the Space is up, never to the pad as a finger. */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean = MouseRoute.onMotion(ev) || super.dispatchTouchEvent(ev)
+
+    /** A mouse's moves and wheel on the phone, likewise. */
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean = MouseRoute.onMotion(ev) || super.dispatchGenericMotionEvent(ev)
 
     private fun submit(signal: PointerSignal) {
         PointerHub.submit(signal, HandProviderKind.TRACKPAD)
@@ -1809,6 +1818,8 @@ private class KeySink(private val activity: Activity, private val onBack: () -> 
         }
         v.isFocusable = true
         v.isFocusableInTouchMode = true
+        // The sink holds the phone's focus while the Space is up, so it is where a mouse's capture is asked for (MouseRoute).
+        com.hayeco.flipspaces.pointer.MouseRoute.attach(v)
         // 0.5.55 (the 1x1 "trackpad keys" layer was one of the cover's three CLIENT layers): the
         // sink draws nothing and says its whole window is transparent (ViewRootImpl's transparent region hint), so
         // SurfaceFlinger leaves the layer out of composition. It stays shown, alpha 1, with its buffer: hidden or alpha 0,

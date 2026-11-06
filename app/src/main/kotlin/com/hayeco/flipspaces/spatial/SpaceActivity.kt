@@ -190,6 +190,8 @@ class SpaceActivity : Activity() {
             override fun surfaceChanged(h: android.view.SurfaceHolder, format: Int, width: Int, height: Int) = voteFrameRate(h.surface, "surface ${width}x$height")
             override fun surfaceDestroyed(h: android.view.SurfaceHolder) = Unit
         })
+        // A Bluetooth or USB mouse moves the Space's own pointer, captured while this window has focus (MouseRoute).
+        com.hayeco.flipspaces.pointer.MouseRoute.attach(this)
     }
 
     private var lastVote: String? = null
@@ -1116,6 +1118,8 @@ class SpaceActivity : Activity() {
         GlassesWarp.spaceEnded()
         // 0.5.32: the glasses' own duty back and the display control link closed (a 72 Hz try under way keeps it).
         GlassesDisplayControl.configure(this, spaceUp = false, turnDuty = false)
+        // The mouse goes back to Android, a press it held let go of.
+        com.hayeco.flipspaces.pointer.MouseRoute.release(view)
         renderer.shutdown()
         if (isFinishing && sessionToken != 0) PlainDisplaySession.spaceClosed(this, sessionToken)
         // 0.5.54: the Space session ends: a forced pacesetter goes back to SurfaceFlinger's own choice.
