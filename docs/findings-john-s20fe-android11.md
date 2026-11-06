@@ -57,8 +57,7 @@ booting) out until a replug. Not changed in 1.1.8; a capped backoff (60 s) inste
 - The `NoRoute` line now carries the interfaces' IPv4 addresses ("eth0 169.254.1.10/24"), so the next report says which
   link it was.
 
-Unknown: whether the glasses serve 52998 and 52999 on 169.254.1.1. Nebula's own library talks to 169.254.1.1 first for its
-OTA socket, which suggests the services listen on both links, but this is not confirmed. If they do not, John's next report
+Unknown: whether the glasses serve 52998 and 52999 on 169.254.1.1; this is not confirmed. If they do not, John's next report
 changes from "No route" to a timeout or refusal on 169.254.1.1, which settles it either way.
 
 Tests: `HeadRetryTest.theEcmLinkReachesTheGlassesAt169_254_1_1`, `theEcmLinkIsUsedOnlyWhenNoNetworkReachesTheNcmLink`.

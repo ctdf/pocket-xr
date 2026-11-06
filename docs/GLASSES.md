@@ -53,7 +53,7 @@ it under "Check on the glasses".
 
 A Beam Pro runs XREAL's own spatial view, which turns the picture with your head as Pocket XR does. Close it before
 opening the Space from Pocket XR, or the windows move twice. The Beam Pro may also switch One series glasses back to
-Anchor. On a phone, XREAL's app (Nebula and the like) does no harm while closed; if it is open, close it from Recents.
+Anchor. On a phone, XREAL's own app does no harm while closed; if it is open, close it from Recents.
 Android does not tell an app which other apps are running, so Pocket XR says this whenever such an app is installed.
 
 The app cannot read the mode either. The one hint it has is the panel duty the glasses answer when the control link opens

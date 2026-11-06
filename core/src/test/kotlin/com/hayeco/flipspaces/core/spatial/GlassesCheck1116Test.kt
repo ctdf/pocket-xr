@@ -76,9 +76,9 @@ class GlassesCheck1116Test {
     @Test fun xrealAppsAreFoundByPackageAndNamed() {
         val host = SetupHost.detect(
             "samsung", "samsung", "SM-S928B",
-            mapOf("com.xreal.nebula" to "Nebula", "ai.nreal.something" to "XREAL", "com.google.android.youtube" to "YouTube", "com.hayeco.flipspaces" to "Pocket XR"),
+            mapOf("com.xreal.spaces" to "XREAL Spaces", "ai.nreal.something" to "XREAL", "com.google.android.youtube" to "YouTube", "com.hayeco.flipspaces" to "Pocket XR"),
         )
-        assertEquals(listOf("Nebula", "XREAL"), host.xrealApps)
+        assertEquals(listOf("XREAL", "XREAL Spaces"), host.xrealApps)
     }
 
     @Test fun aBeamProSaysWhatToCloseAndThatItCanResetAnchor() {
@@ -92,9 +92,9 @@ class GlassesCheck1116Test {
     }
 
     @Test fun aPhoneWithXrealAppsSaysToCloseThemAndAPlainPhoneSaysNothing() {
-        val withApp = GlassesSetup.page(GlassesModel.ONE, SetupHost(xrealApps = listOf("Nebula")))
+        val withApp = GlassesSetup.page(GlassesModel.ONE, SetupHost(xrealApps = listOf("XREAL Spaces")))
         assertEquals(1, withApp.hostNotes.size)
-        assertTrue(withApp.hostNotes[0].startsWith("Nebula is on this phone"))
+        assertTrue(withApp.hostNotes[0].startsWith("XREAL Spaces is on this phone"))
         assertTrue(withApp.hostNotes[0].contains("close it from Recents"))
         assertTrue(GlassesSetup.page(GlassesModel.ONE, SetupHost.PHONE).hostNotes.isEmpty())
         // On a Beam Pro its own XREAL apps are not listed again.
@@ -201,9 +201,9 @@ class GlassesCheck1116Test {
         val phone = GlassesCheck.result(SetupFamily.AIR, SetupHost.PHONE, turned, Answers(false, Moved.TOO_FAR))!!
         assertEquals(Fix.REPORT, phone.fix)
         for (r in listOf(beam, phone)) assertFalse(r.text.contains("Press X"))
-        val app = GlassesCheck.result(SetupFamily.AIR, SetupHost(xrealApps = listOf("Nebula")), turned, Answers(false, Moved.SLID_BACK))!!
+        val app = GlassesCheck.result(SetupFamily.AIR, SetupHost(xrealApps = listOf("XREAL Spaces")), turned, Answers(false, Moved.SLID_BACK))!!
         assertEquals(Fix.XREAL_HOST, app.fix)
-        assertTrue(app.text.startsWith("Nebula"))
+        assertTrue(app.text.startsWith("XREAL Spaces"))
     }
 
     @Test fun unknownGlassesGetAConditionalHint() {
@@ -220,7 +220,7 @@ class GlassesCheck1116Test {
     }
 
     @Test fun everyResultIsPlainWords() {
-        for (fix in Fix.entries) for (family in SetupFamily.entries) for (host in listOf(SetupHost.PHONE, beamPro, SetupHost(xrealApps = listOf("Nebula")))) {
+        for (fix in Fix.entries) for (family in SetupFamily.entries) for (host in listOf(SetupHost.PHONE, beamPro, SetupHost(xrealApps = listOf("XREAL Spaces")))) {
             val t = GlassesCheck.text(fix, family, host)
             assertFalse(t, t.contains('—') || t.contains('–'))
             assertFalse(t, Regex("\\bwe\\b", RegexOption.IGNORE_CASE).containsMatchIn(t))
