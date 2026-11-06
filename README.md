@@ -41,6 +41,10 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
 
 - **Windows in space.** Any Android app opens as a window around you, at its own size and distance. You can drag a
   window by its edge, snap it next to others, curve it, or push it further and pull it closer.
+- **Lock screens.** One tap on the Lock button by the window keys, or in the Menu, keeps every window where it is:
+  nothing moves or resizes, while clicks, scrolls and typing still reach the apps. A small lock shows on a locked
+  window, and the setting is kept after a restart. Unlocked, a window resizes only from a clear drag on the blue handle
+  at its bottom right corner.
 - **All windows at once.** Hold both hands up, or use Adjust all, to move, push, pull or resize every window together.
 - **Head tracking.** Windows stay where you put them as you turn your head. It reads the glasses' own motion sensor
   at 1000 Hz, paced to the glasses' display. This is 3DoF (turning, not walking around); 6DoF is open for the

@@ -395,7 +395,7 @@ internal class IconTexture(private val size: Int = 128) {
      * screen with a play triangle in it, a check at its lower right when on, a circle slash when off; the
      * unavailable one (an app that asks for landscape) is the on look, dimmed by the caller.
      */
-    enum class Icon { BACK, REFRESH, RESET, CLOSE, BROAD_ON, BROAD_OFF, FIT_ON, FIT_OFF, IMMERSIVE_ON, IMMERSIVE_OFF, SWITCH }
+    enum class Icon { BACK, REFRESH, RESET, CLOSE, BROAD_ON, BROAD_OFF, FIT_ON, FIT_OFF, IMMERSIVE_ON, IMMERSIVE_OFF, SWITCH, LOCK }
 
     var id = 0
         private set
@@ -434,6 +434,19 @@ internal class IconTexture(private val size: Int = 128) {
             Icon.CLOSE -> {
                 canvas.drawLine(s * 0.35f, s * 0.35f, s * 0.65f, s * 0.65f, stroke)
                 canvas.drawLine(s * 0.65f, s * 0.35f, s * 0.35f, s * 0.65f, stroke)
+            }
+            Icon.LOCK -> {
+                // 1.1.15: Lock screens: a padlock, its shackle an arch over a filled body with a keyhole.
+                stroke.strokeWidth = s * 0.07f
+                canvas.drawArc(android.graphics.RectF(s * 0.36f, s * 0.2f, s * 0.64f, s * 0.5f), 180f, 180f, false, stroke)
+                canvas.drawLine(s * 0.36f, s * 0.35f, s * 0.36f, s * 0.47f, stroke)
+                canvas.drawLine(s * 0.64f, s * 0.35f, s * 0.64f, s * 0.47f, stroke)
+                fill.color = foreground
+                canvas.drawRoundRect(android.graphics.RectF(s * 0.28f, s * 0.45f, s * 0.72f, s * 0.78f), s * 0.06f, s * 0.06f, fill)
+                fill.color = android.graphics.Color.TRANSPARENT
+                fill.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+                canvas.drawCircle(s / 2f, s * 0.58f, s * 0.045f, fill)
+                fill.xfermode = null
             }
             Icon.SWITCH -> {
                 // 0.5.85: Switch app: two arrows passing, one right along the top, one left along the bottom.

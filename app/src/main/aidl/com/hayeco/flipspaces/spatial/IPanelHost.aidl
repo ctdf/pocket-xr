@@ -150,4 +150,17 @@ interface IPanelHost {
      * "refused: ..." or "failed: ...".
      */
     String appCompat(String packageName, String action) = 25;
+
+    /**
+     * 1.1.15: the root tasks on [displayId], top first, one "taskId package" line each (core.spatial.LaunchDisplay.parse),
+     * the package of each task's top activity (else its base one); null when Android would not say.
+     */
+    String[] rootTaskLines(int displayId) = 28;
+
+    /**
+     * 1.1.15: moves root task [taskId] onto [displayId] (IActivityTaskManager.moveRootTaskToDisplay, what
+     * `am display move-stack` runs), for an app's new screen that Android put on the phone instead of its window.
+     * Returns null when Android took it, else why not.
+     */
+    String moveTaskToDisplay(int taskId, int displayId) = 29;
 }

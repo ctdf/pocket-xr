@@ -92,11 +92,13 @@ class SpatialPointerTest {
     @Test
     fun cornerGrabResizes() {
         val p = pointer()
-        val yaw = panel.widthDeg / 2f - 0.5f
-        val pitch = -panel.heightDeg / 2f + 0.5f
+        // 1.1.15: the handle is just outside the bottom right corner, and a resize needs a short hold and a drag.
+        val yaw = panel.widthDeg / 2f + 0.5f
+        val pitch = -panel.heightDeg / 2f - 0.5f
         p.handle(PointerSignal.MoveBy(yaw / 0.04f, -pitch / 0.04f), Quat.IDENTITY, layout, pixels)
         assertEquals(PanelZone.CORNER, p.hover?.zone)
         p.handle(PointerSignal.Down(), Quat.IDENTITY, layout, pixels)
+        p.frame(Quat.IDENTITY, layout, CornerDrag.HOLD_MS + 50)
         val grown = p.handle(PointerSignal.MoveBy(10f / 0.04f, 0f), Quat.IDENTITY, layout, pixels)
             .filterIsInstance<SpaceAction.Layout>().last().layout.panel(1)!!
         assertTrue(grown.widthDeg > panel.widthDeg + 5f)

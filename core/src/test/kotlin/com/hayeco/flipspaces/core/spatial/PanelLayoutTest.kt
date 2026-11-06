@@ -43,9 +43,10 @@ class PanelLayoutTest {
         // Just above the top edge.
         val topPitch = ahead.heightDeg / 2f + 1f
         assertEquals(PanelZone.TITLE_BAR, PanelHitTester.hit(gaze(0f, topPitch), ahead)?.zone)
-        // The bottom right corner.
-        val corner = PanelHitTester.hit(gaze(ahead.widthDeg / 2f - 0.5f, -ahead.heightDeg / 2f + 0.5f), ahead)
+        // The bottom right corner's handle, just outside it. 1.1.15: two degrees inside it is the app's.
+        val corner = PanelHitTester.hit(gaze(ahead.widthDeg / 2f + 0.5f, -ahead.heightDeg / 2f - 0.5f), ahead)
         assertEquals(PanelZone.CORNER, corner?.zone)
+        assertEquals(PanelZone.BODY, PanelHitTester.hit(gaze(ahead.widthDeg / 2f - 2f, -ahead.heightDeg / 2f + 2f), ahead)?.zone)
         // Well outside.
         assertNull(PanelHitTester.hit(gaze(60f, 0f), ahead))
         assertNull(PanelHitTester.hit(gaze(180f, 0f), ahead))

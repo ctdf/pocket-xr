@@ -2,6 +2,34 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+Reported by tester John Davis (his report was not posted on GitHub, so there is no issue to link).
+
+- **Lock screens.** A Lock button sits at the end of the window keys on the open phone (Move, Resize, Further,
+  Closer, Curve, Lock), and a "Lock screens" switch is in the Menu, which is also how the cover screen reaches it.
+  While it is on, no window moves or resizes: press and hold, dragging by the edge, the resize handle, the window
+  keys, a two hand stretch, Reset, Arrange and Adjust all all leave the windows where they are. The blue resize
+  handle is hidden, and a small lock shows at a window's corner instead, so it is clear why the window won't move.
+  Clicks, scrolls, zooms and typing still reach the apps, and Close, Back, Refresh, Switch app, Wide view and Fit
+  video still work. The setting is kept after Pocket XR or the phone restarts. The Lock button is 48 dp or larger
+  and a screen reader reads it as a switch with its state.
+- **The resize handle no longer covers app buttons.** The blue handle at a window's bottom right now catches the
+  pointer only outside the window and on its very edge (0.3 degrees in), where before it took a block about 12 % of
+  the window inside the corner, over the app. Hovering over it does nothing. A resize starts only after the handle
+  is held for 150 ms and dragged at least 1 degree; a plain click or a long press there without a drag goes to the
+  app, at the window's edge. A long press inside a window never resizes it.
+- **Compose in Gmail and Outlook stays in the window.** These apps open the email editor as a new screen in a task
+  of its own, started in a way Android does not tie to the window it came from, so Android put it on the phone's
+  screen, where the phone last had focus. Pocket XR cannot choose the display for a screen another app starts, so
+  for 6 seconds after a press in a window it watches the phone's screen, and a new screen of that same app that
+  shows up there is moved back onto the window's display (as `am display move-stack` does, through Shizuku). Screens
+  that were already open on the phone, and other apps, are never moved.
+  Where Android still gets in the way: the editor can flash on the phone for a moment before it moves, since Android
+  shows it there first. Without Shizuku running there is no way to move it, so it stays on the phone. If Android
+  refuses the move, or sends the screen back to the phone, Pocket XR leaves it there rather than fight Android, and
+  writes why in its log.
+
 ## 1.1.14: NPU hand tracking is back on Exynos phones
 
 - Hand tracking runs on the NPU again on phones with the Exynos 2500, like the Galaxy Z Flip 7. The 1.1.13 download
