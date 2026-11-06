@@ -53,6 +53,9 @@ phone becomes a trackpad, a Spatial Mouse you point, or you use your hands.
   into 3D by itself where they allow it.
 - **Your phone as the controller.** A trackpad, with taps, two-finger scroll and pinch and three-finger swipes; a
   Spatial Mouse you point like a laser; and a scroll strip. On a Galaxy Z Flip it also works on the cover screen.
+  A Bluetooth or USB mouse, on the phone or a Beam Pro, moves the same pointer: left click clicks, right click is a
+  long press, the wheel scrolls the window under the pointer, and dragging a window's edge or handle moves or resizes
+  it (unless Lock screens is on). A hardware keyboard types into the window you last clicked.
 - **Hand tracking**, on glasses with a camera: point, pinch and drag, with each hand separately. It works on the
   XREAL Aura today. The One and One Pro can get it through the XREAL Eye camera add-on, which is next (help wanted).
 - **An app launcher, a Control Center** (arrange layouts, presets, Wi-Fi, Bluetooth, quick settings) and **Wide

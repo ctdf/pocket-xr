@@ -2,6 +2,24 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+- **A real mouse works in the Space.** Asked by tester John Davis. Before this, a Bluetooth or USB mouse did nothing
+  in the Space: Android drew its own arrow, the Space ignored it, and on the phone a click on the trackpad counted as
+  a finger's tap. Now a mouse connected to the phone or a Beam Pro moves Pocket XR's own pointer, the way the
+  trackpad does. Left click clicks, right click is the app's long press (the trackpad's two finger tap), and the
+  wheel scrolls the window under the pointer. Click and drag on a window's edge to move it, or on the blue handle to
+  resize it; with Lock screens on, neither moves. The mouse's Back button is Back. While the Space is up I capture
+  the mouse, so Android's arrow is hidden and can't wander off to another screen; when the Space closes, or you leave
+  Pocket XR, the mouse goes back to Android. The trackpad's cursor speed sets the mouse's speed too. The
+  trackpad and Spatial Mouse work as before.
+- **With Cursor follows head off, the mouse's pointer stays where you put it.** On glasses with a camera, your hands
+  on the keyboard were taken for hand input: a hand cursor took over from the mouse's pointer and partly turned with
+  your head, so looking at another window seemed to move the pointer there, and a stray pinch could click that
+  window and take your typing. Now, while a mouse is in use and Cursor follows head is off, hand cursors and pinches
+  are set aside: only the mouse or the trackpad moves the pointer, and your keys stay with the window you clicked.
+  Turn Cursor follows head on, or disconnect the mouse, and hands work as before.
+
 ## 1.1.16: a glasses setup check, Lock screens, and Send logs keeps Bluetooth names private
 
 Reported by tester John Davis (his report was not posted on GitHub, so there is no issue to link).

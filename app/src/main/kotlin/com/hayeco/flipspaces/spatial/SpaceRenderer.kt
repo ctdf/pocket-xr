@@ -1044,6 +1044,12 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 pointer.cursorFollowsHead = follows
                 Log.i(tag, "cursor follows the head: ${if (follows) "on" else "off (anchored in the room)"}")
             }
+            // Unreleased: a mouse in use sets the hands aside while the cursor stays anchored (SpatialPointer.handsSetAside).
+            val mouse = com.hayeco.flipspaces.pointer.MouseRoute.leads()
+            if (pointer.mouseLeads != mouse) {
+                pointer.mouseLeads = mouse
+                Log.i(tag, "a mouse ${if (mouse) "leads the pointer" else "no longer leads the pointer"}: hands ${if (pointer.handsSetAside) "set aside (Cursor follows head is off)" else "work as before"}")
+            }
         }
         SpaceSession.heldAdjusts = pointer.holdAdjusts
         SpaceSession.heldCurves = pointer.holdCurves
