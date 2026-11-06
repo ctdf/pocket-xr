@@ -2463,6 +2463,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         wifi = com.hayeco.flipspaces.phone.PhoneConnections.wifi,
         bt = com.hayeco.flipspaces.phone.PhoneConnections.bt,
         minute = System.currentTimeMillis() / 60_000L,
+        // 1.1.15: a newer Pocket XR not put off with Later, as a line under the title.
+        update = com.hayeco.flipspaces.UpdateChecker.banner.value?.version,
     )
 
     /** 0.5.46: whether notification access is on, read at most every 2 s (the card asks every frame). */

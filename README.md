@@ -128,9 +128,14 @@ which the block does not cover, or turn off "Scan apps with Play Protect" in the
 
 Every update is free. There are three ways to get them:
 
-- **In the app.** Pocket XR checks GitHub Releases once a day and shows a card on its phone screen when a newer version
-  is out; tap Download. You can turn this off with "Check for updates" on the same screen. The check sends nothing
-  about you or your phone: it is a plain request to GitHub's public API.
+- **In the app.** Pocket XR checks GitHub Releases when it starts and every 12 hours in the background. When a newer
+  version is out, "Update available" shows across the top of the trackpad and of Pocket XR Settings, with a line in the
+  Menu and on the glasses' Control Center, and one notification says "Pocket XR x.y.z is ready". Tap Update to download
+  it, or Later to hide it until the next version. On Android 13 and later, Pocket XR asks once to allow notifications
+  when it first finds an update; if you say no, the banner still shows. "Check for updates", with the version you have,
+  is at the top of Pocket XR Settings, where you can turn the check off or check now. The check sends nothing about you
+  or your phone: it is a plain request to GitHub's public API. The Google Play version never checks GitHub; Play
+  updates it.
 - **[Obtainium](https://github.com/ImranR98/Obtainium)**, which updates apps straight from their GitHub releases. In
   Obtainium, tap Add App and paste `https://github.com/pocket-xr/pocket-xr`. It then shows each new release and
   installs it with a tap.
@@ -178,7 +183,8 @@ names are XREAL's trademarks, used here only to say what the app works with.
 [![Buy me a beer on Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20beer-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/mikehaye)
 
 Enjoying Pocket XR? You can buy me a beer on [Ko-fi](https://ko-fi.com/mikehaye). It's never required; a star or a
-glasses report helps just as much.
+glasses report helps just as much. In the app, it's the "Buy me a beer" row at the top of the trackpad's Menu (left
+out of the Google Play version).
 
 ## Licence
 

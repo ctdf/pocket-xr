@@ -568,9 +568,16 @@ data class HandThresholds(
 object CameraDebugLine {
     const val EVERY_MS = 1000L
 
-    fun line(cameraId: String, sensorOrientation: Int?, window: DetectionWindow, delegate: String): String =
-        "Camera: id $cameraId, sensor orientation ${sensorOrientation?.toString() ?: "none (UVC)"}, " +
-            "rotation applied ${window.rotation}, ${window.describe()}, MediaPipe on $delegate"
+    /**
+     * 1.1.15: [lead] from [CameraLineGate] ("Camera opened", "Camera still open ..."), and the NPU named as what runs the
+     * hand models (1.1.14 said "MediaPipe on NPU", though MediaPipe only checks the NPU then).
+     */
+    fun line(cameraId: String, sensorOrientation: Int?, window: DetectionWindow, delegate: String, lead: String = "Camera"): String =
+        "$lead: id $cameraId, sensor orientation ${sensorOrientation?.toString() ?: "none (UVC)"}, " +
+            "rotation applied ${window.rotation}, ${window.describe()}, ${runsOn(delegate)}"
+
+    /** "hand models on the NPU" while the NPU runs them, else "MediaPipe on GPU" or "MediaPipe on CPU". */
+    fun runsOn(delegate: String): String = if (delegate == NpuHandsSwitch.NPU) "hand models on the NPU" else "MediaPipe on $delegate"
 
     /** True when a line is due at [nowMs], given the last one went out at [lastMs] (0 for never). */
     fun due(nowMs: Long, lastMs: Long): Boolean = lastMs == 0L || nowMs - lastMs >= EVERY_MS
