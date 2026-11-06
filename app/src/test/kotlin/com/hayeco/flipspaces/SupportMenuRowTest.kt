@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import com.hayeco.flipspaces.core.Support
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -61,23 +62,25 @@ class SupportMenuRowTest {
     @Test
     fun koFiIsTheMenusFirstRowInTheGitHubBuild() {
         assumeFalse(BuildConfig.PLAY_BUILD)
-        assertEquals(listOf(PadScreen.MENU_KO_FI), menu(update = null).menuRowTags())
+        assertEquals(listOf(PadScreen.MENU_KO_FI), menu(update = null).menuRowTags().take(1))
+        assertFalse(PadScreen.MENU_UPDATE in menu(update = null).menuRowTags())
         val row = menu(update = null).menuRow(PadScreen.MENU_KO_FI)!!
         assertEquals(Support.DESCRIPTION, row.contentDescription)
         assertTrue("at least 48 dp tall", row.minimumHeight >= (48 * app.resources.displayMetrics.density).toInt())
     }
 
+    /** 1.1.16: the Menu's other tagged rows (Lock screens, the glasses check) come after these two. */
     @Test
     fun theUpdateRowFollowsIt() {
         assumeFalse(BuildConfig.PLAY_BUILD)
-        assertEquals(listOf(PadScreen.MENU_KO_FI, PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags())
+        assertEquals(listOf(PadScreen.MENU_KO_FI, PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags().take(2))
     }
 
     @Test
     fun thePlayBuildHasNoKoFiRow() {
         assumeTrue(BuildConfig.PLAY_BUILD)
         assertNull(menu(update = null).menuRow(PadScreen.MENU_KO_FI))
-        assertEquals(listOf(PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags())
+        assertEquals(listOf(PadScreen.MENU_UPDATE), menu(update = "99.0.0").menuRowTags().take(1))
     }
 
     @Test

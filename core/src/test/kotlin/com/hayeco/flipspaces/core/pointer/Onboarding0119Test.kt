@@ -43,21 +43,14 @@ class Onboarding0119Test {
         for (m in GlassesModel.entries) assertEquals(m.name, m.setupHint != null, GlassesSetup.forModel(m) != null)
     }
 
-    @Test fun firstRunOnAOneProStartsWithItsSetup() {
-        val pages = IntroPages.firstRun(GlassesModel.ONE_PRO, landscapeHandheld = false, spatialMouse = true)
-        assertEquals(
-            listOf("Set up your XREAL One Pro", "Point and click", "Scroll and zoom", "Three fingers", IntroPages.SPATIAL_MOUSE_TITLE),
-            pages.map { it.title },
-        )
-        assertEquals(IntroArt.GLASSES_MENU, pages[0].art)
-        assertNotNull(pages[0].note)
-    }
-
-    @Test fun firstRunOnAnAuraOrNoGlassesHasNoSetupPage() {
-        for (m in listOf(GlassesModel.AURA, null)) {
-            val pages = IntroPages.firstRun(m, landscapeHandheld = false, spatialMouse = true)
-            assertEquals(listOf("Point and click", "Scroll and zoom", "Three fingers", IntroPages.SPATIAL_MOUSE_TITLE), pages.map { it.title })
-        }
+    /** 1.1.16 (issue 12): the glasses' setup moved from the first run's pages to the setup check. */
+    @Test fun firstRunIsTheTrackpadPagesTheSetupIsTheCheck() {
+        val pages = IntroPages.firstRun(landscapeHandheld = false, spatialMouse = true)
+        assertEquals(listOf("Point and click", "Scroll and zoom", "Three fingers", IntroPages.SPATIAL_MOUSE_TITLE), pages.map { it.title })
+        val page = IntroPages.glassesSetup(GlassesModel.ONE_PRO)
+        assertNotNull(page)
+        assertEquals(IntroArt.GLASSES_MENU, page!!.art)
+        assertNotNull(page.note)
     }
 
     @Test fun spatialMouseIsNamedAndHeldUprightOnAPhone() {
@@ -76,12 +69,12 @@ class Onboarding0119Test {
         assertTrue(p.items.any { it.contains("Tilt the top edge up and down") })
         // The same check the trackpad uses: a Retroid Nova is portrait by nature with built in controls.
         val nova = TrackpadSettings.landscapeHandheld(TrackpadSettings.landscapeByNature(1080, 1920, 1), builtInGamepad = true)
-        assertEquals(IntroArt.AIM_HANDHELD, IntroPages.firstRun(GlassesModel.ONE_PRO, nova, spatialMouse = true).last().art)
+        assertEquals(IntroArt.AIM_HANDHELD, IntroPages.firstRun(nova, spatialMouse = true).last().art)
     }
 
     @Test fun noSpatialMousePageWithoutTheSensor() {
-        val pages = IntroPages.firstRun(GlassesModel.ONE, landscapeHandheld = true, spatialMouse = false)
-        assertEquals(listOf("Set up your XREAL One", "Point and click", "Scroll and zoom", "Three fingers"), pages.map { it.title })
+        val pages = IntroPages.firstRun(landscapeHandheld = true, spatialMouse = false)
+        assertEquals(listOf("Point and click", "Scroll and zoom", "Three fingers"), pages.map { it.title })
         // 1.1.10: the same pages as the gestures, the last one with where Exit is.
         assertEquals(IntroPages.GESTURES.map { it.title }, IntroPages.trackpad(landscapeHandheld = false, spatialMouse = false).map { it.title })
     }

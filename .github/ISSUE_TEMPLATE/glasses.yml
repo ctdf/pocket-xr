@@ -10,11 +10,16 @@ body:
       render: text
     validations:
       required: true
+  - type: markdown
+    attributes:
+      value: |
+        **Windows drift, move faster than your head, or get cut off?** On the XREAL One, One Pro and 1S, press X on the glasses once for Follow mode (not Anchor), and turn Stabilizer off in the glasses' menu (X twice, then Spatial Screen, then Stabilizer). On a Beam Pro, close XREAL's spatial view first. The Glasses setup check in Pocket XR Settings walks through it.
   - type: checkboxes
     id: checks
     attributes:
       label: What works
       options:
+        - label: The Glasses setup check passed (Pocket XR Settings, Glasses setup check)
         - label: The Space opens on the glasses
         - label: Head tracking keeps windows in place (looking left, right, up and down)
         - label: 3D side by side turns on and stays on
@@ -23,4 +28,4 @@ body:
     id: notes
     attributes:
       label: Anything else
-      description: What looked wrong, and any setting on the glasses you changed.
+      description: What looked wrong, any setting on the glasses you changed (Follow or Anchor, Stabilizer), and what the glasses are plugged into (phone model, or a Beam Pro).

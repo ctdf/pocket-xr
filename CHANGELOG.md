@@ -30,6 +30,29 @@ Reported by tester John Davis (his report was not posted on GitHub, so there is 
   refuses the move, or sends the screen back to the phone, Pocket XR leaves it there rather than fight Android, and
   writes why in its log.
 
+From [the testers issue](https://github.com/pocket-xr/pocket-xr/issues/12): on an XREAL 1S plugged into a Beam Pro,
+windows turned faster than the room and were cut off past a certain angle. thejoeba spotted the cause: the glasses' own
+Anchor or Follow setting.
+
+- **Glasses setup check.** The first time a new glasses model connects, Pocket XR opens one short screen with only the
+  steps those glasses need, then a 10 second check: turn your head left and right, and say whether the windows stayed
+  put. Pocket XR measures its own head pose during the turn, so a yes with no real turn does not count. If the check
+  fails, it names the one setting to change: Anchor mode on the glasses, their Stabilizer, XREAL's own software on the
+  host, or Pocket XR's own Smooth Follow. It can be skipped, and once it passes it never comes up by itself again. It is
+  also in Pocket XR Settings and the trackpad's Menu as "Glasses setup check", at any time. Buttons are 52 dp tall and a
+  screen reader reads them as buttons, and reads the countdown and the result.
+- **Steps for each model, in XREAL's words.** One, One Pro and 1S: press X on the glasses once and pick Follow mode, not
+  Anchor; press X twice to open the menu and turn Stabilizer off under Spatial Screen (under Display on older
+  firmware). The Air family, the Aura and glasses Pocket XR does not know get no steps for the glasses, since they have
+  nothing to set. The One series is now also recognised by its USB product when its name says nothing.
+- **Beam Pro and XREAL's apps.** On a Beam Pro the check says plainly that XREAL's spatial view also turns the picture
+  with your head and should be closed before opening the Space, and that the Beam Pro may put One series glasses back in
+  Anchor. On a phone with XREAL's app installed, it names the app and says it does no harm while closed, but to close it
+  from Recents if it is open.
+- The first run tutorial no longer starts with the glasses page; the check opens after it instead. The Anchor card
+  (glasses that may be in Anchor mode) opens the check, and no longer shows once the check has passed.
+- README: per model setup steps and a "Windows drift or get cut off" item. The Glasses report issue form says the same.
+
 ## 1.1.15: updates show up on their own, the beer row moves to the Menu
 
 - New versions are easier to find. Pocket XR checks GitHub Releases when it starts and every 12 hours in the

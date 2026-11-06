@@ -167,6 +167,7 @@ class MainActivity : ComponentActivity() {
                         message = if (file != null) "Glasses report saved: ${file.name}" else "Glasses report made (not saved)"
                     },
                     onSendLogs = { SendLogs.send(this, this) },
+                    onGlassesCheck = { startActivity(Intent(this, TrackpadActivity::class.java).putExtra(TrackpadActivity.EXTRA_GLASSES_CHECK, true)) },
                 )
             }
         }

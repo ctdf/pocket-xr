@@ -83,6 +83,19 @@ class TrackpadPrefs(context: Context) {
             prefs.edit().putStringSet(KEY_GLASSES_SEEN, value.toSet()).apply()
         }
 
+    /**
+     * 1.1.16 (issue 12): the glasses setup check's state per model ([com.hayeco.flipspaces.core.spatial.GlassesCheckMemory]),
+     * with 1.1.9's [glassesSetupSeen] models counted as skipped.
+     */
+    var glassesCheck: Map<String, com.hayeco.flipspaces.core.spatial.CheckState>
+        get() = com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.merge(
+            com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.decode(prefs.getStringSet(KEY_GLASSES_CHECK, null)?.toSet() ?: emptySet()),
+            glassesSetupSeen,
+        )
+        set(value) {
+            prefs.edit().putStringSet(KEY_GLASSES_CHECK, com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.encode(value)).apply()
+        }
+
     /** 0.5.19: the curve new windows open with. 0.5.36: 0 flat to [com.hayeco.flipspaces.core.spatial.PanelCurve.MAX], the Menu's slider. */
     var curveDefault: Float
         get() = prefs.getFloat(KEY_CURVE, 0f).takeIf { it.isFinite() }?.coerceIn(0f, com.hayeco.flipspaces.core.spatial.PanelCurve.MAX) ?: 0f
@@ -127,6 +140,7 @@ class TrackpadPrefs(context: Context) {
         private const val KEY_WRAP = "CurveWrap"
         private const val KEY_NATIVE_BUFFER = "NativeBuffer"
         private const val KEY_GLASSES_SEEN = "GlassesSetupSeen"
+        private const val KEY_GLASSES_CHECK = "GlassesCheckState"
 
         /** 0.5.17 cover screen: the window rail's side, stored like the scrollbar's (0 left, else right). */
         private const val KEY_COVER_CONTROLS = "CoverControlsSide"

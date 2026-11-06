@@ -664,8 +664,12 @@ interface PadHost {
     /** 1.1.9: the Menu's "How to use the trackpad" pages, for this device ([com.hayeco.flipspaces.core.pointer.IntroPages.trackpad]). */
     fun introPages(): List<com.hayeco.flipspaces.core.pointer.IntroPage>
 
-    /** 1.1.9: the glasses setup page for the glasses plugged in (else the last ones used), or null when they have none. */
-    fun glassesSetupPage(): com.hayeco.flipspaces.core.pointer.IntroPage?
+    /**
+     * 1.1.9: the glasses setup page for the glasses plugged in (else the last ones used), or null when they have none.
+     * 1.1.16 (issue 12): the setup check ([GlassesCheckCard]) for any glasses known, opened by [openGlassesCheck].
+     */
+    fun glassesCheckAvailable(): Boolean
+    fun openGlassesCheck()
     fun padTouch(event: MotionEvent, width: Float, height: Float)
     fun backClicked()
     fun homeDown()
@@ -1865,13 +1869,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // (Mike: "put Pocket XR Settings back where it was, i dont like it as its own tile"): back in this card.
         functions.addView(c.divider(20f))
         functions.addView(row(R.drawable.ic_settings_sliders, "Pocket XR Settings") { host.openSettings() })
-        // 1.1.9 (issue 31): the glasses' own settings the Space needs, the same page as at first run; only for glasses that have one.
-        host.glassesSetupPage()?.let { page ->
+        // 1.1.9 (issue 31): the glasses' own settings the Space needs. 1.1.16 (issue 12): with the head turn check, for
+        // any glasses known (plugged in or last used), at any time.
+        if (host.glassesCheckAvailable()) {
             functions.addView(c.divider(20f))
-            functions.addView(row(R.drawable.ic_usage_intro, "Glasses setup") {
+            functions.addView(row(R.drawable.ic_usage_intro, GLASSES_CHECK_ROW, subtitle = "The settings your glasses need, and a 10 second check") {
                 closeDrawer()
-                showIntro(listOf(page))
-            })
+                host.openGlassesCheck()
+            }.apply { tag = MENU_GLASSES_CHECK })
         }
         // 0.5.102 (Mike): the Glasses report moved to Advanced on the settings home.
         functions.addView(c.divider(20f))
@@ -2483,8 +2488,26 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         requestLayout()
     }
 
+    /**
+     * 1.1.16 (issue 12): the glasses setup check ([GlassesCheckCard], built by the activity) in the tutorial's frame. It
+     * closes itself through [closeIntro].
+     */
+    fun showGlassesCheck(build: (close: () -> Unit) -> View) {
+        closePopup()
+        intro.removeAllViews()
+        intro.background = null
+        intro.addView(build { closeIntro() }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        mask.visibility = View.VISIBLE
+        intro.visibility = View.VISIBLE
+        requestLayout()
+    }
+
+    /** 1.1.16: the glasses check open now, or null (the tests). */
+    internal val glassesCheck: GlassesCheckCard? get() = intro.getChildAt(0) as? GlassesCheckCard
+
     private fun closeIntro() {
         intro.visibility = View.GONE
+        intro.removeAllViews()
         if (dialog.visibility != View.VISIBLE && popup.visibility != View.VISIBLE) mask.visibility = View.GONE
     }
 
@@ -2677,7 +2700,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     fun closeTop(): Boolean = when {
         textOpen -> { showText(false); true }
         dialog.visibility == View.VISIBLE -> { closeDialog(); true }
-        intro.visibility == View.VISIBLE -> { closeIntro(); true }
+        intro.visibility == View.VISIBLE -> { glassesCheck?.skip() ?: closeIntro(); true }
         popup.visibility == View.VISIBLE -> { closePopup(); true }
         drawer.visibility == View.VISIBLE -> { closeDrawer(); true }
         else -> false
@@ -2690,6 +2713,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         /** 1.1.15: the Menu's Ko-fi pill and update row ([menuRowTags]). */
         const val MENU_KO_FI = "menu:ko-fi"
         const val MENU_UPDATE = "menu:update"
+        const val MENU_GLASSES_CHECK = "menu:glasses-check"
+        const val GLASSES_CHECK_ROW = "Glasses setup check"
 
         /** 0.5.28: a toast with a one-tap action stays this long. */
         const val ACTION_TOAST_MS = 5000L
