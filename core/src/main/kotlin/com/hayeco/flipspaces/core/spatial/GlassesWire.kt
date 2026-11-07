@@ -91,7 +91,26 @@ object GlassesControl {
 
     /** RPC types whose replies are parsed as RPC replies (an id, then a protobuf). */
     val RPC_TYPES = setOf(SCENE_MODE, RECENTER, NET_LOG, DUTY_GET, DUTY_SET, EDID_GET, EDID_SET, DEPTH_GET, EC_COUNT, EC_GET, EC_SET,
-        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET, SPACE_MODE)
+        STEREO_GET, STEREO_SET, CALIBRATION_GET, SERIAL_GET, SPACE_MODE, ULTRAWIDE_GET, ULTRAWIDE_SET, SCREEN_SIZE_RANGE,
+        SCREEN_SIZE_GET, SCREEN_SIZE_SET, SPATIAL_ANCHOR_GET, SPATIAL_ANCHOR_SET, SPACE_MODE_GET)
+
+    /**
+     * The glasses' own menu settings; each get is an empty request. 10277 Ultrawide answers { result 1, enable_value 2 } and
+     * 10278 sets { enable_value 1 }. 10396 is the screen size's range { min 2, max 3 }: on the Aura 0.80 to 1.30 in 2D and 3D,
+     * 0.85 to 1.20 in Ultrawide. 10397 answers it as a float in field 2, 10398 sets it as a float in field 1. 10404 is the
+     * firmware's translation switch, the Aura's Spatial Anchor: it followed all six menu changes (6 November 2026). 10405
+     * sets it; that it takes its value in field 1 is inferred, so every set is read back.
+     */
+    const val ULTRAWIDE_GET = 10277
+    const val ULTRAWIDE_SET = 10278
+    const val SCREEN_SIZE_RANGE = 10396
+    const val SCREEN_SIZE_GET = 10397
+    const val SCREEN_SIZE_SET = 10398
+    const val SPATIAL_ANCHOR_GET = 10404
+    const val SPATIAL_ANCHOR_SET = 10405
+
+    /** The space mode as the glasses hold it, answered like [SPACE_MODE]'s values. A low duty is no sign of hover. */
+    const val SPACE_MODE_GET = 10421
 
     /**
      * 0.5.65: the glasses' 2D / 3D state. Get 10273 answers { result 1, value 2 }, 0 (left out) in 2D;
@@ -264,7 +283,7 @@ sealed interface ControlMessage {
     }
 
     /** An RPC answer (top bit of [rpcId] clear) or request; [result] is field 1 of the response, null when absent. */
-    data class Rpc(override val type: Int, val rpcId: Int, val result: Long?, val bodyBytes: Int, val value: Long? = null, val valueFloat: Float? = null, val fieldsText: String? = null, val valueBytes: ByteArray? = null) : ControlMessage {
+    data class Rpc(override val type: Int, val rpcId: Int, val result: Long?, val bodyBytes: Int, val value: Long? = null, val valueFloat: Float? = null, val fieldsText: String? = null, val valueBytes: ByteArray? = null, val field3Float: Float? = null) : ControlMessage {
         val isReply: Boolean get() = rpcId and 0x80000000.toInt() == 0
 
         /** 0.5.65: field 2 as text (the calibration's JSON, the serial). */
@@ -325,6 +344,12 @@ object ControlWire {
 
     /** 0.5.36: the spatial screen's depth, read (10400). */
     fun depthGet(rpcId: Int): ByteArray = rpc(GlassesControl.DEPTH_GET, rpcId, ByteArray(0))
+
+    /** An empty read of one of the glasses' menu settings: [GlassesControl.ULTRAWIDE_GET] and those after it. */
+    fun settingGet(rpcId: Int, type: Int): ByteArray = rpc(type, rpcId, ByteArray(0))
+    fun ultrawideSet(rpcId: Int, on: Boolean): ByteArray = rpc(GlassesControl.ULTRAWIDE_SET, rpcId, ProtoWriter().varint(1, if (on) 1L else 0L).bytes())
+    fun spatialAnchorSet(rpcId: Int, on: Boolean): ByteArray = rpc(GlassesControl.SPATIAL_ANCHOR_SET, rpcId, ProtoWriter().varint(1, if (on) 1L else 0L).bytes())
+    fun screenSizeSet(rpcId: Int, size: Float): ByteArray = rpc(GlassesControl.SCREEN_SIZE_SET, rpcId, ProtoWriter().float(1, size).bytes())
     fun edidSet(rpcId: Int, edid: Int): ByteArray = rpc(GlassesControl.EDID_SET, rpcId, ProtoWriter().varint(1, edid.toLong()).bytes())
 
     /** 0.5.65: the 2D / 3D state, read (10273) and set (10274; [sbs] true for 3D side by side). */
@@ -425,6 +450,7 @@ class ControlFramer(private val maxBody: Int = 1 shl 20) {
                     "$k=" + vs.joinToString("/") { v -> when (v) { is Int -> "f32:%.3f".format(java.util.Locale.ROOT, Float.fromBits(v)); is Long -> "v:$v"; else -> "bytes" } }
                 },
                 f2 as? ByteArray,
+                (response?.fields?.get(3)?.lastOrNull() as? Int)?.let { Float.fromBits(it) },
             )
         }
         return ControlMessage.Other(type, n)

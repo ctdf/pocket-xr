@@ -29,6 +29,7 @@ class GlassesCheckCard1116Test {
     private val app: Application = ApplicationProvider.getApplicationContext()
 
     private class Host(val yaws: List<Float>?) : GlassesCheckHost {
+        override fun steady() = false
         var i = 0
         val finished = ArrayList<GlassesCheck.CheckResult?>()
         override fun headYawDeg(): Float? = yaws?.let { it[(i++).coerceAtMost(it.size - 1)] }

@@ -815,20 +815,31 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * Rebuilds the GL viewport, projection and pointer mapping for [next] so a window that grew
      * (a DeX maximize) is drawn and aimed at full size, not at the size it opened with.
      */
+    /**
+     * The glasses are in Ultrawide ([StereoLayout.isUltrawide]): they hold the canvas in the room, so the Space draws the room
+     * from [canvasPose], the head's pose when it began, with every window at its saved place. Recentre brings it round.
+     */
+    private var ultrawide = false
+    private var canvasPose: Quat? = null
+    @Volatile private var canvasRecentre = false
+
     private fun applyViewport(next: SpaceViewport, force: Boolean = false) {
         if (!force && next == viewport && appliedPlan == viewPlan) return
         viewport = next
         GLES30.glViewport(0, 0, next.surfaceWidth, next.surfaceHeight)
         // 0.5.9: the glasses' real field of view (GlassesOptics), one eye's share of the surface.
         // 0.5.14: a side by side surface is always split; 2D there puts the same picture in both halves.
-        stereo = StereoLayout.mode(next.surfaceWidth, next.surfaceHeight, true)
-        eyes = com.hayeco.flipspaces.core.spatial.ViewModeChoice.eyes(viewPlan, next.surfaceWidth, next.surfaceHeight, store.ipdMm)
+        // Ultrawide: the 3840 x 1080 surface is one flat canvas, not two eyes, though Android cannot tell it from 3D.
+        stereo = StereoLayout.mode(next.surfaceWidth, next.surfaceHeight, !ultrawide)
+        eyes = if (ultrawide) StereoLayout.eyes(StereoMode.MONO, next.surfaceWidth, next.surfaceHeight, store.ipdMm)
+        else com.hayeco.flipspaces.core.spatial.ViewModeChoice.eyes(viewPlan, next.surfaceWidth, next.surfaceHeight, store.ipdMm)
         appliedPlan = viewPlan
         // 0.5.26: the projection is the glasses' screen in this mode, so 2D uses their full field of view.
         val sbs = stereo == StereoMode.SIDE_BY_SIDE
         val screen = store.screen(sbs)
-        frustum = next.frustum(store.optics(sbs), stereo)
+        frustum = if (ultrawide) store.optics(false).ultrawideFrustum(next.surfaceWidth, next.surfaceHeight) else next.frustum(store.optics(sbs), stereo)
         pointer.frustum = frustum
+        xr.fitViewHeightDeg = if (ultrawide) frustum.verticalFovDeg else null
         // 0.5.27: each side by side eye's picture adjust, and the pointer's pixels mapped through it.
         // 0.5.29: worked out again on the next frame for this mode (the distance correction is side by side only).
         adjustVersionSeen = -1
@@ -858,8 +869,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
      * mode, a screen under 100 % is said on the glasses with how to get the full view (their own menu; nothing is sent).
      */
     private fun screenHint(screen: com.hayeco.flipspaces.core.spatial.GlassesScreen, sbs: Boolean) {
-        // Not over the view's own hint (the glasses' 3D button), which comes first.
-        if (viewPlan?.met == false) return
+        // Not over the view's own hint (the glasses' 3D button), which comes first. Nothing about 3D in Ultrawide.
+        if (viewPlan?.met == false || ultrawide) return
         // 0.5.27: in 2D, once, how to get the full view (their 3D mode at 100 %); in 3D, the
         // size to set on them while it is under 100 % or only the phone's default ([com.hayeco.flipspaces.core.spatial.FullViewHint]).
         val text = com.hayeco.flipspaces.core.spatial.FullViewHint.hint(sbs, screen, store.screenSet(sbs)) ?: return
@@ -988,7 +999,13 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // 1.1.0: while the hover duty test has the glasses hold the picture in the room, the Space draws head locked, so
         // it is not moved twice (their anchor and the Space's own head tracking).
         val hoverLocked = GlassesDisplayControl.hoverHeadLocked
-        val tracked = if (hoverLocked) null else HeadTracker.renderPose(presentNs)
+        val live = if (hoverLocked) null else HeadTracker.renderPose(presentNs)
+        if (ultrawide && live != null && (canvasPose == null || canvasRecentre)) {
+            if (canvasRecentre) GlassesDisplayControl.recenter()
+            canvasRecentre = false
+            canvasPose = live
+        }
+        val tracked = if (ultrawide) canvasPose else live
         follow.mode = SpaceSession.follow
         follow.update(tracked, nowMs)
         var head = HeadView.pose(follow.relative(tracked), manualYaw)
@@ -1029,7 +1046,17 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             settingsCheckedMs = settingsNowMs
             HeadTracker.setStillLock(store.stillLock)
             HeadTracker.setDrawSmoothing(store.drawSmoothing)
-            GlassesDisplayControl.configure(context, spaceUp = true, turnDuty = store.turnDuty)
+            val wideNow = StereoLayout.isUltrawide(viewport.surfaceWidth, viewport.surfaceHeight, GlassesDisplayControl.stereoState) && GlassesDisplayControl.ultrawideRead != 0
+            if (wideNow != ultrawide) {
+                ultrawide = wideNow
+                canvasPose = null
+                Log.i(tag, "the glasses are ${if (wideNow) "in Ultrawide: one flat canvas" else "out of Ultrawide"}")
+                applyViewport(viewport, force = true)
+            }
+            steadyWindows()
+            val trayButtons = com.hayeco.flipspaces.core.spatial.LauncherButton.values().filter { it != com.hayeco.flipspaces.core.spatial.LauncherButton.STEADY || com.hayeco.flipspaces.core.spatial.SteadyMode.offeredOn(store.model) }
+            if (xr.buttons != trayButtons) xr.buttons = trayButtons
+            GlassesDisplayControl.configure(context, spaceUp = true, turnDuty = store.turnDuty, picture32by9 = StereoLayout.isSbsMode(viewport.surfaceWidth, viewport.surfaceHeight))
             // 0.5.36: the trackpad cursor anchored in the room or following the head (the trackpad's chip).
             pointer.snapWindows = store.snapWindows
             // 1.1.15: Lock screens, from the trackpad's Lock button or its Menu.
@@ -1135,7 +1162,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 // 0.5.57: on the clock, the scene for the glasses refresh the coming frame is posed for.
                 val scenePresent = if (onClock) frameClock.plan(System.nanoTime(), clockBudgetNs())?.let { it.poseNs + glassesNs } ?: presentNs
                 else late.plan(System.nanoTime(), fence.lockNs)?.let { fence.snap(it.presentNs + fenceExtra(it)) + glassesNs } ?: presentNs
-                val sceneHead = if (hoverLocked) head else HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
+                val sceneHead = if (hoverLocked || ultrawide) head else HeadView.pose(follow.relative(HeadTracker.renderPose(scenePresent, record = false)), manualYaw)
                 this.head = sceneHead
                 eyeWarp.bindScene(slot.index)
                 if (seeThrough) GLES30.glClearColor(0f, 0f, 0f, 1f) else GLES30.glClearColor(0.05f, 0.06f, 0.08f, 1f)
@@ -1198,7 +1225,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val poseNs = System.nanoTime()
         // 0.5.57: the frame's stamp, the refresh its pose is for and when the pose was taken, for what the fences say it showed.
         clockPlan?.let { frameClock.record(it.stampNs, it.poseNs, poseNs) }
-        val trackedNow = HeadTracker.renderPose(presentNs)
+        val trackedNow = if (ultrawide) canvasPose else HeadTracker.renderPose(presentNs)
         head = HeadView.pose(follow.relative(trackedNow), manualYaw)
         this.head = head
         // 0.5.21: while the glasses warp, this frame carries its render pose in its top rows.
@@ -1223,8 +1250,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // 0.5.21: not while the glasses warp: they warp each 32 row band to its own light time from the
         // one pose in the record, so a per-row pose here would be corrected twice.
         val rows = if (!warping && store.rowPoseFor(stereo == StereoMode.SIDE_BY_SIDE) && HeadTracker.tracking) rowTimingNow(periodNs) else null
-        val headTop = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
-        val headBottom = rows?.takeUnless { hoverLocked }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
+        val headTop = rows?.takeUnless { hoverLocked || ultrawide }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.topNs, record = false)), manualYaw) }
+        val headBottom = rows?.takeUnless { hoverLocked || ultrawide }?.let { HeadView.pose(follow.relative(HeadTracker.renderPose(presentNs + it.bottomNs, record = false)), manualYaw) }
         if (warpEyes) {
             // 0.5.25: the newest buffer turned onto the window by the newest pose, the top and the bottom row's when
             // the per-row pose is on (the row model at 60 Hz), each eye through its own homography.
@@ -3474,6 +3501,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 Log.i(tag, "launcher: the ${action.button.label} button")
                 when (action.button) {
                     com.hayeco.flipspaces.core.spatial.LauncherButton.RECENTRE -> recentre()
+                    com.hayeco.flipspaces.core.spatial.LauncherButton.STEADY -> GlassesDisplayControl.steady(context, !GlassesDisplayControl.steadyOn)
                     com.hayeco.flipspaces.core.spatial.LauncherButton.VIEW -> SpaceActivity.alive()?.let { a -> a.runOnUiThread { a.switchView("the launcher's 3D / 2D button") } }
                         ?: Log.w(tag, "3D / 2D button: no Space activity to ask for the display mode")
                     // 0.5.45 (Mike: the Calibrate Hands button becomes Window Presets): the Control Center, whose bottom row is the presets.
@@ -3598,6 +3626,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         pointer.centre()
         // With Glasses warp on, the glasses recenter too (nothing with it off).
         GlassesWarp.recentrePressed()
+        // In Ultrawide the canvas comes round on the next frame, in the tracker's new frame.
+        if (ultrawide) canvasRecentre = true
     }
 
     private fun drainCommands() {
@@ -3608,6 +3638,17 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 is SpaceCommand.LauncherApps -> {
                     launcher.setApps(c.apps)
                     xr.setApps(c.apps)
+                    // Pinned once, for someone with none; emptying the row later is their choice.
+                    if (!store.pinsSeeded && c.apps.isNotEmpty()) {
+                        store.pinsSeeded = true
+                        if (store.favourites.isEmpty()) {
+                            val keys = com.hayeco.flipspaces.core.spatial.LauncherDefaults.pick(c.apps)
+                            store.favourites = keys
+                            launcher.setFavourites(keys)
+                            xr.setPinned(keys)
+                            Log.i(tag, "launcher: ${keys.size} apps pinned by default")
+                        }
+                    }
                 }
                 // 0.5.25: typing goes to the launcher's search card.
                 is SpaceCommand.LauncherKey -> if (xr.isOpen) {
@@ -3716,7 +3757,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             return
         }
         val (yaw, pitch) = gaze()
-        if (!immersive.enter(layout, id, yaw, pitch, now, frustum.horizontalFovDeg, frustum.verticalFovDeg)) return
+        if (!immersive.enter(layout, id, yaw, pitch, now, frustum.horizontalFovDeg, frustum.verticalFovDeg, fixedView = ultrawide)) return
         controls.close()
         if (launcher.isOpen) setLauncherOpen(false, "Immersive")
         focus(id)
@@ -4566,6 +4607,38 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     private var launcherFitLogged: String? = null
+
+    /** The windows Steady mode last arranged, -1 before; a window opened or closed there arranges them again. */
+    private var steadyCount = -1
+
+    /**
+     * Each settings beat: going into Ultrawide, the windows as they are saved and arranged on the canvas; coming out, put
+     * back. The saved layout outlives the Space, which restarts with each change of display, and an unplug in Steady mode.
+     */
+    private fun steadyWindows() {
+        val saved = store.steadyLayout
+        if (ultrawide) {
+            if (canvasPose == null) return
+            if (saved != null && steadyCount < 0) steadyCount = layout.panels.size
+            if (saved != null && steadyCount == layout.panels.size) return
+            // Only when the windows are about to be arranged: Immersive is free to run once they are.
+            if (immersive.active) {
+                immersive.exit(frameClockMs - 10_000L)
+                GlassesDisplayControl.immersiveDim(false)
+                return
+            }
+            if (saved == null) store.steadyLayout = com.hayeco.flipspaces.core.spatial.LayoutCodec.encode(layout)
+            val (yaw, pitch) = gaze()
+            setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.arrange(layout, yaw, pitch, frustum.horizontalFovDeg, frustum.verticalFovDeg), commit = true)
+            steadyCount = layout.panels.size
+            Log.i(PANEL_TAG, "Steady mode: $steadyCount windows arranged on the canvas")
+        } else if (saved != null && (GlassesDisplayControl.ultrawideRead == 0 || (GlassesDisplayControl.ultrawideRead == null && !StereoLayout.isSbsMode(viewport.surfaceWidth, viewport.surfaceHeight)))) {
+            setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.restored(layout, com.hayeco.flipspaces.core.spatial.LayoutCodec.decode(saved)), commit = true)
+            store.steadyLayout = null
+            steadyCount = -1
+            Log.i(PANEL_TAG, "Steady mode over: the windows are back as they were")
+        }
+    }
 
     private fun drawInfo(viewProj: Mat4, nowMs: Long) {
         val tex = info ?: return

@@ -57,6 +57,30 @@ class DisplayCommands0532Test {
     }
 
     @Test
+    fun hoverLeftBehindIsClearedAndWaitsForTheAnswer() {
+        val io = Io()
+        val c = GlassesDisplayCommands(io)
+        c.tick(1_000L)
+        c.resetSpace(1_000L)
+        assertTrue(c.spaceSettling)
+        assertTrue(ControlWire.hex(io.last(GlassesControl.SPACE_MODE)).endsWith("0801"))
+        c.received(reply(GlassesControl.SPACE_MODE, io.last(GlassesControl.SPACE_MODE), 0))
+        assertFalse(c.spaceSettling)
+    }
+
+    @Test
+    fun noAnswerToTheFollowDoesNotHoldEverythingUp() {
+        val io = Io()
+        val c = GlassesDisplayCommands(io)
+        c.tick(1_000L)
+        c.resetSpace(1_000L)
+        c.tick(1_000L + GlassesDisplayCommands.SETTLE_MS - 1)
+        assertTrue(c.spaceSettling)
+        c.tick(1_000L + GlassesDisplayCommands.SETTLE_MS)
+        assertFalse(c.spaceSettling)
+    }
+
+    @Test
     fun seventyTwoIsNeverSentAgain() {
         // 0.5.35 (vc55: EDID index 6 rebooted the Aura): the try refuses, sends nothing, and nothing goes back by itself.
         val io = Io()

@@ -135,7 +135,11 @@ object GlassesSetup {
         return GlassesSetupPage(
             title = if (steps.isEmpty()) "Check your $name" else "Set up your $name",
             steps = steps,
-            check = if (steps.isEmpty()) NOTHING_TO_SET else ONE_CHECK,
+            check = when {
+                family == SetupFamily.AURA -> AURA_CHECK
+                steps.isEmpty() -> NOTHING_TO_SET
+                else -> ONE_CHECK
+            },
             hostNotes = host.notes(family),
             family = family,
         )
@@ -143,6 +147,7 @@ object GlassesSetup {
 
     const val ONE_CHECK = "Check: look left and right. Windows should stay put. If they move twice as far or get cut off, the glasses are in Anchor mode."
     const val NOTHING_TO_SET = "Nothing needs setting on these glasses. The check below makes sure the windows stay put."
+    const val AURA_CHECK = "Pocket XR sets these glasses for you. The check below makes sure the windows stay put."
 
     /**
      * The model of the XREAL glasses on USB now, or null when none are plugged in: [usbProduct] is the USB product id on
@@ -164,6 +169,7 @@ object GlassesSetup {
      * their world lock table: 16 to 32 % in their own 3DoF modes ([TurnDuty]; 30 % measured in the Aura's hover, 2
      * November 2026), against about 90 % in head lock. A One family pair in Anchor mode holds its picture in the room
      * the same way, so it is taken to read low too. That is inferred, not measured on a One, so the card says "may be".
+     * The Aura has also read 30 % in follow, in 2D at 120 Hz (6 November 2026), so a low duty can be a false alarm.
      */
     const val WORLD_LOCK_DUTY_MAX = 40
 

@@ -55,6 +55,21 @@ object GlassesDisplayControl {
 
     /** 0.5.65 (research Y1): a 2D / 3D change to make on the glasses: true 3D side by side, false 2D, null none. */
     @Volatile private var stereoWant: Boolean? = null
+
+    /** The picture is 32:9, so the glasses are in 3D or Ultrawide; each change is read fresh, as Android shows the two alike. */
+    @Volatile private var pictureWide = false
+    @Volatile private var stereoReadWanted = false
+
+    /** 3D was asked for on this plug-in; when the Space last ran. See [requestStereo]. */
+    @Volatile private var stereoAsked = false
+    @Volatile private var spaceSeenMs = Long.MIN_VALUE / 2
+    private const val NEW_PLUG_MS = 10_000L
+
+    /** When the glasses last dropped 3D soon after taking it, and how many times 3D was asked again for that on this plug-in. */
+    @Volatile private var stereoFellBackMs = Long.MIN_VALUE / 2
+    @Volatile private var stereoFallbacks = 0
+    private const val FELL_BACK_MS = 3_000L
+    private const val FALLBACK_ASKS = 2
     @Volatile private var stereoTries = 0
 
     /** 0.5.65: the state was read again for the current request. */
@@ -67,10 +82,32 @@ object GlassesDisplayControl {
     /**
      * 0.5.65 (research Y1): the Space wants [sbs] and Android does not offer it: ask the glasses with the command XREAL's
      * runtime sends. The link opens for it; once the glasses answer with that state the request is done.
+     *
+     * 3D is asked for once a plug-in, then the glasses' mode is the user's: a mode change re-plugs the display, and asking
+     * again on the way to Ultrawide switches it straight back off (6 November 2026). A Space gone for [NEW_PLUG_MS] is a new plug-in.
      */
     fun requestStereo(context: Context, sbs: Boolean) {
         app = context.applicationContext
+        // A display came up: a wait left from glasses that refused before must not hold this plug-in back (30 s, 6 November 2026).
+        openBackoffMs = 0L
+        nextOpenMs = 0L
         if (stereoWant == sbs || stereoRefused == sbs) return
+        if (sbs && (steadyWant == true || (link != null && commands.ultrawide == 1))) return
+        val now = SystemClock.elapsedRealtime()
+        // The Aura can take 3D just after plug-in and drop it by itself 1 to 5 s later (6 November 2026): that is asked again.
+        val fellBack = sbs && now - stereoFellBackMs < FELL_BACK_MS && stereoFallbacks < FALLBACK_ASKS
+        if (fellBack) {
+            stereoFallbacks++
+            Log.i(TAG, "the glasses dropped 3D by themselves: asking again ($stereoFallbacks of $FALLBACK_ASKS)")
+        } else if (sbs && stereoAsked && now - spaceSeenMs < NEW_PLUG_MS) {
+            Log.i(TAG, "3D was asked for on this plug-in: the glasses' mode is left as the user set it")
+            return
+        }
+        if (sbs && !stereoAsked) {
+            stereoFallbacks = 0
+            commands.followReset()
+        }
+        if (sbs) stereoAsked = true
         stereoWant = sbs
         stereoAskedMs = SystemClock.elapsedRealtime()
         stereoLinkSeen = link != null
@@ -99,27 +136,80 @@ object GlassesDisplayControl {
         private set
     @Volatile private var hoverTestApplied = false
 
-    fun hoverTest(context: Context, on: Boolean) {
-        app = context.applicationContext
-        hoverTestWanted = on
-        // The same switch has the glasses warp read the duty while it warps the Space's frames.
-        GlassesWarp.readDuty(on)
-        Log.i(TAG, "hover duty test ${if (on) "on" else "off"} (Developer)")
-        ensureLoop()
-    }
-
     /** 1.1.0: the glasses were asked to hover, so the Space draws head locked (their anchor holds the picture). */
     val hoverHeadLocked: Boolean get() = link != null && commands.hover.headLocked
 
-    /** 1.1.0: the hover duty test's line for the Developer card, and the duty read in the glasses warp. */
-    val hoverLine: String get() = commands.hover.line() + (GlassesWarp.dutyInWarp?.let { " Duty with the glasses warp: $it %." } ?: "")
+    /** The glasses' own 2D / 3D state as last read (10273), to tell Ultrawide from 3D; null with no link. */
+    val stereoState: Int? get() = if (link != null) commands.stereo else null
+
+    /** Whether the glasses said they are in Ultrawide (the Aura), null with no answer: 3D reads as 2D for a moment after a change. */
+    val ultrawideRead: Int? get() = if (link != null) commands.ultrawide else null
+
+    /** A Steady mode change under way: true on, false off, null none. See [com.hayeco.flipspaces.core.spatial.SteadyMode]. */
+    @Volatile private var steadyWant: Boolean? = null
+
+    @Volatile private var linkOpenedMs = 0L
+
+    /** The glasses on this link are ones whose menu settings Pocket XR reads. */
+    @Volatile private var auraLink = false
+    private const val SETTINGS_FRESH_MS = 2_000L
+    private const val SPACE_WAIT_MS = 3_000L
+
+    /** Spatial Anchor was checked on this link, for normal tracking. */
+    private var anchorChecked = false
+
+    /** The trackpad's key and the launcher's button: the change asked for, else what the glasses say. */
+    val steadyOn: Boolean get() = steadyWant ?: (link != null && commands.ultrawide == 1)
+
+    fun steady(context: Context, on: Boolean) {
+        app = context.applicationContext
+        steadyWant = on
+        steadyUsed = true
+        auraLink = true
+        steadyStartedMs = SystemClock.elapsedRealtime()
+        stereoWant = null
+        // Coming out, 3D is asked for again as on a new plug-in.
+        if (!on) stereoAsked = false
+        synchronized(lock) { commands.steadyStart() }
+        Log.i(TAG, "Steady mode ${if (on) "on" else "off"}")
+        ensureLoop()
+    }
+
+    private fun auraOn(): Boolean = app?.let { com.hayeco.flipspaces.core.spatial.SteadyMode.managedOn(SpaceStore(it).model) } == true
+
+    /** Steady mode was used this run: other glasses then have their settings read too, so they come back from it properly. */
+    @Volatile private var steadyUsed = false
+    @Volatile private var steadyStartedMs = 0L
+    private const val STEADY_GIVE_UP_MS = 25_000L
+
+    /** Recentre in Ultrawide, render thread. */
+    fun recenter() {
+        if (link == null) return
+        synchronized(lock) { commands.recenter() }
+    }
 
     /** The Space's settings beat (every 0.5 s): whether a Space is up and the turn duty switch. */
-    fun configure(context: Context, spaceUp: Boolean, turnDuty: Boolean) {
+    fun configure(context: Context, spaceUp: Boolean, turnDuty: Boolean, picture32by9: Boolean = false) {
         app = context.applicationContext
         if (this.turnDutyOn != turnDuty) Log.i(TAG, "lower persistence on turns: ${if (turnDuty) "on" else "off"}")
         this.spaceUp = spaceUp
         this.turnDutyOn = turnDuty
+        if (spaceUp) {
+            spaceSeenMs = SystemClock.elapsedRealtime()
+            if (pictureWide != picture32by9) {
+                pictureWide = picture32by9
+                stereoReadWanted = true
+                // A 32:9 picture is 3D or Ultrawide already: nothing more is asked of the glasses.
+                if (picture32by9) {
+                    // The link stays through the re-plug: 3D taken just now fell back to 2D when it closed (6 November 2026).
+                    if (stereoWant == true) {
+                        stereoHoldUntilMs = SystemClock.elapsedRealtime() + STEREO_HOLD_MS
+                        stereoTookMs = SystemClock.elapsedRealtime()
+                    }
+                    stereoWant = null
+                }
+            }
+        }
         if (wanted()) ensureLoop()
     }
 
@@ -162,6 +252,7 @@ object GlassesDisplayControl {
         if (stereoTookMs != 0L && width < height * 3 && now - stereoTookMs < STEREO_HOLD_MS) {
             Log.i(TAG, "the glasses went back to 2D (${width}x$height at ${hz.toInt()} Hz) %.1f s after taking 3D side by side; the link was ${if (link != null) "open" else "closed"}".format(java.util.Locale.ROOT, (now - stereoTookMs) / 1000f))
             stereoTookMs = 0L
+            stereoFellBackMs = now
         }
         commands.displayMode(width, height, hz, now)
     }
@@ -194,7 +285,7 @@ object GlassesDisplayControl {
     // A 72 Hz try keeps the link through the display's re-plug (the Space ends and comes back), so its revert can go out.
     // 0.5.65: also while a 2D / 3D change waits, and once per run of the app for the factory calibration.
     // 0.5.91: and for [STEREO_HOLD_MS] after the glasses took a 2D / 3D change ([stereoHoldUntilMs]).
-    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead || hoverTestWanted)) || stereoWant != null || commands.tryingSinceMs != null ||
+    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead || hoverTestWanted || pictureWide)) || stereoWant != null || steadyWant != null || commands.tryingSinceMs != null ||
         SystemClock.elapsedRealtime() < stereoHoldUntilMs) && !GlassesWarp.linkWanted
 
     /**
@@ -257,6 +348,31 @@ object GlassesDisplayControl {
                 }
                 l != null -> {
                     synchronized(lock) {
+                        if (stereoReadWanted) {
+                            stereoReadWanted = false
+                            commands.readStereo()
+                            // Not just after a new link's own read: the first seconds are when the glasses have most to do.
+                            if (auraLink && now - linkOpenedMs > SETTINGS_FRESH_MS) commands.readSettings()
+                        }
+                        if (spaceUp && auraLink && !hoverTestWanted && steadyWant == null) commands.keepFollow(now)
+                        // Spatial Anchor hurts head tracking, so it goes off once per link. Only the Aura reads it.
+                        if (!anchorChecked && commands.spatialAnchor != null) {
+                            anchorChecked = true
+                            if (commands.spatialAnchor == 1 && steadyWant == null && auraOn()) commands.spatialAnchorOff()
+                        }
+                        steadyWant?.let { on ->
+                            val step = commands.steady(on, now)
+                            if (step == com.hayeco.flipspaces.core.spatial.SteadyMode.Step.DONE) {
+                                steadyWant = null
+                                Log.i(TAG, "Steady mode ${if (on) "on" else "off"}: done (Ultrawide ${commands.ultrawide}, screen size ${commands.screenSize}, Spatial Anchor ${commands.spatialAnchor})")
+                            } else if (commands.stillTries > GlassesDisplayCommands.STILL_TRIES || now - steadyStartedMs > STEADY_GIVE_UP_MS) {
+                                steadyWant = null
+                                // Back to the usual view on glasses that would not go.
+                                stereoAsked = false
+                                if (on) app?.let { requestStereo(it, true) }
+                                Log.i(TAG, "Steady mode ${if (on) "on" else "off"}: gave up at step $step")
+                            }
+                        }
                         // 1.1.0: the hover duty test follows its switch (off puts the glasses back in follow).
                         if (hoverTestApplied != hoverTestWanted) {
                             hoverTestApplied = hoverTestWanted
@@ -272,7 +388,9 @@ object GlassesDisplayControl {
                             if (!commands.back60()) Log.i(TAG, "back to 60 Hz: nothing to do, 72 Hz was not set")
                         }
                         // 0.5.65: the 2D / 3D change, once the state is read; done when the glasses answer with it.
-                        stereoWant?.let { sbs ->
+                        // Follow goes first: asked after 3D, it was answered but the glasses stayed in hover and windows moved twice.
+                        val spaceUnknown = spaceUp && auraLink && (commands.followNeeded || commands.followSettling(now) || (commands.ultrawide == null && now - linkOpenedMs < SPACE_WAIT_MS))
+                        stereoWant?.takeUnless { commands.spaceSettling || spaceUnknown }?.let { sbs ->
                             if (!stereoFresh) {
                                 stereoFresh = true
                                 commands.readStereo()
@@ -338,8 +456,10 @@ object GlassesDisplayControl {
             return
         }
         link = opened
+        linkOpenedMs = SystemClock.elapsedRealtime()
+        auraLink = auraOn() || steadyUsed
         Log.i(TAG, "display control link open ($how)")
-        synchronized(lock) { commands.linkOpened() }
+        synchronized(lock) { commands.linkOpened(menuSettings = auraLink) }
         read(opened)
     }
 
@@ -369,6 +489,7 @@ object GlassesDisplayControl {
             // starts again on the next link while its switch is on.
             synchronized(lock) { commands.hover.stop() }
             hoverTestApplied = false
+            anchorChecked = false
         }
         runCatching { l.close() }
     }

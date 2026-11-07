@@ -308,6 +308,9 @@ enum class LauncherButton(val label: String) {
     /** Recentre: brings the Space back in front. */
     RECENTRE("Recentre"),
 
+    /** Steady mode, beside Recentre, on glasses that have it. */
+    STEADY("Steady"),
+
     /**
      * Pocket XR's 3D / 2D switch. 0.5.45 (Mike: "when users click 3D, they will think that the media they are watching
      * or their apps will be converted into 3D like a 3D movie"): it is the glasses' side by side mode, which gives the
@@ -526,6 +529,15 @@ class XrLauncher {
     var placement = LauncherPlacement(0f, -BELOW_GAZE_DEG)
         private set
 
+    /** Steady mode's view height, degrees, else null: looking up or down shows no more, so the panel fits inside it. */
+    var fitViewHeightDeg: Float? = null
+
+    private fun inFront(headYaw: Float, headPitch: Float): LauncherPlacement {
+        val view = fitViewHeightDeg ?: return LauncherPlacement.inFrontOf(headYaw, headPitch)
+        val fitM = LauncherGrid.heightM / 2f / kotlin.math.tan(view * FIT_VIEW * DEG / 2f)
+        return LauncherPlacement(wrapDegrees(headYaw), headPitch, maxOf(DISTANCE_M, fitM))
+    }
+
     /** Every app, sorted. */
     var apps: List<AppEntry> = emptyList()
         private set
@@ -548,7 +560,7 @@ class XrLauncher {
         private set
 
     /** The buttons the home tray shows. */
-    var buttons: List<LauncherButton> = LauncherButton.values().toList()
+    var buttons: List<LauncherButton> = LauncherButton.values().filter { it != LauncherButton.STEADY }
 
     // Open and close.
     private val alphaAnim = Eased(0f)
@@ -623,7 +635,7 @@ class XrLauncher {
     /** Opens in front of a head looking at [headYaw], [headPitch], on the home tray. */
     fun open(headYaw: Float, headPitch: Float, nowMs: Long) {
         resetIfHidden(nowMs)
-        placement = LauncherPlacement.inFrontOf(headYaw, headPitch)
+        placement = inFront(headYaw, headPitch)
         isOpen = true
         hiddenReset = false
         fadeMs = OPEN_MS
@@ -658,7 +670,7 @@ class XrLauncher {
         }
         val away = angleDeg(placement.dir, Vec3.direction(headYaw, headPitch - BELOW_GAZE_DEG))
         if (away > OUT_OF_VIEW_DEG) {
-            placement = LauncherPlacement.inFrontOf(headYaw, headPitch)
+            placement = inFront(headYaw, headPitch)
             return "recentred in front (it was %.0f degrees away)".format(java.util.Locale.ROOT, away)
         }
         close(nowMs)
@@ -1169,6 +1181,7 @@ class XrLauncher {
     companion object {
         const val DISTANCE_M = 1.0f
         const val BELOW_GAZE_DEG = 5f
+        const val FIT_VIEW = 0.92f
         const val MAX_PITCH_DEG = 35f
 
         /** Open but this far from the gaze, the toggle brings it back in front. */
@@ -1242,5 +1255,27 @@ class XrLauncher {
             val c = (a.normalized() dot b.normalized()).coerceIn(-1f, 1f)
             return kotlin.math.acos(c) * RAD
         }
+    }
+}
+
+/** The apps pinned for someone who has never pinned one, so the launcher's top row shows what it is for. */
+object LauncherDefaults {
+    const val COUNT = 4
+
+    /** Picked in this order when installed; any other apps fill what is left. */
+    val PREFERRED = listOf(
+        "com.android.chrome",
+        "com.google.android.youtube",
+        "com.netflix.mediaclient",
+        "com.spotify.music",
+        "com.google.android.apps.photos",
+        "com.sec.android.gallery3d",
+        "com.google.android.apps.maps",
+        "com.android.settings",
+    )
+
+    fun pick(apps: List<AppEntry>): List<String> {
+        val liked = PREFERRED.mapNotNull { p -> apps.firstOrNull { it.packageName == p } }
+        return (liked + apps).distinctBy { it.packageName }.take(COUNT).map { it.key }
     }
 }

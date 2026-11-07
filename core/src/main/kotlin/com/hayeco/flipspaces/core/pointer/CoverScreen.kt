@@ -39,6 +39,9 @@ enum class CoverButton(val label: String, val window: Boolean = false) {
     BACK("Back"),
     HOME("Home"),
     RECENTRE("Recentre"),
+
+    /** Steady mode, on glasses that have it: beside Keyboard, which then gives up its second width. */
+    STEADY("Steady"),
     MOVE("Move", window = true),
     RESIZE("Resize", window = true),
     FURTHER("Further", window = true),
@@ -121,10 +124,10 @@ object CoverLayoutMath {
         fun cutoutFor(w: Float, h: Float): DpRect = DpRect(w - CUTOUT.width, h - CUTOUT.height, w, h)
     }
 
-    fun flip7(controls: StripSide = StripSide.RIGHT): CoverLayout =
-        compute(FLIP7.WIDTH_DP, FLIP7.HEIGHT_DP, listOf(FLIP7.CUTOUT), FLIP7.CORNER_RADIUS_DP, controls)
+    fun flip7(controls: StripSide = StripSide.RIGHT, steady: Boolean = false): CoverLayout =
+        compute(FLIP7.WIDTH_DP, FLIP7.HEIGHT_DP, listOf(FLIP7.CUTOUT), FLIP7.CORNER_RADIUS_DP, controls, steady)
 
-    fun compute(w: Float, h: Float, cutouts: List<DpRect>, cornerR: Float, controls: StripSide = StripSide.RIGHT): CoverLayout {
+    fun compute(w: Float, h: Float, cutouts: List<DpRect>, cornerR: Float, controls: StripSide = StripSide.RIGHT, steady: Boolean = false): CoverLayout {
         val m = MARGIN
         val g = GAP
         val b = BUTTON
@@ -143,8 +146,8 @@ object CoverLayoutMath {
             x = rc.right + g
         }
         var xr = w - m
-        for (k in TOP_RIGHT.reversed()) {
-            val kw = if (k == CoverButton.KEYBOARD) KEYBOARD_SPAN * b + (KEYBOARD_SPAN - 1) * g else b
+        for (k in (if (steady) listOf(CoverButton.STEADY) + TOP_RIGHT else TOP_RIGHT).reversed()) {
+            val kw = if (k == CoverButton.KEYBOARD && !steady) KEYBOARD_SPAN * b + (KEYBOARD_SPAN - 1) * g else b
             val rc = nudge(DpRect(xr - kw, topY, xr, topY + b), -1f, 0f) { inside(it, BUTTON_RADIUS) }
             buttons[k] = rc
             xr = rc.left - g
@@ -242,7 +245,8 @@ object CoverLayoutMath {
     fun problems(l: CoverLayout): List<String> {
         val out = mutableListOf<String>()
         val all = l.buttons.entries.toList()
-        if (all.size != CoverButton.entries.size) out += "buttons missing: ${CoverButton.entries - l.buttons.keys}"
+        val missing = CoverButton.entries - CoverButton.STEADY - l.buttons.keys
+        if (missing.isNotEmpty()) out += "buttons missing: $missing"
         for ((k, rc) in all) {
             if (rc.width < MIN_TOUCH - 1e-3f || rc.height < MIN_TOUCH - 1e-3f) out += "$k is %.1f x %.1f dp, under 48".format(rc.width, rc.height)
             if (!rectInside(rc, BUTTON_RADIUS, l.widthDp, l.heightDp, l.cornerRadiusDp)) out += "$k is outside the rounded screen"

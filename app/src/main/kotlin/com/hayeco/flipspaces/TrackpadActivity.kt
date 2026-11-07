@@ -322,7 +322,7 @@ class TrackpadActivity : Activity(), PadHost {
         } else {
             null
         } ?: CoverLayoutMath.FLIP7.CORNER_RADIUS_DP
-        val l = CoverLayoutMath.compute(wPx / d, hPx / d, cutouts, corner, settings.coverControls)
+        val l = CoverLayoutMath.compute(wPx / d, hPx / d, cutouts, corner, settings.coverControls, steadyOffered())
         if (l == coverLayout) return
         coverLayout = l
         val problems = CoverLayoutMath.problems(l)
@@ -966,6 +966,7 @@ class TrackpadActivity : Activity(), PadHost {
         val checkHost = object : GlassesCheckHost {
             override fun headYawDeg(): Float? = if (SpaceSession.active) SpaceSession.aim?.head?.yawPitchRoll()?.first else null
             override fun follow() = SpaceSession.follow
+            override fun steady() = com.hayeco.flipspaces.spatial.GlassesDisplayControl.steadyOn
             override fun checkFinished(result: com.hayeco.flipspaces.core.spatial.GlassesCheck.CheckResult?) {
                 val states = prefs.glassesCheck
                 val next = com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.after(states[model.key], result)
@@ -1021,6 +1022,9 @@ class TrackpadActivity : Activity(), PadHost {
     }
 
     override fun currentFollow(): FollowMode = SpaceSession.follow
+
+    override fun steadyOffered(): Boolean = com.hayeco.flipspaces.core.spatial.SteadyMode.offeredOn(com.hayeco.flipspaces.spatial.SpaceStore(this).model)
+    override fun steadyOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.steadyOn
 
     override fun windowCount(): Int = if (SpaceSession.active) SpaceSession.windowCount else 0
 
@@ -1099,7 +1103,7 @@ class TrackpadActivity : Activity(), PadHost {
     override fun coverButton(button: CoverButton, down: Boolean) {
         val now = SystemClock.uptimeMillis()
         if (down) buzz(PadHaptic.COVER_BUTTON)
-        val needsSpace = button.window || button == CoverButton.RECENTRE || button == CoverButton.KEYBOARD
+        val needsSpace = button.window || button == CoverButton.RECENTRE || button == CoverButton.KEYBOARD || button == CoverButton.STEADY
         if (needsSpace && !SpaceSession.active) {
             if (!down) screen.showToast("Open the Space on the glasses first.")
             return
@@ -1112,6 +1116,10 @@ class TrackpadActivity : Activity(), PadHost {
                 // The Space in front of the head, and the cursor in front with it.
                 SpaceSession.send(SpaceCommand.Recentre)
                 submit(PadSignal.Home(HomeEvent.LONG_PRESS))
+            }
+            CoverButton.STEADY -> if (!down) {
+                com.hayeco.flipspaces.spatial.GlassesDisplayControl.steady(this, !steadyOn())
+                screen.refreshCover()
             }
             CoverButton.KEYBOARD -> if (!down) screen.showText(true)
             CoverButton.MOVE -> if (down) submit(PadSignal.Window(WindowAction.MOVE))
@@ -1432,14 +1440,6 @@ class TrackpadActivity : Activity(), PadHost {
         applyMode()
     }
 
-    override fun hoverTestOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTestWanted
-
-    override fun hoverTestChosen(on: Boolean) {
-        com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverTest(this, on)
-        screen.showToast(if (on) "Less blur test on. Windows stay put in front of you while the glasses hold them. Turn your head and look for less smear." else "Less blur test off. The glasses are back in follow.")
-    }
-
-    override fun hoverTestLine(): String = com.hayeco.flipspaces.spatial.GlassesDisplayControl.hoverLine
 
     override fun turnDutyOn(): Boolean = com.hayeco.flipspaces.spatial.SpaceStore(this).turnDuty
 
@@ -1522,52 +1522,6 @@ class TrackpadActivity : Activity(), PadHost {
         store.pictureAdjust = next
         com.hayeco.flipspaces.spatial.EdgeCheckTest.adjustVersion++
         Log.i(TAG, "picture adjust from the trackpad's Menu (${if (cover) "cover" else "main"} screen), $what: ${if (next.neutral) "none" else next.line()}")
-    }
-
-    // 0.5.24: the switch as it is in this app session (a saved on starts off).
-    override fun currentGlassesWarp(): Boolean = com.hayeco.flipspaces.spatial.GlassesWarp.switchOn(this)
-
-    override fun glassesWarpTestRunning(): com.hayeco.flipspaces.core.spatial.WarpRecordTest? = com.hayeco.flipspaces.spatial.GlassesWarp.recordTest
-
-    override fun glassesWarpTestChosen(test: com.hayeco.flipspaces.core.spatial.WarpRecordTest) {
-        val from = "the trackpad's Menu (${if (cover) "cover" else "main"} screen)"
-        val refused = com.hayeco.flipspaces.spatial.GlassesWarp.startTest(this, test, from)
-        screen.showToast(refused ?: "${test.title}: ${test.durationMs / 1000} s, then scene mode 0 by itself.")
-    }
-
-    override fun glassesWarpTestAwaiting(): com.hayeco.flipspaces.core.spatial.WarpRecordTest? = com.hayeco.flipspaces.spatial.GlassesWarp.awaitingAnswer
-
-    override fun glassesWarpTestAnswer(answer: String) {
-        com.hayeco.flipspaces.spatial.GlassesWarp.testAnswer(answer, "the trackpad's Menu (${if (cover) "cover" else "main"} screen)")
-    }
-
-    override fun glassesWarpState(): String {
-        val on = currentGlassesWarp()
-        return when {
-            // 0.5.23: a switch that paused itself after a glasses reset or a lost link says so.
-            // 0.5.24: and one whose 3D record test ended.
-            !on -> com.hayeco.flipspaces.spatial.GlassesWarp.state.takeIf { it.startsWith("Off (") || it.startsWith("Off:") } ?: "Off (the phone warps the picture)"
-            !SpaceSession.active -> "On; starts when the Space is open"
-            else -> com.hayeco.flipspaces.spatial.GlassesWarp.state
-        }
-    }
-
-    /**
-     * 0.5.22: the Glasses warp (beta) switch from the Menu, on the main or the cover
-     * screen. Remembered, logged under FlipSpaces/Warp as the Control panel's is, and confirmed on the glasses.
-     */
-    override fun glassesWarpChosen(on: Boolean) {
-        val from = "the trackpad's Menu (${if (cover) "cover" else "main"} screen)"
-        // 0.5.25: refused while DeX's title bar covers the record's rows.
-        com.hayeco.flipspaces.spatial.GlassesWarp.setSwitch(this, on, from)?.let {
-            screen.showToast(it)
-            return
-        }
-        if (SpaceSession.active) {
-            SpaceSession.send(SpaceCommand.GlassesWarpChanged(on, from))
-        } else {
-            screen.showToast(if (on) "Glasses warp (experimental) on. It starts when the Space is open." else "Glasses warp (experimental) off.")
-        }
     }
 
     override fun coverControlsChosen(side: StripSide) {

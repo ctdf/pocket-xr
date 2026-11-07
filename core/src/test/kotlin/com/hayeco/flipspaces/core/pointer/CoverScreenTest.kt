@@ -65,7 +65,7 @@ class CoverScreenTest {
     @Test
     fun everyTouchTargetIsAtLeast48Dp() {
         val l = CoverLayoutMath.flip7()
-        assertEquals(CoverButton.entries.toSet(), l.buttons.keys)
+        assertEquals((CoverButton.entries - CoverButton.STEADY).toSet(), l.buttons.keys)
         for ((k, rc) in l.buttons) {
             assertTrue("$k ${rc.width}", rc.width >= 48f)
             assertTrue("$k ${rc.height}", rc.height >= 48f)
@@ -93,7 +93,7 @@ class CoverScreenTest {
     fun theLabelsAreShortEnoughForTheButtons() {
         // 10 sp text is about 0.55 of its size a character: every label fits its own button, 2 dp in each side
         // (the app also lets the text shrink to 8 sp rather than cut it).
-        val l = CoverLayoutMath.flip7()
+        val l = CoverLayoutMath.flip7(steady = true)
         for (k in CoverButton.entries) {
             val room = l.buttons.getValue(k).width - 2f * CoverLayoutMath.LABEL_PAD
             assertTrue("${k.label}: ${k.label.length * 5.5f} dp in $room", k.label.length * CoverLayoutMath.LABEL_SP * 0.55f <= room)
