@@ -533,6 +533,7 @@ internal class IntroCover(context: Context, private val art: com.hayeco.flipspac
             com.hayeco.flipspaces.core.pointer.IntroArt.GLASSES_MENU -> return glassesMenu(canvas, cx, cy)
             com.hayeco.flipspaces.core.pointer.IntroArt.AIM_PHONE -> return aim(canvas, cx, cy, handheld = false)
             com.hayeco.flipspaces.core.pointer.IntroArt.AIM_HANDHELD -> return aim(canvas, cx, cy, handheld = true)
+            com.hayeco.flipspaces.core.pointer.IntroArt.ADDON -> return addon(canvas, cx, cy)
             else -> Unit
         }
         val w = context.dpf(120f)
@@ -643,6 +644,37 @@ internal class IntroCover(context: Context, private val art: com.hayeco.flipspac
         val ax = cx + w / 2f + d(20f)
         line(canvas, ax, top + d(14f), ax, top - d(22f))
         line(canvas, ax, top - d(8f), ax, top + d(28f))
+    }
+
+    /** 1.2.1: the add-on's page: a phone notification going up to a pair of glasses. A sketch, not the real page. */
+    private fun addon(canvas: Canvas, cx: Float, cy: Float) {
+        val d = context::dpf
+        // The notification: a card with a dot for the app's icon and two lines of text.
+        val nw = d(170f)
+        val nh = d(44f)
+        val top = cy + d(14f)
+        canvas.drawRoundRect(cx - nw / 2f, top, cx + nw / 2f, top + nh, d(12f), d(12f), padPaint)
+        canvas.drawRoundRect(cx - nw / 2f, top, cx + nw / 2f, top + nh, d(12f), d(12f), padRim)
+        val ix = cx - nw / 2f + d(22f)
+        canvas.drawCircle(ix, top + nh / 2f, d(9f), fingerGlow)
+        canvas.drawCircle(ix, top + nh / 2f, d(6f), finger)
+        val bar = Paint(finger).apply { strokeWidth = d(4f); strokeCap = Paint.Cap.ROUND }
+        canvas.drawLine(ix + d(18f), top + d(16f), cx + nw / 2f - d(20f), top + d(16f), bar)
+        bar.alpha = 120
+        canvas.drawLine(ix + d(18f), top + d(28f), cx + d(30f), top + d(28f), bar)
+        // Up to the glasses.
+        arrow.strokeWidth = d(3f)
+        line(canvas, cx, top - d(6f), cx, top - d(30f))
+        val lw = d(62f)
+        val lh = d(36f)
+        val gap = d(16f)
+        val gy = top - d(40f) - lh
+        val rim = Paint(padRim).apply { strokeWidth = d(3f); color = com.hayeco.flipspaces.core.Look.INK }
+        canvas.drawRoundRect(cx - gap / 2f - lw, gy, cx - gap / 2f, gy + lh, d(12f), d(12f), rim)
+        canvas.drawRoundRect(cx + gap / 2f, gy, cx + gap / 2f + lw, gy + lh, d(12f), d(12f), rim)
+        canvas.drawLine(cx - gap / 2f, gy + d(10f), cx + gap / 2f, gy + d(10f), rim)
+        canvas.drawLine(cx - gap / 2f - lw, gy + d(8f), cx - gap / 2f - lw - d(14f), gy + d(2f), rim)
+        canvas.drawLine(cx + gap / 2f + lw, gy + d(8f), cx + gap / 2f + lw + d(14f), gy + d(2f), rim)
     }
 
     /** A line with an arrow head at its end. */
@@ -2543,6 +2575,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                         }, LinearLayout.LayoutParams(c.dp(15f), c.dp(15f)).apply { topMargin = c.dp(2f) })
                         addView(c.padText(item, 14f, com.hayeco.flipspaces.core.Look.INK_2), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = c.dp(8f) })
                     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(10f) })
+                }
+                // 1.2.1: the add-on's page has its Install button (or its setup, once installed) under the lines.
+                if (shown.art == com.hayeco.flipspaces.core.pointer.IntroArt.ADDON) {
+                    addView(AddonPanel(c), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = c.dp(12f) })
                 }
                 // 1.1.9: a quieter line under the steps (the glasses setup's self-check).
                 shown.note?.let { note ->
