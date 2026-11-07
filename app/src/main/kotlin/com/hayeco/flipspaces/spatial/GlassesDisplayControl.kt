@@ -60,9 +60,6 @@ object GlassesDisplayControl {
     @Volatile private var pictureWide = false
     @Volatile private var stereoReadWanted = false
 
-    /** Hover left behind was looked for on this link. */
-    private var leftoverChecked = false
-
     /** 3D was asked for on this plug-in; when the Space last ran. See [requestStereo]. */
     @Volatile private var stereoAsked = false
     @Volatile private var spaceSeenMs = Long.MIN_VALUE / 2
@@ -95,7 +92,7 @@ object GlassesDisplayControl {
         openBackoffMs = 0L
         nextOpenMs = 0L
         if (stereoWant == sbs || stereoRefused == sbs) return
-        if (sbs && (stillnessWant == true || (link != null && commands.ultrawide == 1))) return
+        if (sbs && (steadyWant == true || (link != null && commands.ultrawide == 1))) return
         val now = SystemClock.elapsedRealtime()
         // The Aura can take 3D just after plug-in and drop it by itself 1 to 5 s later (6 November 2026): that is asked again.
         val fellBack = sbs && now - stereoFellBackMs < FELL_BACK_MS && stereoFallbacks < FALLBACK_ASKS
@@ -106,7 +103,10 @@ object GlassesDisplayControl {
             Log.i(TAG, "3D was asked for on this plug-in: the glasses' mode is left as the user set it")
             return
         }
-        if (sbs && !stereoAsked) stereoFallbacks = 0
+        if (sbs && !stereoAsked) {
+            stereoFallbacks = 0
+            commands.followReset()
+        }
         if (sbs) stereoAsked = true
         stereoWant = sbs
         stereoAskedMs = SystemClock.elapsedRealtime()
@@ -145,30 +145,34 @@ object GlassesDisplayControl {
     /** Whether the glasses said they are in Ultrawide (the Aura), null with no answer: 3D reads as 2D for a moment after a change. */
     val ultrawideRead: Int? get() = if (link != null) commands.ultrawide else null
 
-    /** A Stillness mode change under way: true on, false off, null none. See [com.hayeco.flipspaces.core.spatial.StillnessMode]. */
-    @Volatile private var stillnessWant: Boolean? = null
+    /** A Steady mode change under way: true on, false off, null none. See [com.hayeco.flipspaces.core.spatial.SteadyMode]. */
+    @Volatile private var steadyWant: Boolean? = null
 
     @Volatile private var linkOpenedMs = 0L
+
+    /** The glasses on this link are ones whose menu settings Pocket XR reads. */
+    @Volatile private var auraLink = false
     private const val SETTINGS_FRESH_MS = 2_000L
+    private const val SPACE_WAIT_MS = 3_000L
 
     /** Spatial Anchor was checked on this link, for normal tracking. */
     private var anchorChecked = false
 
     /** The trackpad's key and the launcher's button: the change asked for, else what the glasses say. */
-    val stillnessOn: Boolean get() = stillnessWant ?: (link != null && commands.ultrawide == 1)
+    val steadyOn: Boolean get() = steadyWant ?: (link != null && commands.ultrawide == 1)
 
-    fun stillness(context: Context, on: Boolean) {
+    fun steady(context: Context, on: Boolean) {
         app = context.applicationContext
-        stillnessWant = on
+        steadyWant = on
         stereoWant = null
         // Coming out, 3D is asked for again as on a new plug-in.
         if (!on) stereoAsked = false
-        synchronized(lock) { commands.stillnessStart() }
-        Log.i(TAG, "Stillness mode ${if (on) "on" else "off"}")
+        synchronized(lock) { commands.steadyStart() }
+        Log.i(TAG, "Steady mode ${if (on) "on" else "off"}")
         ensureLoop()
     }
 
-    private fun auraOn(): Boolean = app?.let { com.hayeco.flipspaces.core.spatial.StillnessMode.offeredOn(SpaceStore(it).model) } == true
+    private fun auraOn(): Boolean = app?.let { com.hayeco.flipspaces.core.spatial.SteadyMode.offeredOn(SpaceStore(it).model) } == true
 
     /** Recentre in Ultrawide, render thread. */
     fun recenter() {
@@ -273,7 +277,7 @@ object GlassesDisplayControl {
     // A 72 Hz try keeps the link through the display's re-plug (the Space ends and comes back), so its revert can go out.
     // 0.5.65: also while a 2D / 3D change waits, and once per run of the app for the factory calibration.
     // 0.5.91: and for [STEREO_HOLD_MS] after the glasses took a 2D / 3D change ([stereoHoldUntilMs]).
-    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead || hoverTestWanted || pictureWide)) || stereoWant != null || stillnessWant != null || commands.tryingSinceMs != null ||
+    private fun wanted(): Boolean = ((spaceUp && (turnDutyOn || want72 || want60 || !calibrationRead || hoverTestWanted || pictureWide)) || stereoWant != null || steadyWant != null || commands.tryingSinceMs != null ||
         SystemClock.elapsedRealtime() < stereoHoldUntilMs) && !GlassesWarp.linkWanted
 
     /**
@@ -342,24 +346,20 @@ object GlassesDisplayControl {
                             // Not just after a new link's own read: the first seconds are when the glasses have most to do.
                             if (auraOn() && now - linkOpenedMs > SETTINGS_FRESH_MS) commands.readSettings()
                         }
-                        // Hover left by an app that died: a plain 1920 wide picture with the glasses saying they hover.
-                        if (!leftoverChecked && spaceUp && commands.spaceMode != null) {
-                            leftoverChecked = true
-                            if (!pictureWide && !hoverTestWanted && stillnessWant == null && commands.spaceMode == com.hayeco.flipspaces.core.spatial.GlassesControl.SPACE_HOVER) commands.resetSpace(now)
-                        }
+                        if (spaceUp && auraLink && !hoverTestWanted && steadyWant == null) commands.keepFollow(now)
                         // Spatial Anchor hurts head tracking, so it goes off once per link. Only the Aura reads it.
                         if (!anchorChecked && commands.spatialAnchor != null) {
                             anchorChecked = true
-                            if (commands.spatialAnchor == 1 && stillnessWant == null) commands.spatialAnchorOff()
+                            if (commands.spatialAnchor == 1 && steadyWant == null) commands.spatialAnchorOff()
                         }
-                        stillnessWant?.let { on ->
-                            val step = commands.stillness(on, now)
-                            if (step == com.hayeco.flipspaces.core.spatial.StillnessMode.Step.DONE) {
-                                stillnessWant = null
-                                Log.i(TAG, "Stillness mode ${if (on) "on" else "off"}: done (Ultrawide ${commands.ultrawide}, screen size ${commands.screenSize}, Spatial Anchor ${commands.spatialAnchor})")
+                        steadyWant?.let { on ->
+                            val step = commands.steady(on, now)
+                            if (step == com.hayeco.flipspaces.core.spatial.SteadyMode.Step.DONE) {
+                                steadyWant = null
+                                Log.i(TAG, "Steady mode ${if (on) "on" else "off"}: done (Ultrawide ${commands.ultrawide}, screen size ${commands.screenSize}, Spatial Anchor ${commands.spatialAnchor})")
                             } else if (commands.stillTries > GlassesDisplayCommands.STILL_TRIES) {
-                                stillnessWant = null
-                                Log.i(TAG, "Stillness mode ${if (on) "on" else "off"}: gave up at step $step")
+                                steadyWant = null
+                                Log.i(TAG, "Steady mode ${if (on) "on" else "off"}: gave up at step $step")
                             }
                         }
                         // 1.1.0: the hover duty test follows its switch (off puts the glasses back in follow).
@@ -377,7 +377,9 @@ object GlassesDisplayControl {
                             if (!commands.back60()) Log.i(TAG, "back to 60 Hz: nothing to do, 72 Hz was not set")
                         }
                         // 0.5.65: the 2D / 3D change, once the state is read; done when the glasses answer with it.
-                        stereoWant?.takeUnless { commands.spaceSettling }?.let { sbs ->
+                        // Follow goes first: asked after 3D, it was answered but the glasses stayed in hover and windows moved twice.
+                        val spaceUnknown = spaceUp && auraLink && (commands.followNeeded || (commands.ultrawide == null && now - linkOpenedMs < SPACE_WAIT_MS))
+                        stereoWant?.takeUnless { commands.spaceSettling || spaceUnknown }?.let { sbs ->
                             if (!stereoFresh) {
                                 stereoFresh = true
                                 commands.readStereo()
@@ -444,8 +446,9 @@ object GlassesDisplayControl {
         }
         link = opened
         linkOpenedMs = SystemClock.elapsedRealtime()
+        auraLink = auraOn()
         Log.i(TAG, "display control link open ($how)")
-        synchronized(lock) { commands.linkOpened(menuSettings = auraOn()) }
+        synchronized(lock) { commands.linkOpened(menuSettings = auraLink) }
         read(opened)
     }
 
@@ -475,7 +478,6 @@ object GlassesDisplayControl {
             // starts again on the next link while its switch is on.
             synchronized(lock) { commands.hover.stop() }
             hoverTestApplied = false
-            leftoverChecked = false
             anchorChecked = false
         }
         runCatching { l.close() }

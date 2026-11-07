@@ -522,7 +522,7 @@ internal class LauncherGl(private val context: Context) {
 
     /** A round button, 94 dp: the dark surface at 0.75, a 2 dp gradient rim, a white glyph in 32 dp padding. */
     private fun buttonTexture(b: LauncherButton, viewLabel: String): Int {
-        val still = if (GlassesDisplayControl.stillnessOn) "On" else "Off"
+        val still = if (GlassesDisplayControl.steadyOn) "On" else "Off"
         return baked("button:${b.name}:$viewLabel:$still", LauncherGrid.BUTTON, LauncherGrid.BUTTON) { c, px ->
             val sz = LauncherGrid.BUTTON * px
             val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(191, 0x1D, 0x20, 0x24) }
@@ -536,7 +536,7 @@ internal class LauncherGl(private val context: Context) {
             val g = Glyph(c, sz / 2f, sz / 2f, (LauncherGrid.BUTTON - 64f) * px)
             when (b) {
                 LauncherButton.RECENTRE -> g.crosshair()
-                LauncherButton.STILLNESS -> g.twoWords("Still", still, regular)
+                LauncherButton.STEADY -> g.twoWords("Steady", still, regular)
                 // 0.5.45: "Depth" over its state, On or Off (was "3D" or "2D", what a press switched to).
                 LauncherButton.VIEW -> g.twoWords("Depth", viewLabel, regular)
                 LauncherButton.NOTIFICATIONS -> g.bell()

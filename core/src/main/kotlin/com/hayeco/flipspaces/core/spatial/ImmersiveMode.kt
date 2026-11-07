@@ -29,11 +29,11 @@ class ImmersiveMode {
     val active: Boolean get() = phase != Phase.IDLE
 
     /** Enters with [heroId]'s window from [layout], the cinema in front of [gazeYaw], [gazePitch]. False if it is not there. */
-    fun enter(layout: SpaceLayout, heroId: Int, gazeYaw: Float, gazePitch: Float, nowMs: Long, viewWDeg: Float = VIEW_W_DEG, viewHDeg: Float = VIEW_H_DEG): Boolean {
+    fun enter(layout: SpaceLayout, heroId: Int, gazeYaw: Float, gazePitch: Float, nowMs: Long, viewWDeg: Float = VIEW_W_DEG, viewHDeg: Float = VIEW_H_DEG, fixedView: Boolean = false): Boolean {
         val hero = layout.panel(heroId) ?: return false
         this.heroId = heroId
         from = layout.panels.associateBy { it.id }
-        cinema = cinema(hero, gazeYaw, gazePitch, viewWDeg, viewHDeg)
+        cinema = cinema(hero, gazeYaw, gazePitch, viewWDeg, viewHDeg, fixedView)
         // The others leave nearest first from the hero outward, so the room empties away from it.
         order = layout.panels.filter { it.id != heroId }.sortedBy { abs(wrapDegrees(it.yawDeg - hero.yawDeg)) }.map { it.id }
         phase = Phase.ENTERING
@@ -131,15 +131,27 @@ class ImmersiveMode {
         const val RETURN_DELAY_MS = 150L
         const val STAGGER_MS = 60L
 
-        /** The cinema screen for [p]: in front of the gaze, nearly level, as big as fits in [FIT] of a [viewWDeg] by [viewHDeg] view, its shape kept. */
-        fun cinema(p: SpacePanel, gazeYaw: Float, gazePitch: Float, viewWDeg: Float = VIEW_W_DEG, viewHDeg: Float = VIEW_H_DEG): SpacePanel {
+        /**
+         * The cinema screen for [p]: in front of the gaze, nearly level, as big as fits in [FIT] of a [viewWDeg] by [viewHDeg] view,
+         * its shape kept. With [fixedView] (Steady mode) looking up or down shows no more, so it is centred on the view and
+         * fits with the buttons above and below it.
+         */
+        fun cinema(p: SpacePanel, gazeYaw: Float, gazePitch: Float, viewWDeg: Float = VIEW_W_DEG, viewHDeg: Float = VIEW_H_DEG, fixedView: Boolean = false): SpacePanel {
             val aspect = p.heightM / p.widthM.coerceAtLeast(1e-3f)
             val d = CINEMA_M
+            val pitch = if (fixedView) gazePitch else (gazePitch * 0.3f).coerceIn(-6f, 6f)
             fun metres(deg: Float) = 2f * d * kotlin.math.tan(deg * DEG / 2f)
-            var wM = metres(FIT * viewWDeg)
-            if (wM * aspect > metres(FIT * viewHDeg)) wM = metres(FIT * viewHDeg) / aspect
-            val (wDeg, hDeg) = PadWindowMath.anglesKeepingShape(wM, wM * aspect, d)
-            return p.copy(yawDeg = wrapDegrees(gazeYaw), pitchDeg = (gazePitch * 0.3f).coerceIn(-6f, 6f), distanceM = d, widthDeg = wDeg, heightDeg = hDeg)
+            fun fitted(roomM: Float): SpacePanel {
+                var wM = metres(FIT * viewWDeg)
+                if (wM * aspect > roomM) wM = roomM / aspect
+                val (wDeg, hDeg) = PadWindowMath.anglesKeepingShape(wM, wM * aspect, d)
+                return p.copy(yawDeg = wrapDegrees(gazeYaw), pitchDeg = pitch, distanceM = d, widthDeg = wDeg, heightDeg = hDeg)
+            }
+            val room = metres((if (fixedView) SteadyArrange.HEIGHT_FIT else FIT) * viewHDeg)
+            var c = fitted(room)
+            // Twice: the buttons' share grows a little as the window shrinks.
+            if (fixedView) repeat(2) { c = fitted(room / (1f + WindowControls.aboveShare(c) + WindowControls.belowShare(c))) }
+            return c
         }
 
         /** [a] to [b] at [k]: direction the short way round, distance and size eased together. */

@@ -1,11 +1,11 @@
 package com.hayeco.flipspaces.core.spatial
 
 /**
- * Stillness mode, Aura only, a key on the trackpad and a button in the launcher: one button for what the user otherwise sets in the glasses' menu each time. On is
+ * Steady mode, Aura only, a key on the trackpad and a button in the launcher: one button for what the user otherwise sets in the glasses' menu each time. On is
  * Spatial Anchor off, Ultrawide on and the largest screen size Ultrawide offers. Off is Ultrawide off, then 3D as usual.
  * Each screen size belongs to its mode, so nothing has to be put back: 2D and 3D keep their own.
  */
-object StillnessMode {
+object SteadyMode {
     enum class Step { WAIT, ANCHOR_OFF, LEAVE_3D, ULTRAWIDE_ON, SCREEN_MAX, ULTRAWIDE_OFF, DONE }
 
     /** The glasses' answers, null until read on this link. */

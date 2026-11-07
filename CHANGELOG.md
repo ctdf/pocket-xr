@@ -2,18 +2,20 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## 1.1.18: Stillness mode on the Aura
+## 1.2.0: Steady mode on the Aura
 
-- **Stillness mode on the Aura.** A new button on the trackpad and in the launcher gives you the stillest picture Pocket XR has had.
+- **Steady mode on the Aura.** A new button on the trackpad and in the launcher gives you the stillest picture Pocket XR has had.
   One tap puts your glasses in Ultrawide at their largest screen size, and the glasses hold one wide flat canvas
-  themselves. Tap again for 3D with your windows all around you. There's no depth in Stillness mode, and windows outside
-  the canvas are reached with the trackpad.
+  themselves. Your windows move and resize to fill it side by side, so nothing is cut off. Tap again
+  for 3D, and your windows go back exactly where you had them. There's no depth in Steady mode.
 - **Steadier on the Aura.** Pocket XR now turns Spatial Anchor off for you. It was fighting head tracking, and with it off
   the Space is far steadier, with your windows all around you.
 - **Pocket XR leaves your glasses' mode alone.** It asks for 3D when you plug in, and asks again if the glasses drop it
   straight away. After that, 3D, 2D and Ultrawide are your choice.
+- **Four apps pinned to start with.** The launcher's top row now starts with four apps, so it's clear what the row is for.
+  You can change them or remove them.
 - **The Glasses setup check knows the Aura.** It no longer asks you to change settings Pocket XR now sets, and it tells you
-  to leave Stillness mode before it starts measuring.
+  to leave Steady mode before it starts measuring.
 - **A crash can't leave the glasses stuck.** If the app dies while the glasses are holding the picture, the next start
   clears it.
 

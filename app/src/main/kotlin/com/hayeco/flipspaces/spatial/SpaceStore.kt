@@ -554,6 +554,16 @@ class SpaceStore(context: Context) {
         get() = prefs.getString(KEY_FAVOURITES, null)?.split('\n')?.filter { it.isNotBlank() } ?: emptyList()
         set(value) = prefs.edit().putString(KEY_FAVOURITES, value.joinToString("\n")).apply()
 
+    /** The windows as the user had them before Steady mode, [LayoutCodec] text, null outside it. */
+    var steadyLayout: String?
+        get() = prefs.getString(KEY_STEADY_LAYOUT, null)
+        set(value) = prefs.edit().putString(KEY_STEADY_LAYOUT, value).apply()
+
+    /** The launcher's default pins were offered ([com.hayeco.flipspaces.core.spatial.LauncherDefaults]). */
+    var pinsSeeded: Boolean
+        get() = prefs.getBoolean(KEY_PINS_SEEDED, false)
+        set(value) = prefs.edit().putBoolean(KEY_PINS_SEEDED, value).apply()
+
     /** Apps opened from the Space, most recent first, for the launcher's recents strip. */
     var recents: List<String>
         get() = prefs.getString(KEY_RECENTS, null)?.split('\n')?.filter { it.isNotBlank() } ?: emptyList()
@@ -619,6 +629,8 @@ class SpaceStore(context: Context) {
         private const val KEY_APP_DENSITY = "app_density"
         private const val KEY_FASTEST_REFRESH = "fastest_refresh"
         private const val KEY_FAVOURITES = "launcher_favourites"
+        private const val KEY_PINS_SEEDED = "launcher_pins_seeded"
+        private const val KEY_STEADY_LAYOUT = "steady_layout"
         private const val KEY_RECENTS = "launcher_recents"
         private const val KEY_LAYOUT = "layout"
         private const val KEY_AXES = "axes"

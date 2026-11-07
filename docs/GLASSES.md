@@ -68,17 +68,17 @@ Pocket XR turns **Spatial Anchor** off each time it connects to the Aura. It sit
 fights the Space's head tracking. Found by Mike on 6 November 2026, after a long hunt for shake that it was causing. To the
 firmware it is the translation switch: 10404 reads it and 10405 sets it. The firmware's EIS switch is something else.
 
-### Stillness mode: the stillest picture
+### Steady mode: the stillest picture
 
-**Stillness mode** is on the trackpad, in the launcher beside Recentre, and on the cover screen beside Keyboard, on the Aura only. It turns Spatial Anchor off, leaves 3D, turns on
+**Steady mode** is on the trackpad, in the launcher beside Recentre, and on the cover screen beside Keyboard, on the Aura only. It turns Spatial Anchor off, leaves 3D, turns on
 **Ultrawide** and sets the largest screen size Ultrawide offers. The glasses then hold one flat canvas in the room by
 themselves. Nothing the phone draws can shake it, turning your head looks across it, and text stays sharp. Tap it again for
 3D and windows all around you. Each mode keeps its own screen size, so nothing has to be put back. Ultrawide turned on in
 the glasses' own settings works too: Pocket XR sees the change and draws the canvas.
 
 - It is flat, so there is no depth.
-- Windows stay at their saved places, but only the ones on the canvas can be seen. Turn the view with the trackpad to
-  reach the others. **Recentre** brings the canvas in front of you, and the glasses slide it there.
+- Windows fill the canvas side by side, and go back where you had them when you leave. In Ultrawide
+  set from the glasses' own menu they do the same. **Recentre** brings the canvas in front of you, and the glasses slide it there.
 
 Android shows Ultrawide and 3D as the same 3840 x 1080, so the app reads the glasses' own 2D or 3D state each time the
 display changes. It sends the glasses no mode in Ultrawide: any space mode or 3D request switches it off. So the app asks

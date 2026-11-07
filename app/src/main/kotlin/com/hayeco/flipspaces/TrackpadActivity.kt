@@ -322,7 +322,7 @@ class TrackpadActivity : Activity(), PadHost {
         } else {
             null
         } ?: CoverLayoutMath.FLIP7.CORNER_RADIUS_DP
-        val l = CoverLayoutMath.compute(wPx / d, hPx / d, cutouts, corner, settings.coverControls, stillnessOffered())
+        val l = CoverLayoutMath.compute(wPx / d, hPx / d, cutouts, corner, settings.coverControls, steadyOffered())
         if (l == coverLayout) return
         coverLayout = l
         val problems = CoverLayoutMath.problems(l)
@@ -966,7 +966,7 @@ class TrackpadActivity : Activity(), PadHost {
         val checkHost = object : GlassesCheckHost {
             override fun headYawDeg(): Float? = if (SpaceSession.active) SpaceSession.aim?.head?.yawPitchRoll()?.first else null
             override fun follow() = SpaceSession.follow
-            override fun stillness() = com.hayeco.flipspaces.spatial.GlassesDisplayControl.stillnessOn
+            override fun steady() = com.hayeco.flipspaces.spatial.GlassesDisplayControl.steadyOn
             override fun checkFinished(result: com.hayeco.flipspaces.core.spatial.GlassesCheck.CheckResult?) {
                 val states = prefs.glassesCheck
                 val next = com.hayeco.flipspaces.core.spatial.GlassesCheckMemory.after(states[model.key], result)
@@ -1023,8 +1023,8 @@ class TrackpadActivity : Activity(), PadHost {
 
     override fun currentFollow(): FollowMode = SpaceSession.follow
 
-    override fun stillnessOffered(): Boolean = com.hayeco.flipspaces.core.spatial.StillnessMode.offeredOn(com.hayeco.flipspaces.spatial.SpaceStore(this).model)
-    override fun stillnessOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.stillnessOn
+    override fun steadyOffered(): Boolean = com.hayeco.flipspaces.core.spatial.SteadyMode.offeredOn(com.hayeco.flipspaces.spatial.SpaceStore(this).model)
+    override fun steadyOn(): Boolean = com.hayeco.flipspaces.spatial.GlassesDisplayControl.steadyOn
 
     override fun windowCount(): Int = if (SpaceSession.active) SpaceSession.windowCount else 0
 
@@ -1103,7 +1103,7 @@ class TrackpadActivity : Activity(), PadHost {
     override fun coverButton(button: CoverButton, down: Boolean) {
         val now = SystemClock.uptimeMillis()
         if (down) buzz(PadHaptic.COVER_BUTTON)
-        val needsSpace = button.window || button == CoverButton.RECENTRE || button == CoverButton.KEYBOARD || button == CoverButton.STILLNESS
+        val needsSpace = button.window || button == CoverButton.RECENTRE || button == CoverButton.KEYBOARD || button == CoverButton.STEADY
         if (needsSpace && !SpaceSession.active) {
             if (!down) screen.showToast("Open the Space on the glasses first.")
             return
@@ -1117,8 +1117,8 @@ class TrackpadActivity : Activity(), PadHost {
                 SpaceSession.send(SpaceCommand.Recentre)
                 submit(PadSignal.Home(HomeEvent.LONG_PRESS))
             }
-            CoverButton.STILLNESS -> if (!down) {
-                com.hayeco.flipspaces.spatial.GlassesDisplayControl.stillness(this, !stillnessOn())
+            CoverButton.STEADY -> if (!down) {
+                com.hayeco.flipspaces.spatial.GlassesDisplayControl.steady(this, !steadyOn())
                 screen.refreshCover()
             }
             CoverButton.KEYBOARD -> if (!down) screen.showText(true)

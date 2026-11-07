@@ -839,6 +839,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         val screen = store.screen(sbs)
         frustum = if (ultrawide) store.optics(false).ultrawideFrustum(next.surfaceWidth, next.surfaceHeight) else next.frustum(store.optics(sbs), stereo)
         pointer.frustum = frustum
+        xr.fitViewHeightDeg = if (ultrawide) frustum.verticalFovDeg else null
         // 0.5.27: each side by side eye's picture adjust, and the pointer's pixels mapped through it.
         // 0.5.29: worked out again on the next frame for this mode (the distance correction is side by side only).
         adjustVersionSeen = -1
@@ -1052,7 +1053,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 Log.i(tag, "the glasses are ${if (wideNow) "in Ultrawide: one flat canvas" else "out of Ultrawide"}")
                 applyViewport(viewport, force = true)
             }
-            val trayButtons = com.hayeco.flipspaces.core.spatial.LauncherButton.values().filter { it != com.hayeco.flipspaces.core.spatial.LauncherButton.STILLNESS || com.hayeco.flipspaces.core.spatial.StillnessMode.offeredOn(store.model) }
+            steadyWindows()
+            val trayButtons = com.hayeco.flipspaces.core.spatial.LauncherButton.values().filter { it != com.hayeco.flipspaces.core.spatial.LauncherButton.STEADY || com.hayeco.flipspaces.core.spatial.SteadyMode.offeredOn(store.model) }
             if (xr.buttons != trayButtons) xr.buttons = trayButtons
             GlassesDisplayControl.configure(context, spaceUp = true, turnDuty = store.turnDuty, picture32by9 = StereoLayout.isSbsMode(viewport.surfaceWidth, viewport.surfaceHeight))
             // 0.5.36: the trackpad cursor anchored in the room or following the head (the trackpad's chip).
@@ -3499,7 +3501,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 Log.i(tag, "launcher: the ${action.button.label} button")
                 when (action.button) {
                     com.hayeco.flipspaces.core.spatial.LauncherButton.RECENTRE -> recentre()
-                    com.hayeco.flipspaces.core.spatial.LauncherButton.STILLNESS -> GlassesDisplayControl.stillness(context, !GlassesDisplayControl.stillnessOn)
+                    com.hayeco.flipspaces.core.spatial.LauncherButton.STEADY -> GlassesDisplayControl.steady(context, !GlassesDisplayControl.steadyOn)
                     com.hayeco.flipspaces.core.spatial.LauncherButton.VIEW -> SpaceActivity.alive()?.let { a -> a.runOnUiThread { a.switchView("the launcher's 3D / 2D button") } }
                         ?: Log.w(tag, "3D / 2D button: no Space activity to ask for the display mode")
                     // 0.5.45 (Mike: the Calibrate Hands button becomes Window Presets): the Control Center, whose bottom row is the presets.
@@ -3636,6 +3638,17 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 is SpaceCommand.LauncherApps -> {
                     launcher.setApps(c.apps)
                     xr.setApps(c.apps)
+                    // Pinned once, for someone with none; emptying the row later is their choice.
+                    if (!store.pinsSeeded && c.apps.isNotEmpty()) {
+                        store.pinsSeeded = true
+                        if (store.favourites.isEmpty()) {
+                            val keys = com.hayeco.flipspaces.core.spatial.LauncherDefaults.pick(c.apps)
+                            store.favourites = keys
+                            launcher.setFavourites(keys)
+                            xr.setPinned(keys)
+                            Log.i(tag, "launcher: ${keys.size} apps pinned by default")
+                        }
+                    }
                 }
                 // 0.5.25: typing goes to the launcher's search card.
                 is SpaceCommand.LauncherKey -> if (xr.isOpen) {
@@ -3744,7 +3757,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             return
         }
         val (yaw, pitch) = gaze()
-        if (!immersive.enter(layout, id, yaw, pitch, now, frustum.horizontalFovDeg, frustum.verticalFovDeg)) return
+        if (!immersive.enter(layout, id, yaw, pitch, now, frustum.horizontalFovDeg, frustum.verticalFovDeg, fixedView = ultrawide)) return
         controls.close()
         if (launcher.isOpen) setLauncherOpen(false, "Immersive")
         focus(id)
@@ -4594,6 +4607,38 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     private var launcherFitLogged: String? = null
+
+    /** The windows Steady mode last arranged, -1 before; a window opened or closed there arranges them again. */
+    private var steadyCount = -1
+
+    /**
+     * Each settings beat: going into Ultrawide, the windows as they are saved and arranged on the canvas; coming out, put
+     * back. The saved layout outlives the Space, which restarts with each change of display, and an unplug in Steady mode.
+     */
+    private fun steadyWindows() {
+        val saved = store.steadyLayout
+        if (ultrawide) {
+            if (canvasPose == null) return
+            if (saved != null && steadyCount < 0) steadyCount = layout.panels.size
+            if (saved != null && steadyCount == layout.panels.size) return
+            // Only when the windows are about to be arranged: Immersive is free to run once they are.
+            if (immersive.active) {
+                immersive.exit(frameClockMs - 10_000L)
+                GlassesDisplayControl.immersiveDim(false)
+                return
+            }
+            if (saved == null) store.steadyLayout = com.hayeco.flipspaces.core.spatial.LayoutCodec.encode(layout)
+            val (yaw, pitch) = gaze()
+            setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.arrange(layout, yaw, pitch, frustum.horizontalFovDeg, frustum.verticalFovDeg), commit = true)
+            steadyCount = layout.panels.size
+            Log.i(PANEL_TAG, "Steady mode: $steadyCount windows arranged on the canvas")
+        } else if (saved != null && GlassesDisplayControl.ultrawideRead == 0) {
+            setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.restored(layout, com.hayeco.flipspaces.core.spatial.LayoutCodec.decode(saved)), commit = true)
+            store.steadyLayout = null
+            steadyCount = -1
+            Log.i(PANEL_TAG, "Steady mode over: the windows are back as they were")
+        }
+    }
 
     private fun drawInfo(viewProj: Mat4, nowMs: Long) {
         val tex = info ?: return
