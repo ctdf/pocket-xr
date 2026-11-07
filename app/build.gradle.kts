@@ -133,6 +133,9 @@ android {
                 assets.directories.add("src/npu/assets")
             }
         }
+        // 1.2.1: REQUEST_INSTALL_PACKAGES for the add-on's one-tap install, in every release but Google Play's (debug
+        // builds declare it in src/debug).
+        if (!play) getByName("release").manifest.srcFile("src/selfinstall/AndroidManifest.xml")
     }
 }
 

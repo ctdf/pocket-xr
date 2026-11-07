@@ -4,7 +4,8 @@ import com.hayeco.flipspaces.core.spatial.GlassesModel
 import com.hayeco.flipspaces.core.spatial.GlassesSetup
 
 /** The picture over an intro page (the trackpad draws each one). */
-enum class IntroArt { POINT, SCROLL, THREE_FINGERS, AIM_PHONE, AIM_HANDHELD, GLASSES_MENU }
+/** 1.2.1: [ADDON] is the add-on's page, which the trackpad draws with the add-on's Install button under its lines. */
+enum class IntroArt { POINT, SCROLL, THREE_FINGERS, AIM_PHONE, AIM_HANDHELD, GLASSES_MENU, ADDON }
 
 /** One page of the trackpad's tutorial: a title, numbered steps, and a quieter [note] under them. */
 data class IntroPage(val title: String, val items: List<String>, val art: IntroArt, val note: String? = null)
@@ -93,9 +94,23 @@ object IntroPages {
     }
 
     /**
-     * First run: [trackpad]. 1.1.9 put the plugged-in glasses' setup page first; 1.1.16 (issue 12) moved it to the glasses
-     * setup check, which opens by itself once these pages close, with a head turn check after the steps.
+     * 1.2.1 (Mike: tell new users about the optional add-on during setup): what the add-on gives, with its Install button
+     * under the lines ([com.hayeco.flipspaces.core.AddonSetup]). Next skips it.
      */
-    fun firstRun(landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> =
-        trackpad(landscapeHandheld, spatialMouse, oneFingerScroll)
+    val ADDON: IntroPage = IntroPage(
+        com.hayeco.flipspaces.core.AddonSetup.TITLE,
+        com.hayeco.flipspaces.core.AddonSetup.ITEMS,
+        IntroArt.ADDON,
+        note = com.hayeco.flipspaces.core.AddonSetup.NOTE,
+    )
+
+    /**
+     * First run: [trackpad]. 1.1.9 put the plugged-in glasses' setup page first; 1.1.16 (issue 12) moved it to the glasses
+     * setup check, which opens by itself once these pages close, with a head turn check after the steps. 1.2.1: the
+     * add-on's page ([ADDON]) before the last page, so the tutorial still ends on where Exit is.
+     */
+    fun firstRun(landscapeHandheld: Boolean, spatialMouse: Boolean, oneFingerScroll: Boolean = true): List<IntroPage> {
+        val pages = trackpad(landscapeHandheld, spatialMouse, oneFingerScroll)
+        return pages.dropLast(1) + ADDON + pages.last()
+    }
 }
