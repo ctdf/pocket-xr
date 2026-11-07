@@ -46,6 +46,12 @@ data class GlassesOptics(
         ViewFrustum.ofTanPerPx(width, height, tanPerPanelPx * fitScale(width, height))
 
     /**
+     * The view of the glasses' Ultrawide canvas: [pictureFrustum] squeezes a picture into the panel, but Ultrawide keeps the
+     * panel's angle per pixel, so a 3840 x 1080 canvas is as tall as the view and about twice as wide.
+     */
+    fun ultrawideFrustum(width: Int, height: Int): ViewFrustum = ViewFrustum.ofTanPerPx(width, height, tanPerPanelPx)
+
+    /**
      * The view of a [width] by [height] window inside a [pictureWidth] by [pictureHeight] picture:
      * the picture's angle per pixel, so the window shows its own slice of the view.
      */
@@ -236,6 +242,14 @@ object StereoLayout {
             }
         }
     }
+
+    /**
+     * Are the glasses in Ultrawide: a 32:9 picture while they say they are in 2D? Android shows Ultrawide and 3D as the same
+     * 3840 x 1080, so only the glasses' own state ([stereoState], 10273: 0 is 2D) tells them apart. In Ultrawide the glasses
+     * hold one flat canvas in the room by themselves (Mike, the Aura, 6 November 2026: "perfect", and any space mode or 3D
+     * request sent then drops them out of it), so the Space sends them nothing and draws from one fixed pose.
+     */
+    fun isUltrawide(width: Int, height: Int, stereoState: Int?): Boolean = stereoState == 0 && isSbsMode(width, height)
 
     /** Is a display mode of [width] by [height] the glasses' full side by side mode? */
     fun isSbsMode(width: Int, height: Int): Boolean = height > 0 && width.toFloat() / height >= SBS_MIN_ASPECT

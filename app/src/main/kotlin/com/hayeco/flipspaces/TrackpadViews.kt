@@ -692,6 +692,10 @@ interface PadHost {
     fun directionChosen(direction: PadDirection)
     fun followChosen(mode: FollowMode)
     fun currentFollow(): FollowMode
+
+    /** Stillness mode ([com.hayeco.flipspaces.core.spatial.StillnessMode]): its key shows for glasses that have it. */
+    fun stillnessOffered(): Boolean
+    fun stillnessOn(): Boolean
     fun arrange(kind: ArrangeKind)
 
     /** 0.5.32: the windows the Space has open (0 without a Space). */
@@ -831,9 +835,6 @@ interface PadHost {
     fun turnDutyChosen(on: Boolean)
 
     /** 1.1.0: the hover duty test (Developer, off at every start), and its line under the switch. */
-    fun hoverTestOn(): Boolean
-    fun hoverTestChosen(on: Boolean)
-    fun hoverTestLine(): String
 
     /** 0.5.28: the per-row pose in the glasses' 3D mode, for an A/B by eye. */
     fun rowPoseSbsOn(): Boolean
@@ -843,19 +844,7 @@ interface PadHost {
     fun pictureAdjust(): com.hayeco.flipspaces.core.spatial.PictureAdjust
     fun pictureAdjustChanged(next: com.hayeco.flipspaces.core.spatial.PictureAdjust, what: String)
 
-    /** 0.5.22: the Glasses warp switch on the Menu (0.5.27: labelled experimental): whether it is on, its state line, and a tap. */
-    fun currentGlassesWarp(): Boolean
-    fun glassesWarpState(): String
-    fun glassesWarpChosen(on: Boolean)
 
-    /**
-     * 0.5.24: the 3D record tests under the switch: the one running, a choice, the test that
-     * ended and waits for what the glasses showed, and that answer.
-     */
-    fun glassesWarpTestRunning(): com.hayeco.flipspaces.core.spatial.WarpRecordTest?
-    fun glassesWarpTestChosen(test: com.hayeco.flipspaces.core.spatial.WarpRecordTest)
-    fun glassesWarpTestAwaiting(): com.hayeco.flipspaces.core.spatial.WarpRecordTest?
-    fun glassesWarpTestAnswer(answer: String)
 }
 
 /**
@@ -1019,6 +1008,7 @@ internal fun coverIcon(b: CoverButton): Int = when (b) {
     CoverButton.BACK -> R.drawable.ic_back
     CoverButton.HOME -> R.drawable.ic_home_new
     CoverButton.RECENTRE -> R.drawable.ic_cover_recentre
+    CoverButton.STILLNESS -> R.drawable.ic_cover_stillness
     CoverButton.MOVE -> R.drawable.ic_cover_move
     CoverButton.RESIZE -> R.drawable.ic_cover_resize
     CoverButton.FURTHER -> R.drawable.ic_cover_further
@@ -1185,6 +1175,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         addView(barRecentreIcon, FrameLayout.LayoutParams(context.dp(28f), context.dp(28f), Gravity.CENTER))
         contentDescription = "Recentre"
     }
+    /** Stillness mode in the portrait bar, beside Recentre, as in the launcher. Landscape has a key, the cover its own. */
+    private val barStillnessIcon = ImageView(context).apply { setImageResource(R.drawable.ic_cover_stillness) }
+    private val barStillness = FrameLayout(context).apply {
+        addView(barStillnessIcon, FrameLayout.LayoutParams(context.dp(28f), context.dp(28f), Gravity.CENTER))
+        contentDescription = "Stillness mode"
+    }
+    private val barStillnessDivider = View(context).apply { setBackgroundColor(DIVIDER_1A) }
     private val bar = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         setBackgroundResource(R.drawable.black_gradient_rounded_rect)
@@ -1195,6 +1192,11 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         addView(barBack, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         divider()
         addView(barRecentre, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+        addView(barStillnessDivider, LinearLayout.LayoutParams(context.dp(1f), ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            topMargin = context.dp(22f)
+            bottomMargin = context.dp(22f)
+        })
+        addView(barStillness, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
         divider()
         addView(barHome, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
     }
@@ -1312,7 +1314,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
      * is Back, Recentre, Home. Landscape: Keyboard and Recentre either side of Curve, between Back and Home.
      */
     private val mainKeys: Map<CoverButton, CoverKey> = listOf(
-        CoverButton.KEYBOARD, CoverButton.RECENTRE, CoverButton.MOVE, CoverButton.RESIZE, CoverButton.FURTHER, CoverButton.CLOSER,
+        CoverButton.KEYBOARD, CoverButton.RECENTRE, CoverButton.STILLNESS, CoverButton.MOVE, CoverButton.RESIZE, CoverButton.FURTHER, CoverButton.CLOSER,
     ).associateWith { b -> CoverKey(context, b, coverIcon(b), { down -> host.coverButton(b, down) }) }
     private val mainRow = listOf(CoverButton.MOVE, CoverButton.RESIZE, CoverButton.FURTHER, CoverButton.CLOSER)
     private var typedSoFar = ""
@@ -1375,6 +1377,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         pressable(barHome, barHomeIcon, R.drawable.ic_home_new, R.drawable.ic_home_new_pressed, R.drawable.right_black_gradient_bg_pressed, isHome = true)
         pressable(sideBack, sideBackIcon, R.drawable.ic_back, R.drawable.ic_back_pressed, R.drawable.black_gradient_rounded_rect_pressed, isHome = false, restore = R.drawable.black_gradient_rounded_rect)
         pressable(sideHome, sideHomeIcon, R.drawable.ic_home_new, R.drawable.ic_home_new_pressed, R.drawable.black_gradient_rounded_rect_pressed, isHome = true, restore = R.drawable.black_gradient_rounded_rect)
+        barStillness.setOnClickListener {
+            host.coverButton(CoverButton.STILLNESS, true)
+            host.coverButton(CoverButton.STILLNESS, false)
+        }
         barRecentre.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -1445,10 +1451,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         updateBanner.visibility = if (!cover && updateVersion != null) View.VISIBLE else View.GONE
         // 0.5.106: the open phone's keys; landscape has room for Keyboard and Recentre only.
         for ((b, k) in mainKeys) {
-            val shown = !cover && (!landscape || b == CoverButton.KEYBOARD || b == CoverButton.RECENTRE)
+            val shown = !cover && if (b == CoverButton.STILLNESS) landscape && host.stillnessOffered() else !landscape || b == CoverButton.KEYBOARD || b == CoverButton.RECENTRE
             k.visibility = if (shown) View.VISIBLE else View.GONE
         }
-        coverKeys.values.forEach { it.visibility = if (cover && !textOpen) View.VISIBLE else View.GONE }
+        val barStill = if (host.stillnessOffered()) View.VISIBLE else View.GONE
+        barStillness.visibility = barStill
+        barStillnessDivider.visibility = barStill
+        for ((b, k) in coverKeys) k.visibility = if (cover && !textOpen && coverShown(b)) View.VISIBLE else View.GONE
         // 1.1.15: Lock screens' toggle on the open phone; the cover reaches it from its Menu.
         lockKey.visibility = if (cover) View.GONE else View.VISIBLE
         if (!cover && textOpen) showText(false)
@@ -1463,10 +1472,16 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         pad.invalidate()
     }
 
+    private fun coverShown(b: CoverButton) = b != CoverButton.STILLNESS || host.stillnessOffered()
+
     /** 0.5.17 cover screen: Move or Resize lit while it holds a window. 0.5.19: Curve too, on both screens. */
     fun refreshCover() {
         val hold = host.windowHold()
         lockKey.locked = host.windowsLockedOn()
+        val stillOn = host.stillnessOn()
+        mainKeys[CoverButton.STILLNESS]?.lit = stillOn
+        coverKeys[CoverButton.STILLNESS]?.lit = stillOn
+        barStillness.setBackgroundResource(if (stillOn) R.drawable.bg_cover_button_on else 0)
         curveKey.lit = hold == WindowAction.CURVE
         mainKeys[CoverButton.MOVE]?.lit = hold == WindowAction.MOVE
         mainKeys[CoverButton.RESIZE]?.lit = hold == WindowAction.RESIZE
@@ -1480,7 +1495,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     fun showText(show: Boolean) {
         if (show == textOpen) return
         textBar.visibility = if (show) View.VISIBLE else View.GONE
-        coverKeys.values.forEach { it.visibility = if (cover && !show) View.VISIBLE else View.GONE }
+        for ((b, k) in coverKeys) k.visibility = if (cover && !show && coverShown(b)) View.VISIBLE else View.GONE
         host.typing(show)
         val ime = context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
         if (show) {
@@ -1540,7 +1555,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             // 0.5.17 cover screen: core's layout for this screen (the pad clear of the cutouts and
             // the rounded corners, the buttons 48 dp and more for one thumb), in this view's pixels.
             // While typing: the text field at the top and the pad under it, above the keyboard.
-            val l = coverLayout ?: CoverLayoutMath.flip7(settings.coverControls)
+            val l = coverLayout ?: CoverLayoutMath.flip7(settings.coverControls, host.stillnessOffered())
             val sx = w / context.dpf(l.widthDp)
             val sy = h / context.dpf(l.heightDp)
             fun at(v: View, rc: DpRect) = put(
@@ -1595,6 +1610,8 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             put(curveKey, kx, ky, dp(70f), dp(54f))
             mainKeys[CoverButton.KEYBOARD]?.let { put(it, kx - dp(8f) - dp(70f), ky, dp(70f), dp(54f)) }
             mainKeys[CoverButton.RECENTRE]?.let { put(it, kx + dp(70f) + dp(8f), ky, dp(70f), dp(54f)) }
+            // Stillness mode right of Recentre, across from Lock screens.
+            mainKeys[CoverButton.STILLNESS]?.let { put(it, kx + 2 * (dp(8f) + dp(70f)), ky, dp(70f), dp(54f)) }
             // 1.1.15: Lock screens left of Keyboard.
             put(lockKey, kx - 2 * (dp(8f) + dp(70f)), ky, dp(70f), dp(54f))
             // 1.1.8 (issue 33): Spatial Mouse's recentre tip over the keys, on a landscape handheld.
@@ -2184,30 +2201,6 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 host.deviceWindowsChosen(!devOn)
                 buildDrawer()
             })
-            // 0.5.41 (Mike: "I want to use glasses warping if it's possible"): the glasses' own warp, back for a retest in
-            // Full SBS; vc53's three tries were left by the glasses after about 1 s. Its state under it.
-            val warpOn = host.currentGlassesWarp()
-            dev.addView(row(R.drawable.ic_follow_mode, "Glasses warp (test): ${if (warpOn) "ON" else "OFF"}", tick = warpOn) {
-                host.glassesWarpChosen(!warpOn)
-                buildDrawer()
-            })
-            dev.addView(c.padText(host.glassesWarpState(), 12f, WHITE))
-            // 1.1.0 (why the Aura drops scene mode 1): 0.5.26's decisive test D, back on the card. One fixed record for
-            // 60 s: a drop means the glasses' capture is at fault, a hold means the per-frame record is.
-            val testD = com.hayeco.flipspaces.core.spatial.WarpRecordTest.FIXED
-            val running = host.glassesWarpTestRunning()
-            dev.addView(row(R.drawable.ic_follow_mode, if (running == testD) "Warp test D: running (60 s)" else "Warp test D: one fixed record (60 s)", tick = running == testD) {
-                if (running == null) host.glassesWarpTestChosen(testD)
-                buildDrawer()
-            })
-            // 1.1.0 (the motion blur test): the glasses' hover, to see if it gives the Space's picture their world lock
-            // duty (shorter lit frames, the same brightness). The Space draws head locked while it is on.
-            val hoverOn = host.hoverTestOn()
-            dev.addView(row(R.drawable.ic_follow_mode, "Less blur test (glasses hover): ${if (hoverOn) "ON" else "OFF"}", tick = hoverOn) {
-                host.hoverTestChosen(!hoverOn)
-                buildDrawer()
-            })
-            dev.addView(c.padText(host.hoverTestLine(), 12f, WHITE))
             // 0.5.55: off draws the trackpad in its window again, scaled by SurfaceFlinger on the cover.
             val nativeOn = host.nativeBufferOn()
             dev.addView(row(R.drawable.ic_follow_mode, "Trackpad at the screen's own pixels: ${if (nativeOn) "ON" else "OFF"}", tick = nativeOn) {

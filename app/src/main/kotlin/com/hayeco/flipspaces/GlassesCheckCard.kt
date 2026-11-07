@@ -23,6 +23,9 @@ interface GlassesCheckHost {
     fun headYawDeg(): Float?
     fun follow(): FollowMode
 
+    /** Stillness mode is on, so the head pose does not turn. */
+    fun stillness(): Boolean
+
     /** The check ended with [result], or was skipped or closed (null). */
     fun checkFinished(result: GlassesCheck.CheckResult?)
 }
@@ -90,7 +93,7 @@ internal class GlassesCheckCard(
             if (left <= 0) {
                 val turn = meter.turned()
                 if (turn == null) {
-                    show(GlassesCheck.result(page.family, host, null, answers, checkHost.follow()))
+                    show(GlassesCheck.result(page.family, host, null, answers, checkHost.follow(), checkHost.stillness()))
                 } else {
                     step = Step.ASK_STAYED
                     build()
@@ -198,7 +201,7 @@ internal class GlassesCheckCard(
 
     private fun answer(a: GlassesCheck.Answers) {
         answers = a
-        show(GlassesCheck.result(page.family, host, meter.turned(), a, checkHost.follow()))
+        show(GlassesCheck.result(page.family, host, meter.turned(), a, checkHost.follow(), checkHost.stillness()))
     }
 
     private fun show(r: GlassesCheck.CheckResult?) {

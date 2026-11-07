@@ -47,6 +47,10 @@ object GlassesCheck {
         XREAL_HOST,
         /** Glasses Pocket XR does not know: whatever setting of their own follows the head. */
         UNKNOWN_GLASSES_MODE,
+        /** Stillness mode is on: the glasses hold the picture, so Pocket XR's head pose does not turn. */
+        STILLNESS_ON,
+        /** The Aura: Pocket XR sets it each time it connects, so a new connection puts it right. */
+        AURA_RECONNECT,
         /** Pocket XR's own tracking is set to follow the head (Smooth Follow). */
         POCKET_FOLLOW,
         /** Pocket XR saw no turn: head tracking is off or not reading. */
@@ -64,7 +68,8 @@ object GlassesCheck {
      * null when the Space had no head pose), [answers] what the user said, [follow] Pocket XR's own tracking mode.
      * Null while a question is still to be answered.
      */
-    fun result(family: SetupFamily, host: SetupHost, turn: Turn?, answers: Answers, follow: FollowMode = FollowMode.BODY_ANCHOR): CheckResult? {
+    fun result(family: SetupFamily, host: SetupHost, turn: Turn?, answers: Answers, follow: FollowMode = FollowMode.BODY_ANCHOR, stillness: Boolean = false): CheckResult? {
+        if (stillness) return fail(Fix.STILLNESS_ON, family, host)
         if (turn == null) return fail(Fix.NO_SPACE, family, host)
         val stayed = answers.stayed ?: return null
         if (stayed) {
@@ -85,6 +90,7 @@ object GlassesCheck {
         Moved.TOO_FAR -> when {
             family == SetupFamily.ONE_SERIES -> Fix.GLASSES_ANCHOR
             host.beamPro || host.xrealApps.isNotEmpty() -> Fix.XREAL_HOST
+            family == SetupFamily.AURA -> Fix.AURA_RECONNECT
             family == SetupFamily.OTHER -> Fix.UNKNOWN_GLASSES_MODE
             else -> Fix.REPORT
         }
@@ -92,6 +98,7 @@ object GlassesCheck {
             family == SetupFamily.ONE_SERIES -> Fix.GLASSES_STABILIZER
             follow == FollowMode.SMOOTH_FOLLOW -> Fix.POCKET_FOLLOW
             host.beamPro || host.xrealApps.isNotEmpty() -> Fix.XREAL_HOST
+            family == SetupFamily.AURA -> Fix.AURA_RECONNECT
             family == SetupFamily.OTHER -> Fix.UNKNOWN_GLASSES_MODE
             else -> Fix.REPORT
         }
@@ -108,11 +115,13 @@ object GlassesCheck {
         Fix.XREAL_HOST -> if (host.beamPro) "XREAL's spatial view on the Beam Pro is turning the picture too. Close it, then open the Space from Pocket XR and check again." else
             "${host.xrealApps.joinToString(", ").ifEmpty { "An XREAL app" }} may be turning the picture too. Close it from Recents, then check again."
         Fix.UNKNOWN_GLASSES_MODE -> "Something else is turning the picture too. If your glasses have their own Anchor, 3DoF or stabilizer setting, turn it off so they show a plain screen, then check again."
+        Fix.STILLNESS_ON -> "Stillness mode is on, so the glasses hold the picture and this check can't measure it. Turn Stillness mode off, then check again."
+        Fix.AURA_RECONNECT -> "Unplug the glasses and plug them back in. Pocket XR sets Spatial Anchor and the glasses' mode each time it connects. Then check again."
         Fix.POCKET_FOLLOW -> "Pocket XR is set to Smooth Follow. Open the Menu and pick Body Anchor (3DoF), then check again."
         Fix.NO_TURN -> "Pocket XR did not see your head turn ${TURN_DEG.toInt()} degrees each way. Turn further, or check that Head tracking is on in Pocket XR Settings."
         Fix.NO_SPACE -> "Open the Space on the glasses first, so there are windows to look at, then check again."
         Fix.REPORT -> "That is not a setting Pocket XR knows. Please send a Glasses report (Pocket XR Settings, Advanced) on GitHub and say what the windows did."
-    }.let { if (family == SetupFamily.AURA && fix == Fix.REPORT) "$it Nothing on the Aura needs setting for Pocket XR." else it }
+    }.let { if (family == SetupFamily.AURA && fix == Fix.REPORT) "$it Pocket XR sets the Aura's own settings for you." else it }
 
     const val PASSED = "All set. Windows stay put as you turn. This check won't come up again for these glasses; it is in the Menu if you need it."
 

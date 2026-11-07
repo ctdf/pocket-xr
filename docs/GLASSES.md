@@ -62,6 +62,35 @@ The app cannot read the mode either. The one hint it has is the panel duty the g
 shows a card with one tap to the Glasses setup check, once per run of the app and never once the check has passed. That a One in Anchor mode reads low is
 inferred, not measured, so the card says "may be". No other control message is sent to find out.
 
+### XREAL Aura: Spatial Anchor
+
+Pocket XR turns **Spatial Anchor** off each time it connects to the Aura. It sits where the One has Stabilizer, and on, it
+fights the Space's head tracking. Found by Mike on 6 November 2026, after a long hunt for shake that it was causing. To the
+firmware it is the translation switch: 10404 reads it and 10405 sets it. The firmware's EIS switch is something else.
+
+### Stillness mode: the stillest picture
+
+**Stillness mode** is on the trackpad, in the launcher beside Recentre, and on the cover screen beside Keyboard, on the Aura only. It turns Spatial Anchor off, leaves 3D, turns on
+**Ultrawide** and sets the largest screen size Ultrawide offers. The glasses then hold one flat canvas in the room by
+themselves. Nothing the phone draws can shake it, turning your head looks across it, and text stays sharp. Tap it again for
+3D and windows all around you. Each mode keeps its own screen size, so nothing has to be put back. Ultrawide turned on in
+the glasses' own settings works too: Pocket XR sees the change and draws the canvas.
+
+- It is flat, so there is no depth.
+- Windows stay at their saved places, but only the ones on the canvas can be seen. Turn the view with the trackpad to
+  reach the others. **Recentre** brings the canvas in front of you, and the glasses slide it there.
+
+Android shows Ultrawide and 3D as the same 3840 x 1080, so the app reads the glasses' own 2D or 3D state each time the
+display changes. It sends the glasses no mode in Ultrawide: any space mode or 3D request switches it off. So the app asks
+for 3D once a plug-in, again if the glasses drop it straight away, and after that the mode is the user's.
+
+Tried on the Aura and not kept: letting the glasses hold one 3D frame and re-pinning it (a blink at each change, because the
+firmware restarts the picture), recentring through a turn (steppy), recentring after one (a slide, and windows arrive
+late), a firmer still lock (a catch at the start of a turn, and a picture frozen on the display is not fixed to the room),
+Spatial Anchor with a smoothed head (worse), and sliding windows in at the canvas edge (the windows you look at move).
+
+Ultrawide is not yet tested on the One, One Pro or 1S.
+
 ### 3D mode
 
 The Space wants the glasses in their 3D side by side mode (3840 x 1080). On the Aura and the One, the app switches them

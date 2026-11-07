@@ -308,6 +308,9 @@ enum class LauncherButton(val label: String) {
     /** Recentre: brings the Space back in front. */
     RECENTRE("Recentre"),
 
+    /** Stillness mode, beside Recentre, on glasses that have it. */
+    STILLNESS("Stillness"),
+
     /**
      * Pocket XR's 3D / 2D switch. 0.5.45 (Mike: "when users click 3D, they will think that the media they are watching
      * or their apps will be converted into 3D like a 3D movie"): it is the glasses' side by side mode, which gives the
@@ -548,7 +551,7 @@ class XrLauncher {
         private set
 
     /** The buttons the home tray shows. */
-    var buttons: List<LauncherButton> = LauncherButton.values().toList()
+    var buttons: List<LauncherButton> = LauncherButton.values().filter { it != LauncherButton.STILLNESS }
 
     // Open and close.
     private val alphaAnim = Eased(0f)
