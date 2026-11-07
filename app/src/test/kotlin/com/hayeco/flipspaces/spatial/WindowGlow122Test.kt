@@ -3,7 +3,10 @@ package com.hayeco.flipspaces.spatial
 import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.hayeco.flipspaces.core.Look
+import com.hayeco.flipspaces.core.spatial.WindowGlow
 import com.hayeco.flipspaces.ui.SpaceSettings
+import com.hayeco.flipspaces.ui.windowGlowColorLabel
 import com.hayeco.flipspaces.ui.windowGlowLabel
 import com.hayeco.flipspaces.ui.windowGlowStep
 import org.junit.After
@@ -59,6 +62,45 @@ class WindowGlow122Test {
         val store = SpaceStore(app)
         store.windowGlowPercent = 20
         store.resetSpatialSettings()
+        assertEquals(100, store.windowGlowPercent)
+    }
+
+    @Test
+    fun theColourIsBlueByDefault() {
+        assertEquals(Look.ACCENT, SpaceStore(app).windowGlowColor)
+        assertEquals(Look.ACCENT, SpaceSettings(1f, 1f, true).windowGlowColor)
+        assertEquals("Glow colour: Blue", windowGlowColorLabel(SpaceStore(app).windowGlowColor))
+    }
+
+    @Test
+    fun theColourIsSavedAcrossARestart() {
+        val green = WindowGlow.PRESETS.first { it.name == "Green" }.argb
+        SpaceStore(app).windowGlowColor = green
+        assertEquals(green, app.getSharedPreferences("space", Context.MODE_PRIVATE).getInt("window_glow_color_122", 0))
+        assertEquals(green, SpaceStore(app).windowGlowColor)
+        assertEquals("Glow colour: Green", windowGlowColorLabel(green))
+        val custom = WindowGlow.custom(30f, 0.4f)
+        SpaceStore(app).windowGlowColor = custom
+        assertEquals(custom, SpaceStore(app).windowGlowColor)
+        assertEquals("Glow colour: Custom", windowGlowColorLabel(custom))
+    }
+
+    @Test
+    fun theColourIsAlwaysOpaque() {
+        val store = SpaceStore(app)
+        store.windowGlowColor = 0x00FF5C5C
+        assertEquals(0xFFFF5C5C.toInt(), store.windowGlowColor)
+        app.getSharedPreferences("space", Context.MODE_PRIVATE).edit().putInt("window_glow_color_122", 0x2000FF00).commit()
+        assertEquals(0xFF00FF00.toInt(), store.windowGlowColor)
+    }
+
+    @Test
+    fun resetBringsBackTheBlue() {
+        val store = SpaceStore(app)
+        store.windowGlowColor = WindowGlow.PRESETS.last().argb
+        store.windowGlowPercent = 30
+        store.resetSpatialSettings()
+        assertEquals(Look.ACCENT, store.windowGlowColor)
         assertEquals(100, store.windowGlowPercent)
     }
 

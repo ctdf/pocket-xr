@@ -7,6 +7,9 @@ Each release lists what changed for people using Pocket XR. Versions follow [sem
 - **Turn down the window glow.** Spatial windows in Settings has a new Window glow slider for the blue glow round the
   window you are using. Slide it lower for a softer glow, or all the way down to turn it off. It changes the Space at
   once, and it starts at 100 %, so the glow looks as before unless you change it.
+- **Pick the glow's colour.** Next to the slider, Glow colour has swatches for blue, white, purple, pink, green, amber
+  and red, plus Custom, which opens a hue slider and a colour slider for any bright colour you like. The colour and
+  the slider work together and change the Space at once. Blue stays the default, and Reset puts both back.
 
 ## 1.2.1: the add-on during setup
 

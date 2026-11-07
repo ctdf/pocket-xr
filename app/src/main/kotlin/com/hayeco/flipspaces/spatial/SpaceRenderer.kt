@@ -417,6 +417,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     /** 1.2.2: Settings' Window glow ([com.hayeco.flipspaces.core.spatial.WindowGlow]), read again on [SpaceCommand.SettingsChanged]. */
     private var windowGlowPercent = store.windowGlowPercent
+    private var windowGlowColor = store.windowGlowColor
     private var manualYaw = 0f
     private var mode: ModeChoice? = null
     private var shizuku = ShizukuStatus.NOT_INSTALLED
@@ -3675,6 +3676,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                     pointer.settings = pointer.settings.copy(handsSteer = store.handsSteer)
                     seeThrough = store.seeThrough
                     windowGlowPercent = store.windowGlowPercent
+                    windowGlowColor = store.windowGlowColor
                     HeadTracker.applySettings(context)
                 }
             }
@@ -4271,8 +4273,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GlKit.applyHalo(prog, bodyW + 2f * haloM, panel.heightM + 2f * haloM, haloM)
         GLES30.glUniformMatrix4fv(prog.mvp, 1, false, (viewProj * r.model).m, 0)
         GLES30.glUniformMatrix4fv(prog.tex, 1, false, GlKit.IDENTITY, 0)
-        val glow = com.hayeco.flipspaces.core.spatial.WindowGlow.alpha((HALO_ALPHA * focus + FRAME_HALO_ALPHA * frame).coerceAtMost(1f), windowGlowPercent)
-        val c = look(Look.ACCENT, glow * windowAlpha)
+        // 1.2.2: and its colour is Settings' Window glow colour, the accent blue unless changed.
+        val c = com.hayeco.flipspaces.core.spatial.WindowGlow.rgba(windowGlowColor, (HALO_ALPHA * focus + FRAME_HALO_ALPHA * frame).coerceAtMost(1f) * windowAlpha, windowGlowPercent)
         GLES30.glUniform4f(prog.color, c[0], c[1], c[2], c[3])
         GLES30.glUniform1f(prog.circle, 2f)
         GlKit.drawShape(prog, r)

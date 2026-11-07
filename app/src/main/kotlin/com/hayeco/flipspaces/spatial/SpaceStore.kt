@@ -94,7 +94,8 @@ class SpaceStore(context: Context) {
             e.remove(screenKey(sbs)).remove(screenKey(sbs) + "_from")
         }
         e.remove(KEY_VIEW).remove(KEY_IPD).remove(KEY_HANDS_STEER).remove(KEY_PLAIN_DISPLAY)
-            .remove(KEY_SEE_THROUGH).remove(KEY_DEX_FULL_SCREEN).remove(KEY_WINDOW_GLOW).apply()
+            .remove(KEY_SEE_THROUGH).remove(KEY_DEX_FULL_SCREEN).remove(KEY_WINDOW_GLOW)
+            .remove(KEY_WINDOW_GLOW_COLOR).apply()
     }
 
     // 0.5.36 (Mike: Further/Closer and Curve should act on the selected window only): the wraparound is retired, so a
@@ -185,6 +186,11 @@ class SpaceStore(context: Context) {
     var windowGlowPercent: Int
         get() = com.hayeco.flipspaces.core.spatial.WindowGlow.clamp(prefs.getInt(KEY_WINDOW_GLOW, com.hayeco.flipspaces.core.spatial.WindowGlow.DEFAULT_PERCENT))
         set(value) = prefs.edit().putInt(KEY_WINDOW_GLOW, com.hayeco.flipspaces.core.spatial.WindowGlow.clamp(value)).apply()
+
+    /** 1.2.2: the focused window's glow colour, opaque ARGB, the accent blue unless changed ([com.hayeco.flipspaces.core.spatial.WindowGlow.PRESETS]). */
+    var windowGlowColor: Int
+        get() = com.hayeco.flipspaces.core.spatial.WindowGlow.color(prefs.getInt(KEY_WINDOW_GLOW_COLOR, com.hayeco.flipspaces.core.spatial.WindowGlow.DEFAULT_COLOR))
+        set(value) = prefs.edit().putInt(KEY_WINDOW_GLOW_COLOR, com.hayeco.flipspaces.core.spatial.WindowGlow.color(value)).apply()
 
     /**
      * 0.5.9: press DeX's own full screen button on the Space's window, hiding the taskbar and the title bar. 0.5.101 (Mike's
@@ -651,5 +657,6 @@ class SpaceStore(context: Context) {
         private const val KEY_DEX_FULL_SCREEN = "dex_full_screen"
         private const val KEY_PLAIN_DISPLAY = "plain_display"
         private const val KEY_WINDOW_GLOW = "window_glow_122"
+        private const val KEY_WINDOW_GLOW_COLOR = "window_glow_color_122"
     }
 }
