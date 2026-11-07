@@ -2,6 +2,15 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
+## 1.2.1: the add-on during setup
+
+- **New users hear about the add-on.** The free Pocket XR add-on now has its own page in the first-run tutorial, and
+  the Glasses setup check's All set screen shows it as the next step.
+- **One tap to install it.** The Install add-on button downloads the newest add-on and opens Android's install prompt.
+  If Android asks, Allow installs opens "Install unknown apps", and the install carries on when you come back. If the
+  download fails, it says why and offers the add-on's release page.
+- **Already have it?** If the add-on is installed, the button opens its notification access setting instead.
+
 ## 1.2.0: Steady mode
 
 - **Steady mode.** A new button on the trackpad and in the launcher gives you the stillest picture Pocket XR has had.
