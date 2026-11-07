@@ -93,10 +93,15 @@ class Ultrawide0118Test {
         assertEquals(SteadyMode.Step.WAIT, SteadyMode.next(false, SteadyMode.Glasses()))
     }
 
-    @Test fun onlyTheAuraIsOfferedIt() {
-        assertTrue(SteadyMode.offeredOn(GlassesModel.AURA))
+    @Test fun theAuraAndTheOneSeriesAreOfferedIt() {
+        for (m in listOf(GlassesModel.AURA, GlassesModel.ONE, GlassesModel.ONE_PRO, GlassesModel.ONE_S)) assertTrue("$m", SteadyMode.offeredOn(m))
+        assertFalse(SteadyMode.offeredOn(GlassesModel.AIR))
         assertFalse(SteadyMode.offeredOn(null))
-        assertFalse(GlassesModel.entries.filter { it != GlassesModel.AURA }.any(SteadyMode::offeredOn))
+    }
+
+    @Test fun onlyTheAuraIsManagedWithoutAsking() {
+        assertTrue(SteadyMode.managedOn(GlassesModel.AURA))
+        assertFalse(SteadyMode.managedOn(GlassesModel.ONE_S))
     }
 
     @Test fun oneSetGoesOutThenWaitsToBeReadBack() {
@@ -272,5 +277,43 @@ class Ultrawide0118Test {
         assertFalse(c.followNeeded)
         c.keepFollow(10_000L)
         assertEquals(0, io.sent.count { type(it) == 10284 })
+    }
+
+    @Test fun aSpatialAnchorThatWillNotGoOffDoesNotStopSteadyMode() {
+        val io = Sink()
+        val c = GlassesDisplayCommands(io)
+        c.linkOpened(menuSettings = true)
+        answer(c, io, GlassesControl.STEREO_GET, ByteArray(0))
+        answer(c, io, GlassesControl.ULTRAWIDE_GET, ByteArray(0))
+        answer(c, io, GlassesControl.SPATIAL_ANCHOR_GET, ProtoWriter().varint(2, 1).bytes())
+        c.steadyStart()
+        assertEquals(SteadyMode.Step.ANCHOR_OFF, c.steady(true, 10_000L))
+        assertEquals(SteadyMode.Step.ANCHOR_OFF, c.steady(true, 13_100L))
+        assertEquals(SteadyMode.Step.ULTRAWIDE_ON, c.steady(true, 16_200L))
+    }
+
+    @Test fun glassesThatRefuseTheSizeStillFinish() {
+        val io = Sink()
+        val c = GlassesDisplayCommands(io)
+        c.linkOpened(menuSettings = true)
+        val request = io.sent.last { type(it) == GlassesControl.SCREEN_SIZE_RANGE }
+        val id = request.copyOfRange(6, 10).also { it[0] = (it[0].toInt() and 0x7F).toByte() }
+        val pb = ProtoWriter().message(4, ProtoWriter().varint(1, 5004).bytes()).bytes()
+        c.received(ControlFramer().append(ControlWire.header(GlassesControl.SCREEN_SIZE_RANGE, 4 + pb.size) + id + pb).single())
+        answer(c, io, GlassesControl.STEREO_GET, ByteArray(0))
+        answer(c, io, GlassesControl.ULTRAWIDE_GET, ProtoWriter().varint(2, 1).bytes())
+        answer(c, io, GlassesControl.SPATIAL_ANCHOR_GET, ByteArray(0))
+        c.steadyStart()
+        assertEquals(SteadyMode.Step.DONE, c.steady(true, 10_000L))
+    }
+
+    @Test fun threeDWaitsAMomentAfterAFollow() {
+        val io = Sink()
+        val c = GlassesDisplayCommands(io)
+        assertFalse("nothing sent yet", c.followSettling(10_000L))
+        inHover(c, io, ultrawide = 0)
+        c.keepFollow(10_000L)
+        assertTrue(c.followSettling(12_900L))
+        assertFalse(c.followSettling(13_100L))
     }
 }

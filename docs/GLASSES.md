@@ -70,7 +70,7 @@ firmware it is the translation switch: 10404 reads it and 10405 sets it. The fir
 
 ### Steady mode: the stillest picture
 
-**Steady mode** is on the trackpad, in the launcher beside Recentre, and on the cover screen beside Keyboard, on the Aura only. It turns Spatial Anchor off, leaves 3D, turns on
+**Steady mode** is on the trackpad, in the launcher beside Recentre, and on the cover screen beside Keyboard, on the Aura and the One series. It turns Spatial Anchor off, leaves 3D, turns on
 **Ultrawide** and sets the largest screen size Ultrawide offers. The glasses then hold one flat canvas in the room by
 themselves. Nothing the phone draws can shake it, turning your head looks across it, and text stays sharp. Tap it again for
 3D and windows all around you. Each mode keeps its own screen size, so nothing has to be put back. Ultrawide turned on in
@@ -89,7 +89,7 @@ firmware restarts the picture), recentring through a turn (steppy), recentring a
 late), a firmer still lock (a catch at the start of a turn, and a picture frozen on the display is not fixed to the room),
 Spatial Anchor with a smoothed head (worse), and sliding windows in at the canvas edge (the windows you look at move).
 
-Ultrawide is not yet tested on the One, One Pro or 1S.
+Steady mode is tested on the Aura only. It should work on the One, One Pro and 1S, but hasn't been tried on them: please open an issue if it doesn't. There it reads and changes those glasses' settings only once you tap it.
 
 ### 3D mode
 

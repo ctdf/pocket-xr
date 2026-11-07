@@ -4632,7 +4632,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
             setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.arrange(layout, yaw, pitch, frustum.horizontalFovDeg, frustum.verticalFovDeg), commit = true)
             steadyCount = layout.panels.size
             Log.i(PANEL_TAG, "Steady mode: $steadyCount windows arranged on the canvas")
-        } else if (saved != null && GlassesDisplayControl.ultrawideRead == 0) {
+        } else if (saved != null && (GlassesDisplayControl.ultrawideRead == 0 || (GlassesDisplayControl.ultrawideRead == null && !StereoLayout.isSbsMode(viewport.surfaceWidth, viewport.surfaceHeight)))) {
             setLayout(com.hayeco.flipspaces.core.spatial.SteadyArrange.restored(layout, com.hayeco.flipspaces.core.spatial.LayoutCodec.decode(saved)), commit = true)
             store.steadyLayout = null
             steadyCount = -1

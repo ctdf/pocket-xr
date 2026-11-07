@@ -111,6 +111,9 @@ class GlassesDisplayCommands(private val io: Io) {
     private var settingsAskedMs = Long.MIN_VALUE / 2
     private var stillSentMs = Long.MIN_VALUE / 2
 
+    /** Spatial Anchor offs sent for this change: glasses where it does not hold are not held up by it. */
+    private var anchorTries = 0
+
     /** Sets sent for the current Steady mode change; past [STILL_TRIES] it gives up. */
     @Volatile var stillTries = 0
         private set
@@ -127,6 +130,7 @@ class GlassesDisplayCommands(private val io: Io) {
     /** A new Steady mode change starts: its tries count from nothing. */
     fun steadyStart() {
         stillTries = 0
+        anchorTries = 0
         stillSentMs = Long.MIN_VALUE / 2
     }
 
@@ -141,7 +145,8 @@ class GlassesDisplayCommands(private val io: Io) {
      * out and the display's re-plug has time to pass. Answers the step the glasses are on.
      */
     fun steady(on: Boolean, nowMs: Long): SteadyMode.Step {
-        val step = SteadyMode.next(on, SteadyMode.Glasses(stereo, ultrawide, spatialAnchor, screenSize, screenSizeMax))
+        val anchor = if (anchorTries >= ANCHOR_TRIES) 0 else spatialAnchor
+        val step = SteadyMode.next(on, SteadyMode.Glasses(stereo, ultrawide, anchor, screenSize, screenSizeMax))
         if (nowMs - settingsAskedMs >= STILL_READ_MS) {
             settingsAskedMs = nowMs
             rpc(ControlWire::stereoGet, "2D / 3D state read (10273)")
@@ -151,7 +156,10 @@ class GlassesDisplayCommands(private val io: Io) {
         stillSentMs = nowMs
         stillTries++
         when (step) {
-            SteadyMode.Step.ANCHOR_OFF -> spatialAnchorOff()
+            SteadyMode.Step.ANCHOR_OFF -> {
+                anchorTries++
+                spatialAnchorOff()
+            }
             SteadyMode.Step.LEAVE_3D -> rpc({ ControlWire.stereoSet(it, false) }, "2D (10274 = 0), on the way to Ultrawide")
             SteadyMode.Step.ULTRAWIDE_ON -> rpc({ ControlWire.ultrawideSet(it, true) }, "Ultrawide on (10278 = 1)")
             SteadyMode.Step.ULTRAWIDE_OFF -> rpc({ ControlWire.ultrawideSet(it, false) }, "Ultrawide off (10278 = 0)")
@@ -174,9 +182,20 @@ class GlassesDisplayCommands(private val io: Io) {
      */
     val followNeeded: Boolean get() = ultrawide == 0 && spaceMode == GlassesControl.SPACE_HOVER && followTries < FOLLOW_TRIES
 
+    /**
+     * A follow went out moments ago. Ultrawide off, follow and 3D 3 seconds apart left the Aura's picture and its own menu
+     * blank once (7 November 2026), so 3D gives the glasses this long to finish.
+     */
+    fun followSettling(nowMs: Long): Boolean = nowMs - followSentMs < FOLLOW_SETTLE_MS
+
     /** A new plug-in: the tries count from nothing. */
     fun followReset() {
         followTries = 0
+    }
+
+    private fun sizeUnanswered() {
+        screenSize = 1f
+        screenSizeMax = 1f
     }
 
     /** Each beat with normal tracking wanted: follow sent while the glasses say hover, and read back. */
@@ -311,9 +330,10 @@ class GlassesDisplayCommands(private val io: Io) {
             }
             GlassesControl.ULTRAWIDE_GET -> if (m.result == 0L) ultrawide = (m.value ?: 0L).toInt()
             // The Aura has answered NaN just after a mode change: such a value is not kept.
-            GlassesControl.SCREEN_SIZE_GET -> if (m.result == 0L) m.valueFloat?.takeIf { it.isFinite() }?.let { screenSize = it }
-            GlassesControl.SCREEN_SIZE_RANGE -> if (m.result == 0L) m.field3Float?.takeIf { it.isFinite() && it in SCREEN_SIZE_LOWEST..SCREEN_SIZE_HIGHEST }?.let { screenSizeMax = it }
-            GlassesControl.SPATIAL_ANCHOR_GET -> if (m.result == 0L) spatialAnchor = (m.value ?: 0L).toInt()
+            GlassesControl.SCREEN_SIZE_GET -> if (m.result == 0L) m.valueFloat?.takeIf { it.isFinite() }?.let { screenSize = it } else sizeUnanswered()
+            GlassesControl.SCREEN_SIZE_RANGE -> if (m.result == 0L) m.field3Float?.takeIf { it.isFinite() && it in SCREEN_SIZE_LOWEST..SCREEN_SIZE_HIGHEST }?.let { screenSizeMax = it } else sizeUnanswered()
+            // Glasses that refuse these have nothing here to change, and the rest of Steady mode goes on without them.
+            GlassesControl.SPATIAL_ANCHOR_GET -> spatialAnchor = if (m.result == 0L) (m.value ?: 0L).toInt() else 0
             GlassesControl.SPACE_MODE_GET -> if (m.result == 0L) {
                 spaceMode = (m.value ?: 0L).toInt()
                 if (spaceMode == GlassesControl.SPACE_FOLLOW) followTries = 0
@@ -435,11 +455,13 @@ class GlassesDisplayCommands(private val io: Io) {
         const val STILL_READ_MS = 1_000L
         const val STILL_RETRY_MS = 3_000L
         const val STILL_TRIES = 8
+        const val ANCHOR_TRIES = 2
 
         /** Follow: how long before it is read back, how long before it is sent again, and how many times. */
         const val FOLLOW_READ_MS = 1_500L
         const val FOLLOW_RETRY_MS = 3_000L
         const val FOLLOW_TRIES = 3
+        const val FOLLOW_SETTLE_MS = 3_000L
 
         /** Any screen size outside this is not believed, whatever range the glasses answer. */
         const val SCREEN_SIZE_LOWEST = 0.5f

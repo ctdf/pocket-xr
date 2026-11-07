@@ -1,7 +1,7 @@
 package com.hayeco.flipspaces.core.spatial
 
 /**
- * Steady mode, Aura only, a key on the trackpad and a button in the launcher: one button for what the user otherwise sets in the glasses' menu each time. On is
+ * Steady mode, a key on the trackpad and a button in the launcher: one button for what the user otherwise sets in the glasses' menu each time. On is
  * Spatial Anchor off, Ultrawide on and the largest screen size Ultrawide offers. Off is Ultrawide off, then 3D as usual.
  * Each screen size belongs to its mode, so nothing has to be put back: 2D and 3D keep their own.
  */
@@ -33,7 +33,11 @@ object SteadyMode {
         }
     }
 
-    fun offeredOn(model: GlassesModel?): Boolean = model == GlassesModel.AURA
+    /** Glasses that get the key. The One series is untested (7 November 2026): it should work, so a refusal only ends the change. */
+    fun offeredOn(model: GlassesModel?): Boolean = model == GlassesModel.AURA || model == GlassesModel.ONE || model == GlassesModel.ONE_PRO || model == GlassesModel.ONE_S
+
+    /** Glasses whose menu settings are read and put right on every link. Others only once Steady mode has been used. */
+    fun managedOn(model: GlassesModel?): Boolean = model == GlassesModel.AURA
 
     private const val SIZE_SAME = 0.005f
 }
