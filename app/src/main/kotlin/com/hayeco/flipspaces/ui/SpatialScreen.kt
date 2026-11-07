@@ -39,6 +39,7 @@ import com.hayeco.flipspaces.core.spatial.ModeChoice
 import com.hayeco.flipspaces.core.spatial.SpatialMode
 import com.hayeco.flipspaces.spatial.PanelHost
 import com.hayeco.flipspaces.spatial.SpaceSnapshot
+import kotlin.math.roundToInt
 
 data class SpaceSettings(
     /** 0.5.26: the glasses' screen size in 2D and in their 3D mode (their Display size, 0.8 to 1.3), the projection's. */
@@ -50,6 +51,8 @@ data class SpaceSettings(
     val ipdMm: Float = 63f,
     /** 0.5.9, experimental: the glasses as a plain display with DeX off while the Space runs. */
     val plainDisplay: Boolean = false,
+    /** 1.2.2: the focused window's glow, 0 (off) to 100 % (the look it always had). */
+    val windowGlow: Int = com.hayeco.flipspaces.core.spatial.WindowGlow.DEFAULT_PERCENT,
 )
 
 const val SECURE_NOTE =
@@ -120,7 +123,7 @@ fun SpatialScreen(
             // 0.5.101 (Mike's settings audit): the app list is gone from here (the launcher on the glasses and Advanced on
             // the main screen open apps); the plain display test is under Developer; and a reset to the defaults.
             item { DeveloperCard(settings, onSettings) }
-            item { ResetButton("Spatial windows", "The glasses' screen sizes, 3D (on for the Aura and the One), eye distance and the hand pointer go back to Pocket XR's defaults. Your windows, presets and the glasses' calibration stay.", onReset) }
+            item { ResetButton("Spatial windows", "The glasses' screen sizes, 3D (on for the Aura and the One), eye distance, window glow and the hand pointer go back to Pocket XR's defaults. Your windows, presets and the glasses' calibration stay.", onReset) }
         }
     }
 }
@@ -228,6 +231,18 @@ private fun SettingsCard(settings: SpaceSettings, onChange: (SpaceSettings) -> U
                 onValueChange = { onChange(settings.copy(ipdMm = it)) },
                 valueRange = com.hayeco.flipspaces.core.spatial.StereoLayout.MIN_IPD_MM..com.hayeco.flipspaces.core.spatial.StereoLayout.MAX_IPD_MM,
             )
+            // 1.2.2 (a user: "reduce opacity or intensity of the blue drop shadow around the windows").
+            Text(windowGlowLabel(settings.windowGlow), style = MaterialTheme.typography.bodyMedium)
+            Slider(
+                value = settings.windowGlow.toFloat(),
+                onValueChange = { onChange(settings.copy(windowGlow = windowGlowStep(it))) },
+                valueRange = com.hayeco.flipspaces.core.spatial.WindowGlow.MIN_PERCENT.toFloat()..com.hayeco.flipspaces.core.spatial.WindowGlow.MAX_PERCENT.toFloat(),
+                steps = WINDOW_GLOW_STEPS,
+            )
+            Text(
+                "The blue glow round the window you are using. Lower it to soften the glow, or slide it to Off to hide it.",
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text("Hand pointer", style = MaterialTheme.typography.bodyMedium)
             Choice("Hand ray: the hand aims, pinch clicks", settings.handsSteer) { onChange(settings.copy(handsSteer = true)) }
             Choice("Look and pinch: head gaze aims, pinch anywhere clicks", !settings.handsSteer) { onChange(settings.copy(handsSteer = false)) }
@@ -238,6 +253,17 @@ private fun SettingsCard(settings: SpaceSettings, onChange: (SpaceSettings) -> U
         }
     }
 }
+
+/** 1.2.2: Window glow's slider stops between off and full, every 10 %. */
+internal const val WINDOW_GLOW_STEPS = 9
+
+/** 1.2.2: the slider's position [value] as a Window glow percent, on its 10 % stops. */
+internal fun windowGlowStep(value: Float): Int =
+    com.hayeco.flipspaces.core.spatial.WindowGlow.clamp((value / 10f).roundToInt() * 10)
+
+/** 1.2.2: Window glow's title at [percent]. */
+internal fun windowGlowLabel(percent: Int): String =
+    if (com.hayeco.flipspaces.core.spatial.WindowGlow.shown(percent)) "Window glow: $percent %" else "Window glow: Off"
 
 /** 0.5.101: tests for developers, closed until opened. */
 @Composable

@@ -94,7 +94,7 @@ class SpaceStore(context: Context) {
             e.remove(screenKey(sbs)).remove(screenKey(sbs) + "_from")
         }
         e.remove(KEY_VIEW).remove(KEY_IPD).remove(KEY_HANDS_STEER).remove(KEY_PLAIN_DISPLAY)
-            .remove(KEY_SEE_THROUGH).remove(KEY_DEX_FULL_SCREEN).apply()
+            .remove(KEY_SEE_THROUGH).remove(KEY_DEX_FULL_SCREEN).remove(KEY_WINDOW_GLOW).apply()
     }
 
     // 0.5.36 (Mike: Further/Closer and Curve should act on the selected window only): the wraparound is retired, so a
@@ -180,6 +180,11 @@ class SpaceStore(context: Context) {
     var ipdMm: Float
         get() = prefs.getFloat(KEY_IPD, com.hayeco.flipspaces.core.spatial.StereoLayout.DEFAULT_IPD_MM)
         set(value) = prefs.edit().putFloat(KEY_IPD, value.coerceIn(com.hayeco.flipspaces.core.spatial.StereoLayout.MIN_IPD_MM, com.hayeco.flipspaces.core.spatial.StereoLayout.MAX_IPD_MM)).apply()
+
+    /** 1.2.2: the focused window's glow, 0 (off) to 100 % (the look it always had) ([com.hayeco.flipspaces.core.spatial.WindowGlow]). */
+    var windowGlowPercent: Int
+        get() = com.hayeco.flipspaces.core.spatial.WindowGlow.clamp(prefs.getInt(KEY_WINDOW_GLOW, com.hayeco.flipspaces.core.spatial.WindowGlow.DEFAULT_PERCENT))
+        set(value) = prefs.edit().putInt(KEY_WINDOW_GLOW, com.hayeco.flipspaces.core.spatial.WindowGlow.clamp(value)).apply()
 
     /**
      * 0.5.9: press DeX's own full screen button on the Space's window, hiding the taskbar and the title bar. 0.5.101 (Mike's
@@ -645,5 +650,6 @@ class SpaceStore(context: Context) {
         private const val KEY_IPD = "ipd_mm"
         private const val KEY_DEX_FULL_SCREEN = "dex_full_screen"
         private const val KEY_PLAIN_DISPLAY = "plain_display"
+        private const val KEY_WINDOW_GLOW = "window_glow_122"
     }
 }

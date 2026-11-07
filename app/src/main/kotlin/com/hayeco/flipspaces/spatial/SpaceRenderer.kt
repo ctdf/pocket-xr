@@ -414,6 +414,9 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     /** 0.5.24: the saved windows were capped once this run ([capReopened]). */
     private var reopenCapped = false
     private var seeThrough = store.seeThrough
+
+    /** 1.2.2: Settings' Window glow ([com.hayeco.flipspaces.core.spatial.WindowGlow]), read again on [SpaceCommand.SettingsChanged]. */
+    private var windowGlowPercent = store.windowGlowPercent
     private var manualYaw = 0f
     private var mode: ModeChoice? = null
     private var shizuku = ShizukuStatus.NOT_INSTALLED
@@ -3671,6 +3674,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                     applyViewport(viewport, force = true)
                     pointer.settings = pointer.settings.copy(handsSteer = store.handsSteer)
                     seeThrough = store.seeThrough
+                    windowGlowPercent = store.windowGlowPercent
                     HeadTracker.applySettings(context)
                 }
             }
@@ -4253,6 +4257,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // glow brightens and the rim turns the accent ([bodyRounding]): the window's frame lights to say it can be taken.
         val frame = if (firstEye) p.frameLook.at(onFrame, frameClockMs) else p.frameLook.value
         if (focus < 0.01f && frame < 0.01f) return
+        // 1.2.2: Settings' Window glow scales its opacity; off draws nothing (the rim still lights on the grab band).
+        if (!com.hayeco.flipspaces.core.spatial.WindowGlow.shown(windowGlowPercent)) return
         val bodyW = PanelCurve.arcWidthM(panel)
         val haloM = HALO_PER_M * panel.distanceM
         val gu = haloM / bodyW
@@ -4265,7 +4271,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         GlKit.applyHalo(prog, bodyW + 2f * haloM, panel.heightM + 2f * haloM, haloM)
         GLES30.glUniformMatrix4fv(prog.mvp, 1, false, (viewProj * r.model).m, 0)
         GLES30.glUniformMatrix4fv(prog.tex, 1, false, GlKit.IDENTITY, 0)
-        val c = look(Look.ACCENT, (HALO_ALPHA * focus + FRAME_HALO_ALPHA * frame).coerceAtMost(1f) * windowAlpha)
+        val glow = com.hayeco.flipspaces.core.spatial.WindowGlow.alpha((HALO_ALPHA * focus + FRAME_HALO_ALPHA * frame).coerceAtMost(1f), windowGlowPercent)
+        val c = look(Look.ACCENT, glow * windowAlpha)
         GLES30.glUniform4f(prog.color, c[0], c[1], c[2], c[3])
         GLES30.glUniform1f(prog.circle, 2f)
         GlKit.drawShape(prog, r)
