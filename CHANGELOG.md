@@ -2,7 +2,7 @@
 
 Each release lists what changed for people using Pocket XR. Versions follow [semantic versioning](https://semver.org/).
 
-## 1.2.2
+## 1.2.2: the window glow
 
 - **Turn down the window glow.** Spatial windows in Settings has a new Window glow slider for the blue glow round the
   window you are using. Slide it lower for a softer glow, or all the way down to turn it off. It changes the Space at
