@@ -411,6 +411,12 @@ class TrackpadActivity : Activity(), PadHost {
         }
     }
 
+    /** 1.2.3 (issue 55): a keyboard the text field asked for before this window had focus opens now. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && ::screen.isInitialized) screen.windowFocused()
+    }
+
     override fun onResume() {
         super.onResume()
         resumed = true
