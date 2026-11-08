@@ -12,19 +12,15 @@ import java.nio.ByteOrder
 /**
  * 4F build: a gamepad Android sees as a real controller, made in the panel service (the shell, through Shizuku) the way
  * scrcpy's `--gamepad=uhid` does: a HID device on `/dev/uhid` with an Xbox 360 pad's ids, so Android gives it that pad's
- * key layout and games list it as a controller.
- *
- * The phone's own screen is touched all the time while it is the gamepad, which moves Android's focus to the phone, so
- * the device's own reports would often reach the trackpad instead of the game. So no reports are written: each change
- * is injected straight into the game's display as key and joystick events that carry this device's id, and a game that
- * asks for the event's InputDevice gets the real gamepad with its axes and buttons.
+ * key layout and games list it as a controller. Its state is written as HID reports, so its events carry its own
+ * device id, as a game needs. [inject] is kept for the service's wiring and is not used.
  */
+@Suppress("unused")
 internal class VirtualGamepad(private val inject: (InputEvent, Int, String) -> String?) {
     private var uhid: RandomAccessFile? = null
     private var deviceId = -1
     private var buttons = 0
     private var axes = FloatArray(AXES)
-    private val downTimes = LongArray(BUTTON_KEYS.size)
 
     /** The device's id, creating it first when needed. */
     @Synchronized
@@ -51,47 +47,48 @@ internal class VirtualGamepad(private val inject: (InputEvent, Int, String) -> S
 
     /**
      * The pad's state now: [newButtons] a bit per [BUTTON_KEYS] entry, [newAxes] the left stick x and y, the right stick
-     * x and y (-1 to 1, y down), the left and right trigger (0 to 1) and the D-pad x and y (-1, 0 or 1). What changed
-     * is sent to [displayId].
+     * x and y (-1 to 1, y down), the left and right trigger (0 to 1) and the D-pad x and y (-1, 0 or 1).
+     *
+     * Written as a real HID report: Android gives injected events the virtual keyboard's device id (InputDispatcher's
+     * `resolvedDeviceId`), so a game never saw them as the gamepad's. From the device itself they go, like any
+     * controller's, to the top focused display, which the Space keeps on the focused window.
      */
     @Synchronized
-    fun state(displayId: Int, newButtons: Int, newAxes: FloatArray): String? {
-        val id = device()
-        val now = SystemClock.uptimeMillis()
-        var problem: String? = null
-        for (i in BUTTON_KEYS.indices) {
-            val bit = 1 shl i
-            if ((buttons xor newButtons) and bit == 0) continue
-            val down = newButtons and bit != 0
-            if (down) downTimes[i] = now
-            val e = KeyEvent(downTimes[i], now, if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, BUTTON_KEYS[i], 0, 0, id, 0, 0, InputDevice.SOURCE_GAMEPAD)
-            inject(e, displayId, "gamepad ${KeyEvent.keyCodeToString(BUTTON_KEYS[i])}")?.let { problem = it }
-        }
-        buttons = newButtons
+    fun state(@Suppress("UNUSED_PARAMETER") displayId: Int, newButtons: Int, newAxes: FloatArray): String? {
+        device()
+        val f = uhid ?: return "no gamepad device"
         val a = newAxes.copyOf(AXES)
-        if (!a.contentEquals(axes)) {
-            axes = a
-            val props = arrayOf(MotionEvent.PointerProperties().apply { this.id = 0; toolType = MotionEvent.TOOL_TYPE_UNKNOWN })
-            val coords = arrayOf(MotionEvent.PointerCoords().apply {
-                setAxisValue(MotionEvent.AXIS_X, a[0])
-                setAxisValue(MotionEvent.AXIS_Y, a[1])
-                setAxisValue(MotionEvent.AXIS_Z, a[2])
-                setAxisValue(MotionEvent.AXIS_RZ, a[3])
-                setAxisValue(MotionEvent.AXIS_LTRIGGER, a[4])
-                setAxisValue(MotionEvent.AXIS_RTRIGGER, a[5])
-                setAxisValue(MotionEvent.AXIS_BRAKE, a[4])
-                setAxisValue(MotionEvent.AXIS_GAS, a[5])
-                setAxisValue(MotionEvent.AXIS_HAT_X, a[6])
-                setAxisValue(MotionEvent.AXIS_HAT_Y, a[7])
-            })
-            val e = MotionEvent.obtain(now, now, MotionEvent.ACTION_MOVE, 1, props, coords, 0, 0, 1f, 1f, id, 0, InputDevice.SOURCE_JOYSTICK, 0)
-            try {
-                inject(e, displayId, "gamepad axes")?.let { problem = it }
-            } finally {
-                e.recycle()
-            }
+        var hid = 0
+        for (i in BUTTON_KEYS.indices) if (newButtons and (1 shl i) != 0) hid = hid or (1 shl HID_BIT[i])
+        fun stick(v: Float) = (v.coerceIn(-1f, 1f) * 32767f).toInt()
+        fun trigger(v: Float) = (v.coerceIn(0f, 1f) * 255f).toInt()
+        val hx = Math.round(a[6]).coerceIn(-1, 1)
+        val hy = Math.round(a[7]).coerceIn(-1, 1)
+        // Hat 1 north, clockwise to 8 north-west; 0 (outside 1 to 8) is centred.
+        val hat = when {
+            hx == 0 && hy < 0 -> 1
+            hx > 0 && hy < 0 -> 2
+            hx > 0 && hy == 0 -> 3
+            hx > 0 && hy > 0 -> 4
+            hx == 0 && hy > 0 -> 5
+            hx < 0 && hy > 0 -> 6
+            hx < 0 && hy == 0 -> 7
+            hx < 0 && hy < 0 -> 8
+            else -> 0
         }
-        return problem
+        val report = ByteBuffer.allocate(REPORT_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+            .putShort(hid.toShort())
+            .putShort(stick(a[0]).toShort()).putShort(stick(a[1]).toShort())
+            .putShort(stick(a[2]).toShort()).putShort(stick(a[3]).toShort())
+            .put(trigger(a[4]).toByte()).put(trigger(a[5]).toByte())
+            .put(hat.toByte())
+            .array()
+        val ev = ByteBuffer.allocate(4 + 2 + REPORT_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(UHID_INPUT2).putShort(REPORT_SIZE.toShort()).put(report).array()
+        f.write(ev)
+        buttons = newButtons
+        axes = a
+        return null
     }
 
     @Synchronized
@@ -110,7 +107,7 @@ internal class VirtualGamepad(private val inject: (InputEvent, Int, String) -> S
         val b = ByteBuffer.allocate(4 + 128 + 64 + 64 + 2 + 2 + 4 * 4 + DESCRIPTOR.size).order(ByteOrder.LITTLE_ENDIAN)
         b.putInt(UHID_CREATE2)
         b.put(NAME.toByteArray().copyOf(128))
-        b.put(ByteArray(64))
+        b.put("pocketxr/gamepad0".toByteArray().copyOf(64))
         b.put(ByteArray(64))
         b.putShort(DESCRIPTOR.size.toShort())
         b.putShort(BUS_USB.toShort())
@@ -127,6 +124,11 @@ internal class VirtualGamepad(private val inject: (InputEvent, Int, String) -> S
         const val AXES = 8
         private const val UHID_DESTROY = 1
         private const val UHID_CREATE2 = 11
+        private const val UHID_INPUT2 = 12
+        private const val REPORT_SIZE = 13
+
+        /** The HID button (bit = usage - 1) for each [BUTTON_KEYS] bit: A 1, B 2, X 4, Y 5, LB 7, RB 8, Back 11, Start 12, Home 13, L3 14, R3 15. */
+        private val HID_BIT = intArrayOf(0, 1, 3, 4, 6, 7, 10, 11, 12, 13, 14)
         private const val BUS_USB = 0x03
         // Xbox 360 pad: Android's Vendor_045e_Product_028e.kl, which most games know.
         private const val VENDOR = 0x045E

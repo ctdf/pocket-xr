@@ -3406,11 +3406,22 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
     }
 
     /** 4F build: the phone's virtual gamepad, to the focused panel as [panelKey] sends keys. */
+    private var gamepadFocusAt = 0L
+    private var gamepadFocusDisplay = -1
+
     private fun panelGamepad(g: SpaceCommand.PanelGamepad) {
         val p = gameTarget() ?: return
         val display = p.displayId ?: return
+        // The gamepad's own events go to Android's top focused display: keep it on the game's window, as a press on the
+        // phone's screen may have moved it. At most every two seconds, and at once for another window.
+        val now = SystemClock.uptimeMillis()
+        if (display != gamepadFocusDisplay || now - gamepadFocusAt > 2000) {
+            gamepadFocusDisplay = display
+            gamepadFocusAt = now
+            PanelHost.focus(display, "the phone's gamepad")
+        }
         PanelHost.gamepad(display, g.buttons, g.axes) { err ->
-            com.hayeco.flipspaces.game.GameStatus.report(if (err == null) "Gamepad → ${p.panel.label}" else "Gamepad: $err", err != null)
+            com.hayeco.flipspaces.game.GameStatus.report(if (err == null) "Gamepad report → ${p.panel.label} (focus kept there)" else "Gamepad: $err", err != null)
             if (err != null) problem = "Gamepad on ${p.panel.label}: $err"
         }
     }

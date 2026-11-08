@@ -74,7 +74,7 @@ object PanelHost {
      */
     // 0.5.37: 14, launchNew (a new instance of a running app); a new version restarts the user service with this code.
     // 1.1.15: 16, rootTaskLines and moveTaskToDisplay (an app's new screen that landed on the phone, back to its window).
-    private const val SERVICE_VERSION = 18
+    private const val SERVICE_VERSION = 19
 
     /**
      * 0.5.52: window displays on the shell's virtual device (Developer: "Windows stay awake when the phone sleeps (test)"),
