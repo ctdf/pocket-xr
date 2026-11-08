@@ -2008,8 +2008,9 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
                 24f, 41f,
             ) { i -> host.coverControlsChosen(if (i == 0) StripSide.RIGHT else StripSide.LEFT) })
         }
-        // Horizontal Trackpad Direction (not on the cover screen, whose layout has no direction).
-        if (!cover) {
+        // Horizontal Trackpad Direction (not on the cover screen, whose layout has no direction). 1.2.3 (issue 56): only on
+        // the Horizontal Trackpad, the one page it turns; elsewhere the choice did nothing.
+        if (!cover && com.hayeco.flipspaces.core.pointer.TrackpadSettings.directionApplies(settings.mode)) {
             s.addView(c.divider(20f))
             s.addView(choice(
                 "Sideways trackpad direction",
