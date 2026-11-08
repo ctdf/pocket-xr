@@ -1523,6 +1523,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         coverKeys[CoverButton.CURVE]?.lit = hold == WindowAction.CURVE
     }
 
+    /**
+     * 1.2.3 (issue 55: in the launcher's Search apps "I have to tap it myself to start typing"): the keyboard is asked for
+     * once the trackpad's window has focus. Opening the field makes the window focusable ([PadHost.typing]), but it
+     * gains focus a moment later, and Android drops a keyboard request from a window without focus. From the cover's
+     * Keyboard button the window often had focus already, so it worked there; from the glasses' search it did not.
+     */
+    private var keyboardOnFocus = false
+
     /** 0.5.17 cover screen: the text field over the top of the cover, its keyboard below; the buttons hide meanwhile. */
     fun showText(show: Boolean) {
         if (show == textOpen) return
@@ -1534,12 +1542,24 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             typedSoFar = ""
             textField.setText("")
             textField.requestFocus()
-            textField.post { ime?.showSoftInput(textField, 0) }
+            keyboardOnFocus = !textField.hasWindowFocus()
+            if (!keyboardOnFocus) textField.post { ime?.showSoftInput(textField, 0) }
         } else {
+            keyboardOnFocus = false
             ime?.hideSoftInputFromWindow(textField.windowToken, 0)
             textField.clearFocus()
         }
         requestLayout()
+    }
+
+    /** The trackpad's window gained focus: the keyboard the open text field asked for before it had focus. */
+    fun windowFocused() {
+        if (!keyboardOnFocus || !textOpen) return
+        keyboardOnFocus = false
+        textField.requestFocus()
+        textField.post {
+            context.getSystemService(android.view.inputmethod.InputMethodManager::class.java)?.showSoftInput(textField, 0)
+        }
     }
 
     /** The gesture hint shows only while gestures are on (state 2). */
