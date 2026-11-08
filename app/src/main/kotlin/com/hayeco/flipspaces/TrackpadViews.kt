@@ -1077,12 +1077,13 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     val pad = PadArtView(context) { e, w, h -> host.padTouch(e, w, h) }
 
-    /** 4F build: game keys over the pad, off until the Menu turns them on. */
-    private val gameKeys = GameKeysView(context) { a, c, d -> host.gameKey(a, c, d) }.apply { visibility = View.GONE }
-    val gameKeysShown: Boolean get() = gameKeys.visibility == View.VISIBLE
+    /** 4F build: the phone as a keyboard or gamepad, over the whole trackpad page while it is open. */
+    val gameScreen = com.hayeco.flipspaces.game.GameScreen(context, host as com.hayeco.flipspaces.game.GameHost).apply { visibility = View.GONE }
 
-    fun showGameKeys(on: Boolean) {
-        gameKeys.visibility = if (on) View.VISIBLE else View.GONE
+    fun openGame() {
+        closePopup()
+        closeDrawer()
+        gameScreen.open()
     }
     private val drawerButton = ImageView(context).apply {
         setImageResource(R.drawable.ic_drawer_button)
@@ -1411,11 +1412,11 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     init {
         setBackgroundColor(BACKGROUND)
-        listOf(pad, gameKeys, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
+        listOf(pad, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
         mainKeys.values.forEach { addView(it) }
         coverKeys.values.forEach { addView(it) }
         addView(lockKey)
-        listOf(textBar, mask, popup, intro, dialog, drawerScrim, drawer, toast, lock).forEach { addView(it) }
+        listOf(textBar, mask, popup, intro, dialog, drawerScrim, drawer, gameScreen, toast, lock).forEach { addView(it) }
         pressable(barBack, barBackIcon, R.drawable.ic_back, R.drawable.ic_back_pressed, R.drawable.left_black_gradient_bg_pressed, isHome = false)
         pressable(barHome, barHomeIcon, R.drawable.ic_home_new, R.drawable.ic_home_new_pressed, R.drawable.right_black_gradient_bg_pressed, isHome = true)
         pressable(sideBack, sideBackIcon, R.drawable.ic_back, R.drawable.ic_back_pressed, R.drawable.black_gradient_rounded_rect_pressed, isHome = false, restore = R.drawable.black_gradient_rounded_rect)
@@ -1717,7 +1718,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // over the selector, while typing into the Space (the cover's has its own place above).
         if (!cover && textOpen) put(textBar, dp(20f), dp(12f), w - dp(40f), dp(52f))
         if (landscape) put(hint, w - dp(23f) - dp(20f) - hw, selectorBottom + dp(35f), hw, hh) else put(hint, (w - hw) / 2, selectorBottom + dp(35f), hw, hh)
-        rects[pad]?.let { put(gameKeys, it[0], it[1], it[2], it[3]) }
+        put(gameScreen, 0, 0, w, h)
         put(mask, 0, 0, w, h)
         put(drawerScrim, 0, 0, w, h)
         val dw = minOf(w, if (landscape) dp(316f) else dp(290f))
@@ -1725,7 +1726,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         if (drawer.visibility != View.VISIBLE) drawer.translationX = -dw.toFloat()
         // Popup: 230 wide, 240 tall with the gesture button, 156 without; 30 below the selector,
         // centred in portrait and right aligned in landscape.
-        val ph = if (host.gestureState() > 0) dp(240f) else dp(156f)
+        val ph = if (host.gestureState() > 0) dp(287f) else dp(203f)
         val pw = dp(230f)
         val selectorRect = rects[selector] ?: intArrayOf(0, 0, 0, 0)
         val popX = if (landscape) (selectorRect[0] + selectorRect[2] - pw).coerceAtLeast(0) else (w - pw) / 2
@@ -1811,6 +1812,16 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             }
             popup.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(46f)).apply { if (i == 0) topMargin = context.dp(8f) })
         }
+        // 4F build: the keyboard and gamepad layouts, next to the pad types.
+        popup.addView(context.divider(0f, DIVIDER_33))
+        popup.addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(context.icon(R.drawable.ic_settings_sliders, 20f))
+            addView(context.padText("Keyboard & Gamepad", 14f, WHITE), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(10f) })
+            pressLight(this, 0f)
+            setOnClickListener { openGame() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(46f)))
         gestureButton = null
         if (host.gestureState() > 0) {
             val icon = context.icon(R.drawable.ic_gesture_off, 30f)
@@ -1973,11 +1984,10 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
             closeDrawer()
             host.unlockPhone()
         })
-        // 4F build: game keys (W A S D, Space, Shift, Esc, Q, E, H, Tab) over the pad.
+        // 4F build: the keyboard and gamepad layouts.
         functions.addView(c.divider(20f))
-        functions.addView(row(R.drawable.ic_settings_sliders, if (gameKeysShown) "Hide game keys" else "Game keys", subtitle = "Keys a game sees held down, over the trackpad") {
-            closeDrawer()
-            showGameKeys(!gameKeysShown)
+        functions.addView(row(R.drawable.ic_settings_sliders, "Keyboard & gamepad", subtitle = "Keys, sticks and a mouse area for games, in layouts you set") {
+            openGame()
         })
         drawerBody.addView(functions, cardParams(if (koFi) 12f else 25f))
 

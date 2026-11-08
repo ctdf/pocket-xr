@@ -3403,6 +3403,14 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         PanelHost.key(display, k.action, k.keyCode, k.metaState, k.repeat, k.downTime) { problem = "Key on ${p.panel.label}: $it" }
     }
 
+    /** 4F build: the phone's virtual gamepad, to the focused panel as [panelKey] sends keys. */
+    private fun panelGamepad(g: SpaceCommand.PanelGamepad) {
+        val target = KeyRouting.target(launcher.isOpen, fullKeyboard = true, focusedPanelId = focusedPanelId, panelIds = panels.keys)
+        val p = (target as? KeyTarget.Panel)?.let { panels[it.panelId] } ?: return
+        val display = p.displayId ?: return
+        PanelHost.gamepad(display, g.buttons, g.axes) { problem = "Gamepad on ${p.panel.label}: $it" }
+    }
+
     /** Android paused, resumed or stopped a panel's display. */
     private fun drainDisplayEvents() {
         while (true) {
@@ -3661,6 +3669,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 is SpaceCommand.LauncherSearch -> xr.setQuery(c.query)
                 is SpaceCommand.LauncherNav -> launcherActions(xr.key(c.key, SystemClock.uptimeMillis()))
                 is SpaceCommand.PanelKey -> panelKey(c)
+                is SpaceCommand.PanelGamepad -> panelGamepad(c)
                 SpaceCommand.TrackpadTouched -> keepFocus()
                 is SpaceCommand.Remove -> removePanel(c.panelId)
                 SpaceCommand.Recentre -> recentre()

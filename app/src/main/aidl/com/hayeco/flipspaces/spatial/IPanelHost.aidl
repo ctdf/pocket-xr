@@ -163,4 +163,13 @@ interface IPanelHost {
      * Returns null when Android took it, else why not.
      */
     String moveTaskToDisplay(int taskId, int displayId) = 29;
+
+    /**
+     * 4F build: the virtual gamepad's state for the app on [displayId] ([VirtualGamepad]): a bit per button, and the
+     * sticks, triggers and D-pad. Made on first use. Returns null, else what went wrong.
+     */
+    String gamepad(int displayId, int buttons, in float[] axes) = 30;
+
+    /** 4F build: removes the virtual gamepad. */
+    void gamepadClose() = 31;
 }

@@ -98,7 +98,7 @@ import com.hayeco.flipspaces.spatial.SpaceSession
  * 0.4.8: while the Space is up a [KeySink] window takes the keys sent to the phone (phone Back
  * goes to the Space). The sink takes no touches, so the trackpad stays not focusable.
  */
-class TrackpadActivity : Activity(), PadHost {
+class TrackpadActivity : Activity(), PadHost, com.hayeco.flipspaces.game.GameHost {
     private val keySink by lazy { KeySink(this) { PointerHub.submit(PointerSignal.Back, HandProviderKind.TRACKPAD) } }
     private var resumed = false
     private lateinit var prefs: TrackpadPrefs
@@ -226,6 +226,11 @@ class TrackpadActivity : Activity(), PadHost {
 
     @Deprecated("Android 13 and later use the OnBackInvokedCallback registered in onCreate")
     override fun onBackPressed() {
+        if (screen.gameScreen.isOpen) {
+            screen.gameScreen.close()
+            gameExit()
+            return
+        }
         if (!screen.closeTop()) {
             CoverTrackpad.leftByUser()
             @Suppress("DEPRECATION")
@@ -1639,9 +1644,27 @@ class TrackpadActivity : Activity(), PadHost {
         }
     }
 
-    /** 4F build: a game key from [GameKeysView], to the focused window as a held key. */
+    /** 4F build: a key from the game screen, to the focused window as a held key. */
     override fun gameKey(action: Int, keyCode: Int, downTime: Long) {
         SpaceSession.send(SpaceCommand.PanelKey(action, keyCode, 0, 0, downTime))
+    }
+
+    /** 4F build: the game screen's virtual gamepad, to the focused window. */
+    override fun gamePad(buttons: Int, axes: FloatArray) {
+        SpaceSession.send(SpaceCommand.PanelGamepad(buttons, axes))
+    }
+
+    /** 4F build: the game screen's mouse area works as the trackpad does. */
+    override fun gameMouse(event: MotionEvent, width: Float, height: Float) = padTouch(event, width, height)
+
+    override fun gameOrientation(landscape: Boolean) {
+        if (cover) return
+        requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    override fun gameExit() {
+        requestedOrientation = if (cover) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        else TrackpadSettings.screenOrientation(settings.mode, settings.direction, prefs.landscapeDevice)
     }
 
     private fun key(code: Int) {

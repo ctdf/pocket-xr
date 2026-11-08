@@ -16,8 +16,8 @@ android {
         applicationId = "com.hayeco.flipspaces"
         minSdk = 30
         targetSdk = 36
-        versionCode = 154
-        versionName = "1.2.2-4f-keys"
+        versionCode = 155
+        versionName = "1.2.2-4f-gamepad"
         // Fork: installs next to the official app.
         applicationIdSuffix = ".fourfinger"
         // The Flip 7 is arm64; MediaPipe's native code for other ABIs only adds size.

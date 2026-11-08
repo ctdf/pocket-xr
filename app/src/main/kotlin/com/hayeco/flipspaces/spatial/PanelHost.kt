@@ -74,7 +74,7 @@ object PanelHost {
      */
     // 0.5.37: 14, launchNew (a new instance of a running app); a new version restarts the user service with this code.
     // 1.1.15: 16, rootTaskLines and moveTaskToDisplay (an app's new screen that landed on the phone, back to its window).
-    private const val SERVICE_VERSION = 16
+    private const val SERVICE_VERSION = 17
 
     /**
      * 0.5.52: window displays on the shell's virtual device (Developer: "Windows stay awake when the phone sleeps (test)"),
@@ -488,6 +488,28 @@ object PanelHost {
             val err = runCatching { h.injectKey(displayId, action, keyCode, metaState, repeat, downTime) }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
             if (err != null) main.post { problem(err) }
         }
+    }
+
+    /**
+     * 4F build: the virtual gamepad's state for the app on [displayId]. A stick sends many states; one that only moves
+     * the axes is skipped when a newer one with the same buttons is already queued, so no press or release is lost.
+     */
+    @Volatile private var padSeq = 0
+    @Volatile private var padLatestButtons = 0
+
+    fun gamepad(displayId: Int, buttons: Int, axes: FloatArray, problem: (String) -> Unit) {
+        val seq = ++padSeq
+        padLatestButtons = buttons
+        calls.execute {
+            if (seq != padSeq && buttons == padLatestButtons) return@execute
+            val h = host ?: return@execute
+            val err = runCatching { h.gamepad(displayId, buttons, axes) }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
+            if (err != null) main.post { problem(err) }
+        }
+    }
+
+    fun gamepadClose() {
+        calls.execute { runCatching { host?.gamepadClose() } }
     }
 
     /** Gives [displayId] top focus (0.4.1), so typing and the phone's keyboard reach its app. */

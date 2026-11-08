@@ -44,6 +44,9 @@ sealed interface SpaceCommand {
      * it goes on to that panel's app. KeyEvent action, code, meta state, repeat and down time.
      */
     data class PanelKey(val action: Int, val keyCode: Int, val metaState: Int, val repeat: Int, val downTime: Long) : SpaceCommand
+
+    /** 4F build: the phone's virtual gamepad changed; it goes to the focused panel's app ([VirtualGamepad]). */
+    class PanelGamepad(val buttons: Int, val axes: FloatArray) : SpaceCommand
     /**
      * The phone's trackpad was touched (0.4.2): Android may have moved focus to the phone, so
      * the focused panel (or the open launcher's Space) gets it back.

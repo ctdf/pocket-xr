@@ -94,6 +94,7 @@ class PanelHostService : IPanelHost.Stub() {
     private val callbackClass: Class<*> by lazy { Class.forName("android.hardware.display.IVirtualDisplayCallback") }
 
     override fun destroy() {
+        runCatching { pad.close() }
         tokens.keys.toList().forEach { releaseDisplay(it) }
         System.exit(0)
     }
@@ -547,6 +548,15 @@ class PanelHostService : IPanelHost.Stub() {
             KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD,
         )
         inject(event, displayId, "key ${KeyEvent.keyCodeToString(keyCode)}")
+    }
+
+    /** 4F build: the virtual gamepad, made on first use. */
+    private val pad by lazy { VirtualGamepad(::inject) }
+
+    override fun gamepad(displayId: Int, buttons: Int, axes: FloatArray): String? = guardText { pad.state(displayId, buttons, axes) }
+
+    override fun gamepadClose() {
+        runCatching { pad.close() }
     }
 
     /** Sets the event's display (hidden, by reflection) and injects it as the shell. */
