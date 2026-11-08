@@ -3429,6 +3429,39 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         }
     }
 
+    /**
+     * 4F build: the focused window's last frame, read back from its texture (render thread), for the game screen to pick
+     * touch points and icons on. The texture holds it bottom row first, so it is turned the right way up.
+     */
+    private fun gameSnapshot() {
+        val p = gameTarget() ?: return
+        val t = p.src.texture
+        val w = t.width
+        val h = t.height
+        if (w <= 0 || h <= 0 || !p.hasFrame) {
+            com.hayeco.flipspaces.game.GameStatus.report("No picture of ${p.panel.label} yet", true)
+            return
+        }
+        val bmp = runCatching {
+            val buf = java.nio.ByteBuffer.allocateDirect(w * h * 4).order(java.nio.ByteOrder.nativeOrder())
+            android.opengl.GLES30.glBindFramebuffer(android.opengl.GLES30.GL_FRAMEBUFFER, t.framebuffer)
+            android.opengl.GLES30.glReadPixels(0, 0, w, h, android.opengl.GLES30.GL_RGBA, android.opengl.GLES30.GL_UNSIGNED_BYTE, buf)
+            android.opengl.GLES30.glBindFramebuffer(android.opengl.GLES30.GL_FRAMEBUFFER, 0)
+            val raw = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+            buf.rewind()
+            raw.copyPixelsFromBuffer(buf)
+            val scale = minOf(1f, 1280f / maxOf(w, h))
+            val m = android.graphics.Matrix().apply { postScale(scale, -scale) }
+            android.graphics.Bitmap.createBitmap(raw, 0, 0, w, h, m, true).also { if (it !== raw) raw.recycle() }
+        }.getOrElse {
+            com.hayeco.flipspaces.game.GameStatus.report("Picture of ${p.panel.label}: ${it.message}", true)
+            return
+        }
+        com.hayeco.flipspaces.game.GameStatus.deliver(
+            com.hayeco.flipspaces.game.GameStatus.Snapshot(bmp, p.panel.label, p.panel.packageName, p.width, p.height),
+        )
+    }
+
     /** 4F build: the window the game screen works on: the focused one, as for keys. */
     private fun gameTarget(): PanelGl? {
         val target = KeyRouting.target(launcher.isOpen, fullKeyboard = true, focusedPanelId = focusedPanelId, panelIds = panels.keys)
@@ -3697,6 +3730,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 is SpaceCommand.PanelKey -> panelKey(c)
                 is SpaceCommand.PanelGamepad -> panelGamepad(c)
                 is SpaceCommand.PanelTouch -> panelTouch(c)
+                SpaceCommand.GameSnapshot -> gameSnapshot()
                 SpaceCommand.TrackpadTouched -> keepFocus()
                 is SpaceCommand.Remove -> removePanel(c.panelId)
                 SpaceCommand.Recentre -> recentre()

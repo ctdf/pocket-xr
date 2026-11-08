@@ -38,6 +38,9 @@ interface GameHost {
 
     /** Hides Android's status and navigation bars while the game screen is open. */
     fun gameImmersive(on: Boolean)
+
+    /** Asks the Space for a picture of the focused window ([GameStatus.snapshotListener]). */
+    fun gameSnapshot()
 }
 
 /**
@@ -50,7 +53,18 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
     private val store = GameProfiles(context)
     private var editing = false
     private val bar = LinearLayout(context)
+    /** The game window's last picture, drawn dimmed under the controls while editing. */
+    private var picture: GameStatus.Snapshot? = null
+    private val picturePaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = 110 }
     private val area = object : FrameLayout(context) {
+        init { setWillNotDraw(false) }
+
+        override fun onDraw(canvas: Canvas) {
+            val pic = picture ?: return
+            if (!editing) return
+            canvas.drawBitmap(pic.bitmap, null, fitRect(pic.bitmap, width, height), picturePaint)
+        }
+
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             val w = r - l
             val h = b - t
@@ -136,6 +150,14 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         }
     }
 
+    /** Where [b] fits whole, centred, in [w] x [h]. */
+    private fun fitRect(b: android.graphics.Bitmap, w: Int, h: Int): RectF {
+        val s = minOf(w.toFloat() / b.width, h.toFloat() / b.height)
+        val bw = b.width * s
+        val bh = b.height * s
+        return RectF((w - bw) / 2, (h - bh) / 2, (w + bw) / 2, (h + bh) / 2)
+    }
+
     /** Every touch stops here: none reaches the trackpad under the game screen. */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean = true
@@ -151,12 +173,45 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             status.text = line
             status.setTextColor(if (problem) 0xFFFF7043.toInt() else 0xFF8BC34A.toInt())
         }
+        var first = true
+        GameStatus.snapshotListener = { snap ->
+            picture = snap
+            if (first) {
+                first = false
+                bindOnOpen(snap)
+            }
+            pictureWaiter?.invoke(snap)
+            pictureWaiter = null
+            area.invalidate()
+        }
+        host.gameSnapshot()
         requestApplyInsets()
     }
+
+    /** The layout bound to the focused app opens by itself; a changed window size is pointed out. */
+    private fun bindOnOpen(snap: GameStatus.Snapshot) {
+        val bound = store.profiles.indexOfFirst { it.app == snap.app }
+        if (bound >= 0 && store.profiles[store.current].app != snap.app) {
+            store.current = bound
+            rebuild()
+            host.gameOrientation(store.profile.landscape)
+        }
+        val p = store.profile
+        if (p.winW > 0 && (p.winW != snap.width || p.winH != snap.height) && p.controls.any { it.hasPoint }) {
+            GameStatus.report("Touch points were set on a ${p.winW}×${p.winH} window, ${snap.window} is ${snap.width}×${snap.height} now: check them", true)
+        }
+    }
+
+    /** Called with the next picture, once. */
+    private var pictureWaiter: ((GameStatus.Snapshot) -> Unit)? = null
 
     fun close() {
         releaseAll()
         GameStatus.listener = null
+        GameStatus.snapshotListener = null
+        pictureWaiter = null
+        picker?.let { removeView(it) }
+        picker = null
         visibility = View.GONE
         host.gameImmersive(false)
     }
@@ -187,14 +242,13 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         bar.removeAllViews()
         if (!editing) {
             barButton("‹ Trackpad") { close(); host.gameExit() }
-            barButton("◀") { switchProfile(-1) }
-            barText(store.profile.name, 0f)
-            barButton("▶") { switchProfile(1) }
+            barButton("${store.profile.name} ▾") { layoutList() }
             (status.parent as? ViewGroup)?.removeView(status)
             bar.addView(status, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             barButton("Edit") { editing = true; rebuild() }
         } else {
             barButton("+ Add") { addControl() }
+            barButton("Picture ⟳") { host.gameSnapshot() }
             barButton(if (store.profile.landscape) "Landscape" else "Portrait") {
                 store.profile.landscape = !store.profile.landscape
                 store.save()
@@ -231,17 +285,45 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         else LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
-    private fun switchProfile(step: Int) {
-        val n = store.profiles.size
-        store.current = (store.current + step + n) % n
-        rebuild()
-        host.gameOrientation(store.profile.landscape)
+    /** The layouts as a list: name, orientation and the app it is bound to; then binding this one to the game. */
+    private fun layoutList() {
+        val app = picture
+        val rows = store.profiles.mapIndexed { i, p ->
+            (if (i == store.current) "✓ " else "    ") + p.name + " · " + (if (p.landscape) "landscape" else "portrait") +
+                (if (p.app.isNotEmpty()) " · ${p.appLabel.ifEmpty { p.app }}" else "")
+        }.toMutableList()
+        val bindRow = when {
+            app == null -> null
+            store.profile.app == app.app -> "Unbind “${store.profile.name}” from ${app.window}"
+            else -> "Open “${store.profile.name}” by itself for ${app.window}"
+        }
+        bindRow?.let { rows += it }
+        dialog().setTitle("Layouts").setItems(rows.toTypedArray()) { _, i ->
+            if (i < store.profiles.size) {
+                store.current = i
+                rebuild()
+                host.gameOrientation(store.profile.landscape)
+            } else if (app != null) {
+                val p = store.profile
+                if (p.app == app.app) {
+                    p.app = ""
+                    p.appLabel = ""
+                } else {
+                    // One layout per app: an older binding to it is dropped.
+                    store.profiles.filter { it.app == app.app }.forEach { it.app = ""; it.appLabel = "" }
+                    p.app = app.app
+                    p.appLabel = app.window
+                }
+                store.save()
+                GameStatus.report(if (p.app.isEmpty()) "“${p.name}” is no longer bound" else "“${p.name}” opens by itself for ${app.window}", false)
+            }
+        }.show()
     }
 
     private fun dialog() = AlertDialog.Builder(context, android.R.style.Theme_DeviceDefault_Dialog_Alert)
 
     private fun layoutsMenu() {
-        val items = arrayOf("Rename this layout", "Copy as a new layout", "New empty layout", "Delete this layout", "Reset all layouts to defaults")
+        val items = arrayOf("Rename this layout", "Copy as a new layout", "New empty layout", "Delete this layout", "Reset all layouts to defaults", "Gamepad check")
         dialog().setTitle(store.profile.name).setItems(items) { _, which ->
             when (which) {
                 0 -> ask("Name", store.profile.name) { store.profile.name = it; store.save(); buildBar() }
@@ -261,6 +343,7 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
                     rebuild()
                     host.gameOrientation(store.profile.landscape)
                 }
+                5 -> gamepadCheck()
                 4 -> dialog().setMessage("Replace every layout with the three defaults?").setPositiveButton("Reset") { _, _ ->
                     store.profiles.clear()
                     store.profiles.addAll(GameProfiles.defaults())
@@ -297,13 +380,161 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
                 5 -> Control(ControlKind.TOUCH, 0.4f, 0.4f, 0.12f, 0.16f, 0)
                 else -> Control(ControlKind.STICK, 0.35f, 0.3f, 0.26f, 0.44f, StickTarget.TOUCH.ordinal)
             }
+            if (needsPoint(c)) {
+                // A touch control starts on the game's picture: the point picked there, the control put at the same place
+                // on the phone with the game's button as its icon. Then it can be moved anywhere.
+                pickPoint(c, adding = true)
+                return@setItems
+            }
             store.profile.controls.add(c)
             rebuild()
-            when {
-                needsPoint(c) -> setPoint(c)
-                c.kind != ControlKind.MOUSE -> choose(c)
-            }
+            if (c.kind != ControlKind.MOUSE) choose(c)
         }.show()
+    }
+
+    // ---- picking a touch point on the game's picture ----
+
+    private var picker: View? = null
+
+    /** Gets a fresh picture of the game's window, then lets the point be picked on it. */
+    private fun pickPoint(c: Control, adding: Boolean) {
+        GameStatus.report("Getting a picture of the game's window…", false)
+        pictureWaiter = { snap -> showPicker(snap, c, adding) }
+        host.gameSnapshot()
+    }
+
+    private fun showPicker(snap: GameStatus.Snapshot, c: Control, adding: Boolean) {
+        picker?.let { removeView(it) }
+        val view = PickerView(snap, if (c.hasPoint) c.tx else 0.5f, if (c.hasPoint) c.ty else 0.5f) { u, v ->
+            picker?.let { removeView(it) }
+            picker = null
+            if (u == null || v == null) return@PickerView
+            c.tx = u
+            c.ty = v
+            c.icon = cropIcon(snap.bitmap, u, v)
+            store.profile.winW = snap.width
+            store.profile.winH = snap.height
+            if (adding) {
+                // The same place on the phone as on the game's window.
+                c.x = (u - c.w / 2).coerceIn(0f, 1f - c.w)
+                c.y = (v - c.h / 2).coerceIn(0f, 1f - c.h)
+                store.profile.controls.add(c)
+            }
+            store.save()
+            rebuild()
+        }
+        picker = view
+        addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    /** A square of the picture around [u], [v], 96 pixels, as base 64 PNG: the game's own button as the icon. */
+    private fun cropIcon(b: android.graphics.Bitmap, u: Float, v: Float): String = runCatching {
+        val side = (minOf(b.width, b.height) * 0.14f).toInt().coerceAtLeast(8)
+        val x = (u * b.width - side / 2).toInt().coerceIn(0, b.width - side)
+        val y = (v * b.height - side / 2).toInt().coerceIn(0, b.height - side)
+        val crop = android.graphics.Bitmap.createScaledBitmap(android.graphics.Bitmap.createBitmap(b, x, y, side, side), 96, 96, true)
+        val out = java.io.ByteArrayOutputStream()
+        crop.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+    }.getOrDefault("")
+
+    /**
+     * The game's picture over the whole phone screen: a touch or drag puts the cross where the game is to be touched,
+     * then Use. [done] gets null on Cancel.
+     */
+    @SuppressLint("ViewConstructor")
+    private inner class PickerView(
+        private val snap: GameStatus.Snapshot,
+        private var u: Float,
+        private var v: Float,
+        private val done: (Float?, Float?) -> Unit,
+    ) : FrameLayout(context) {
+        private val image = object : View(context) {
+            private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dpf(2f); color = 0xFFFF4081.toInt() }
+
+            override fun onDraw(canvas: Canvas) {
+                val r = fitRect(snap.bitmap, width, height)
+                canvas.drawBitmap(snap.bitmap, null, r, null)
+                val x = r.left + u * r.width()
+                val y = r.top + v * r.height()
+                val side = minOf(r.width(), r.height()) * 0.07f
+                canvas.drawCircle(x, y, side, cross)
+                canvas.drawLine(x - side * 1.6f, y, x + side * 1.6f, y, cross)
+                canvas.drawLine(x, y - side * 1.6f, x, y + side * 1.6f, cross)
+            }
+
+            @SuppressLint("ClickableViewAccessibility")
+            override fun onTouchEvent(e: MotionEvent): Boolean {
+                val r = fitRect(snap.bitmap, width, height)
+                u = ((e.x - r.left) / r.width()).coerceIn(0f, 1f)
+                v = ((e.y - r.top) / r.height()).coerceIn(0f, 1f)
+                invalidate()
+                return true
+            }
+        }
+
+        init {
+            setBackgroundColor(Color.BLACK)
+            addView(image, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply { bottomMargin = dp(48f) })
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundColor(0xFF1C1C1C.toInt())
+            }
+            fun button(label: String, weight: Float, onClick: () -> Unit) = row.addView(TextView(context).apply {
+                text = label
+                setTextColor(Color.WHITE)
+                textSize = 14f
+                gravity = Gravity.CENTER
+                setOnClickListener { onClick() }
+            }, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, weight))
+            button("Cancel", 1f) { done(null, null) }
+            row.addView(TextView(context).apply {
+                text = "Touch the game's button on ${snap.window}"
+                setTextColor(0xFFBBBBBB.toInt())
+                textSize = 12f
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 2f))
+            button("Use", 1f) { done(u, v) }
+            addView(row, LayoutParams(LayoutParams.MATCH_PARENT, dp(48f), Gravity.BOTTOM))
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouchEvent(event: MotionEvent): Boolean = true
+    }
+
+    // ---- the gamepad check ----
+
+    private fun devices(): List<android.view.InputDevice> {
+        val out = ArrayList<android.view.InputDevice>()
+        for (id in android.view.InputDevice.getDeviceIds()) android.view.InputDevice.getDevice(id)?.let { out.add(it) }
+        return out
+    }
+
+    /** The input devices Android lists, as the game sees them: whether the virtual gamepad is there and what it is. */
+    private fun gamepadCheck() {
+        // Sending an empty state makes the gamepad if it is not there yet.
+        sendPad()
+        postDelayed({
+            val lines = devices().map { d: android.view.InputDevice ->
+                val src = buildList {
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_GAMEPAD)) add("gamepad")
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_JOYSTICK)) add("joystick")
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_DPAD)) add("dpad")
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_KEYBOARD)) add("keyboard")
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_TOUCHSCREEN)) add("touch")
+                    if (d.supportsSource(android.view.InputDevice.SOURCE_MOUSE)) add("mouse")
+                }.joinToString("+")
+                val axes = d.motionRanges.filter { it.isFromSource(android.view.InputDevice.SOURCE_JOYSTICK) }
+                    .joinToString(" ") { android.view.MotionEvent.axisToString(it.axis).removePrefix("AXIS_") }
+                "${if (d.name == com.hayeco.flipspaces.spatial.VirtualGamepad.NAME) "► " else ""}${d.name} (id ${d.id}, %04x:%04x): $src${if (axes.isNotEmpty()) "; axes $axes" else ""}"
+                    .format(d.vendorId, d.productId)
+            }
+            val found = lines.any { it.startsWith("►") }
+            dialog().setTitle(if (found) "Gamepad: Android lists it" else "Gamepad: not listed")
+                .setMessage((if (found) "" else "Pocket XR Gamepad is not among Android's devices. The top bar shows why, in red.\n\n") + lines.joinToString("\n\n"))
+                .setPositiveButton("OK", null).show()
+        }, 1500)
     }
 
     /** What the control sends: a key, a gamepad button, or a stick's target. */
@@ -352,13 +583,30 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
     private fun controlMenu(c: Control) {
         val items = mutableListOf<String>()
         if (c.kind != ControlKind.MOUSE && c.kind != ControlKind.TOUCH) items += "Change what it sends"
-        if (needsPoint(c)) items += "Set the touch point at the cursor"
+        if (needsPoint(c)) items += listOf("Pick the touch point on the game's picture", "Set the touch point at the cursor")
+        if (c.kind == ControlKind.KEY || c.kind == ControlKind.PAD_BUTTON || c.kind == ControlKind.TOUCH) {
+            items += "Colour"
+            if (c.hasPoint) items += "Icon from the game's picture"
+            if (c.icon.isNotEmpty()) items += "Remove the icon"
+        }
         if (c.kind == ControlKind.STICK && c.code == StickTarget.TOUCH.ordinal) items += "How far the touch stick moves"
         items += listOf("Rename", "Duplicate", "Make square", "Delete")
         dialog().setTitle(c.label.ifEmpty { "D-pad" }).setItems(items.toTypedArray()) { _, i ->
             when (items[i]) {
                 "Change what it sends" -> choose(c)
                 "Set the touch point at the cursor" -> setPoint(c)
+                "Pick the touch point on the game's picture" -> pickPoint(c, adding = false)
+                "Colour" -> {
+                    val names = arrayOf("Default", "Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Pink", "Grey")
+                    val colors = intArrayOf(0, 0xFFE53935.toInt(), 0xFFFB8C00.toInt(), 0xFFFDD835.toInt(), 0xFF43A047.toInt(),
+                        0xFF1E88E5.toInt(), 0xFF8E24AA.toInt(), 0xFFD81B60.toInt(), 0xFF757575.toInt())
+                    dialog().setTitle("Colour").setItems(names) { _, k -> c.color = colors[k]; store.save(); rebuild() }.show()
+                }
+                "Icon from the game's picture" -> {
+                    pictureWaiter = { snap -> c.icon = cropIcon(snap.bitmap, c.tx, c.ty); store.save(); rebuild() }
+                    host.gameSnapshot()
+                }
+                "Remove the icon" -> { c.icon = ""; store.save(); rebuild() }
                 "How far the touch stick moves" -> {
                     val reach = floatArrayOf(0.04f, 0.06f, 0.08f, 0.11f, 0.15f)
                     dialog().setTitle("Reach, of the window's width").setItems(reach.map { "%.0f %%".format(it * 100) }.toTypedArray()) { _, r ->
@@ -391,6 +639,10 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dpf(1.5f) }
         private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
         private val rect = RectF()
+        private val iconPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { alpha = 220 }
+        private val iconBitmap: android.graphics.Bitmap? = control.icon.takeIf { it.isNotEmpty() }?.let {
+            runCatching { android.util.Base64.decode(it, android.util.Base64.NO_WRAP).let { b -> android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size) } }.getOrNull()
+        }
         private var pressedNow = false
         private var downAt = 0L
         private var knobX = 0f
@@ -408,7 +660,11 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             val w = width.toFloat()
             val h = height.toFloat()
             rect.set(dpf(2f), dpf(2f), w - dpf(2f), h - dpf(2f))
-            fill.color = if (pressedNow) 0x88FFFFFF.toInt() else 0x33FFFFFF
+            fill.color = when {
+                control.color != 0 -> (control.color and 0x00FFFFFF) or (if (pressedNow) 0xCC000000.toInt() else 0x77000000)
+                pressedNow -> 0x88FFFFFF.toInt()
+                else -> 0x33FFFFFF
+            }
             stroke.color = if (editing) 0xFF4FC3F7.toInt() else 0x88FFFFFF.toInt()
             stroke.pathEffect = null
             text.textSize = minOf(w, h) * 0.3f
@@ -417,7 +673,17 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
                     val r = if (control.kind == ControlKind.PAD_BUTTON && control.code <= PadButton.Y.ordinal) minOf(w, h) / 2 else dpf(12f)
                     canvas.drawRoundRect(rect, r, r, fill)
                     canvas.drawRoundRect(rect, r, r, stroke)
-                    canvas.drawText(control.label, w / 2, h / 2 - (text.descent() + text.ascent()) / 2, text)
+                    val ic = iconBitmap
+                    if (ic != null) {
+                        val side = minOf(w, h) * 0.72f
+                        canvas.drawBitmap(ic, null, RectF((w - side) / 2, (h - side) / 2, (w + side) / 2, (h + side) / 2), iconPaint)
+                        if (control.name.isNotEmpty()) {
+                            text.textSize = minOf(w, h) * 0.18f
+                            canvas.drawText(control.label, w / 2, h - dpf(6f), text)
+                        }
+                    } else {
+                        canvas.drawText(control.label, w / 2, h / 2 - (text.descent() + text.ascent()) / 2, text)
+                    }
                 }
                 ControlKind.STICK -> {
                     val radius = minOf(w, h) / 2 - dpf(2f)

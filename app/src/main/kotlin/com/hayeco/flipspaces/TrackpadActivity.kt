@@ -1680,6 +1680,10 @@ class TrackpadActivity : Activity(), PadHost, com.hayeco.flipspaces.game.GameHos
         }
     }
 
+    override fun gameSnapshot() {
+        SpaceSession.send(SpaceCommand.GameSnapshot)
+    }
+
     override fun gameExit() {
         requestedOrientation = if (cover) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         else TrackpadSettings.screenOrientation(settings.mode, settings.direction, prefs.landscapeDevice)

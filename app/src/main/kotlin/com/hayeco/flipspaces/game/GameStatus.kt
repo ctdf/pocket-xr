@@ -17,4 +17,19 @@ object GameStatus {
     fun report(line: String, problem: Boolean) {
         main.post { listener?.invoke(line, problem) }
     }
+
+    /** A picture of the focused window: [app] its package, [width] x [height] its display's pixels. */
+    class Snapshot(val bitmap: android.graphics.Bitmap, val window: String, val app: String, val width: Int, val height: Int)
+
+    @Volatile var snapshot: Snapshot? = null
+
+    /** Called on the main thread when a new picture arrives. */
+    @Volatile var snapshotListener: ((Snapshot) -> Unit)? = null
+
+    fun deliver(s: Snapshot) {
+        main.post {
+            snapshot = s
+            snapshotListener?.invoke(s)
+        }
+    }
 }

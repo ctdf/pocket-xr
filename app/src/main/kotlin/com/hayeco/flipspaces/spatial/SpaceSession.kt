@@ -49,6 +49,9 @@ sealed interface SpaceCommand {
     class PanelGamepad(val buttons: Int, val axes: FloatArray) : SpaceCommand
 
     /** 4F build: the game screen's touch controls: positions are fractions of the focused window (0 to 1). */
+    /** 4F build: a picture of the focused window for the game screen ([com.hayeco.flipspaces.game.GameStatus.snapshot]). */
+    data object GameSnapshot : SpaceCommand
+
     class PanelTouch(val action: Int, val ids: IntArray, val us: FloatArray, val vs: FloatArray, val downTime: Long) : SpaceCommand
     /**
      * The phone's trackpad was touched (0.4.2): Android may have moved focus to the phone, so

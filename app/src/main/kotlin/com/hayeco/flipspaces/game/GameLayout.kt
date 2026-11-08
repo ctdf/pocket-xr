@@ -36,6 +36,9 @@ data class Control(
     var tr: Float = 0.08f,
     /** A name the user gave it; else the label comes from what it sends. */
     var name: String = "",
+    /** Its colour (0: the default), and an icon cut from the game's picture (a PNG in base 64, empty: none). */
+    var color: Int = 0,
+    var icon: String = "",
 ) {
     val hasPoint: Boolean get() = tx >= 0f && ty >= 0f
 
@@ -62,6 +65,7 @@ data class Control(
     fun toJson(): JSONObject = JSONObject().put("k", kind.name).put("x", x.toDouble()).put("y", y.toDouble())
         .put("w", w.toDouble()).put("h", h.toDouble()).put("c", code)
         .put("tx", tx.toDouble()).put("ty", ty.toDouble()).put("tr", tr.toDouble()).put("n", name)
+        .put("col", color).put("icon", icon)
 
     companion object {
         fun fromJson(o: JSONObject) = Control(
@@ -69,6 +73,7 @@ data class Control(
             o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), o.getDouble("w").toFloat(), o.getDouble("h").toFloat(),
             o.optInt("c"),
             o.optDouble("tx", -1.0).toFloat(), o.optDouble("ty", -1.0).toFloat(), o.optDouble("tr", 0.08).toFloat(), o.optString("n"),
+            o.optInt("col"), o.optString("icon"),
         )
     }
 }
@@ -82,17 +87,32 @@ enum class PadButton(val label: String, val bit: Int) {
     MODE("Home", 8), L3("L3", 9), R3("R3", 10), LT("LT", -1), RT("RT", -1),
 }
 
-/** A named layout, landscape or portrait. */
-data class GameProfile(var name: String, var landscape: Boolean, val controls: MutableList<Control>) {
+/**
+ * A named layout, landscape or portrait. [app] is the package it is bound to (empty: none): it opens by itself for that
+ * app. [winW] x [winH] is the game window's size when touch points were last set (0: never).
+ */
+data class GameProfile(
+    var name: String,
+    var landscape: Boolean,
+    val controls: MutableList<Control>,
+    var app: String = "",
+    var appLabel: String = "",
+    var winW: Int = 0,
+    var winH: Int = 0,
+) {
     fun toJson(): JSONObject = JSONObject().put("name", name).put("landscape", landscape)
         .put("controls", JSONArray().apply { controls.forEach { put(it.toJson()) } })
+        .put("app", app).put("appLabel", appLabel).put("winW", winW).put("winH", winH)
 
-    fun copy(newName: String) = GameProfile(newName, landscape, controls.map { it.copy() }.toMutableList())
+    fun copy(newName: String) = GameProfile(newName, landscape, controls.map { it.copy() }.toMutableList(), "", "", winW, winH)
 
     companion object {
         fun fromJson(o: JSONObject): GameProfile {
             val a = o.getJSONArray("controls")
-            return GameProfile(o.getString("name"), o.getBoolean("landscape"), MutableList(a.length()) { Control.fromJson(a.getJSONObject(it)) })
+            return GameProfile(
+                o.getString("name"), o.getBoolean("landscape"), MutableList(a.length()) { Control.fromJson(a.getJSONObject(it)) },
+                o.optString("app"), o.optString("appLabel"), o.optInt("winW"), o.optInt("winH"),
+            )
         }
     }
 }
