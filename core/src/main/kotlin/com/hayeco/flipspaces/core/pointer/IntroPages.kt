@@ -25,7 +25,13 @@ object IntroPages {
      * pages were another product's text).
      */
     val GESTURES: List<IntroPage> = listOf(
-        IntroPage("Point and click", listOf("Move one finger to move the dot", "Tap to click", "Tap with two fingers for a long press"), IntroArt.POINT),
+        // 1.2.3 (issue 53): the resize handle needs a held finger, which nothing said.
+        IntroPage(
+            "Point and click",
+            listOf("Move one finger to move the dot", "Tap to click", "Tap with two fingers for a long press"),
+            IntroArt.POINT,
+            note = RESIZE_LINE,
+        ),
         IntroPage(
             "Scroll and zoom",
             listOf("Run a finger along the strip at the edge to scroll", "Move two fingers to scroll", "Pinch with two fingers to zoom"),
@@ -35,6 +41,9 @@ object IntroPages {
     )
 
     const val SPATIAL_MOUSE_TITLE = "Spatial Mouse (aim with your phone)"
+
+    /** 1.2.3 (issue 53): how to resize, under the first page's steps. */
+    const val RESIZE_LINE = "To resize a window, put the dot on its corner handle. Hold a finger still until the dot fills, then drag."
 
     /**
      * Spatial Mouse, held the way the device is: a phone upright, a landscape handheld ([TrackpadSettings.landscapeHandheld])
