@@ -1093,6 +1093,10 @@ class TrackpadActivity : Activity(), PadHost {
         screen.showToast(if (on) "Recording the glasses. Menu, then Stop recording, when you're done." else "Recording stopped: saved to Movies/Pocket XR.")
     }
 
+    override fun openControlPanel() {
+        submit(PadSignal.Swipe(com.hayeco.flipspaces.core.pointer.SwipeDirection.DOWN))
+    }
+
     override fun returnHome() {
         screen.closeDrawer()
         // 0.5.96 (open source audit): in our own words (the earlier line was another product's).
