@@ -74,7 +74,7 @@ object PanelHost {
      */
     // 0.5.37: 14, launchNew (a new instance of a running app); a new version restarts the user service with this code.
     // 1.1.15: 16, rootTaskLines and moveTaskToDisplay (an app's new screen that landed on the phone, back to its window).
-    private const val SERVICE_VERSION = 17
+    private const val SERVICE_VERSION = 18
 
     /**
      * 0.5.52: window displays on the shell's virtual device (Developer: "Windows stay awake when the phone sleeps (test)"),
@@ -497,14 +497,23 @@ object PanelHost {
     @Volatile private var padSeq = 0
     @Volatile private var padLatestButtons = 0
 
-    fun gamepad(displayId: Int, buttons: Int, axes: FloatArray, problem: (String) -> Unit) {
+    fun gamepad(displayId: Int, buttons: Int, axes: FloatArray, result: (String?) -> Unit) {
         val seq = ++padSeq
         padLatestButtons = buttons
         calls.execute {
             if (seq != padSeq && buttons == padLatestButtons) return@execute
-            val h = host ?: return@execute
+            val h = host ?: return@execute main.post { result("The panel service is not connected (Shizuku)") }.let { }
             val err = runCatching { h.gamepad(displayId, buttons, axes) }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
-            if (err != null) main.post { problem(err) }
+            main.post { result(err) }
+        }
+    }
+
+    /** 4F build: a touch from the game screen's touch controls, with its own pointer ids. */
+    fun touch(displayId: Int, action: Int, ids: IntArray, xs: FloatArray, ys: FloatArray, downTime: Long, result: (String?) -> Unit) {
+        calls.execute {
+            val h = host ?: return@execute main.post { result("The panel service is not connected (Shizuku)") }.let { }
+            val err = runCatching { h.injectGameTouch(displayId, action, ids, xs, ys, downTime) }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
+            main.post { result(err) }
         }
     }
 

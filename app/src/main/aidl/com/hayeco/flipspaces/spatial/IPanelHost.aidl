@@ -172,4 +172,10 @@ interface IPanelHost {
 
     /** 4F build: removes the virtual gamepad. */
     void gamepadClose() = 31;
+
+    /**
+     * 4F build: a touch with its own pointer ids (the game screen's touch controls hold several fingers that come and go
+     * in any order). [action] carries the pointer index for pointer down and up; positions are display pixels.
+     */
+    String injectGameTouch(int displayId, int action, in int[] ids, in float[] xs, in float[] ys, long downTime) = 32;
 }

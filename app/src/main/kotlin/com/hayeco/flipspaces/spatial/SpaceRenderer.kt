@@ -2685,6 +2685,8 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
         // App closed, or the Back question is up: the app gets nothing until it is answered,
         // except a hover exit (0.4.5: a held back exit and the next enter aborted Android).
         val blocked = cardOf(p) != null
+        // 4F build: where the cursor is on this window, for the game screen's touch points.
+        if (action is SpaceAction.Hover) com.hayeco.flipspaces.game.GameStatus.cursor = com.hayeco.flipspaces.game.GameStatus.Cursor(p.panel.label, action.u, action.v)
         val sent = if (action is SpaceAction.Hover) {
             action.copy(phase = p.hover.pass(action.phase, id, blocked) ?: return)
         } else {
@@ -3405,10 +3407,34 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
 
     /** 4F build: the phone's virtual gamepad, to the focused panel as [panelKey] sends keys. */
     private fun panelGamepad(g: SpaceCommand.PanelGamepad) {
-        val target = KeyRouting.target(launcher.isOpen, fullKeyboard = true, focusedPanelId = focusedPanelId, panelIds = panels.keys)
-        val p = (target as? KeyTarget.Panel)?.let { panels[it.panelId] } ?: return
+        val p = gameTarget() ?: return
         val display = p.displayId ?: return
-        PanelHost.gamepad(display, g.buttons, g.axes) { problem = "Gamepad on ${p.panel.label}: $it" }
+        PanelHost.gamepad(display, g.buttons, g.axes) { err ->
+            com.hayeco.flipspaces.game.GameStatus.report(if (err == null) "Gamepad → ${p.panel.label}" else "Gamepad: $err", err != null)
+            if (err != null) problem = "Gamepad on ${p.panel.label}: $err"
+        }
+    }
+
+    /** 4F build: the game screen's touch controls on the focused panel, its fractions in the display's pixels. */
+    private fun panelTouch(t: SpaceCommand.PanelTouch) {
+        val p = gameTarget() ?: return
+        val display = p.displayId ?: return
+        val xs = FloatArray(t.us.size) { (t.us[it] * p.width).coerceIn(0f, p.width - 1f) }
+        val ys = FloatArray(t.vs.size) { (t.vs[it] * p.height).coerceIn(0f, p.height - 1f) }
+        PanelHost.touch(display, t.action, t.ids, xs, ys, t.downTime) { err ->
+            if (err != null) {
+                com.hayeco.flipspaces.game.GameStatus.report("Touch: $err", true)
+                problem = "Touch on ${p.panel.label}: $err"
+            }
+        }
+    }
+
+    /** 4F build: the window the game screen works on: the focused one, as for keys. */
+    private fun gameTarget(): PanelGl? {
+        val target = KeyRouting.target(launcher.isOpen, fullKeyboard = true, focusedPanelId = focusedPanelId, panelIds = panels.keys)
+        val p = (target as? KeyTarget.Panel)?.let { panels[it.panelId] }
+        if (p == null) com.hayeco.flipspaces.game.GameStatus.report("No window in focus: click the game's window first", true)
+        return p
     }
 
     /** Android paused, resumed or stopped a panel's display. */
@@ -3670,6 +3696,7 @@ class SpaceRenderer(private val context: Context) : GLSurfaceView.Renderer {
                 is SpaceCommand.LauncherNav -> launcherActions(xr.key(c.key, SystemClock.uptimeMillis()))
                 is SpaceCommand.PanelKey -> panelKey(c)
                 is SpaceCommand.PanelGamepad -> panelGamepad(c)
+                is SpaceCommand.PanelTouch -> panelTouch(c)
                 SpaceCommand.TrackpadTouched -> keepFocus()
                 is SpaceCommand.Remove -> removePanel(c.panelId)
                 SpaceCommand.Recentre -> recentre()

@@ -32,6 +32,12 @@ interface GameHost {
     fun gameMouse(event: MotionEvent, width: Float, height: Float)
     fun gameOrientation(landscape: Boolean)
     fun gameExit()
+
+    /** A touch on the focused window: pointer ids and positions as fractions of the window. */
+    fun gameTouch(action: Int, ids: IntArray, us: FloatArray, vs: FloatArray, downTime: Long)
+
+    /** Hides Android's status and navigation bars while the game screen is open. */
+    fun gameImmersive(on: Boolean)
 }
 
 /**
@@ -67,6 +73,54 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
 
     private fun sendPad() = host.gamePad(buttons, axes.copyOf())
 
+    // ---- touches on the game's window, one pointer per touch control ----
+    private class Finger(val id: Int, var u: Float, var v: Float)
+
+    private val fingers = LinkedHashMap<Any, Finger>()
+    private var touchDown = 0L
+
+    private fun sendTouch(action: Int) {
+        val list = fingers.values.toList()
+        host.gameTouch(action, IntArray(list.size) { list[it].id }, FloatArray(list.size) { list[it].u }, FloatArray(list.size) { list[it].v }, touchDown)
+    }
+
+    /** Puts [owner]'s finger at [u], [v] on the game's window, down if it was up. */
+    private fun touchAt(owner: Any, u: Float, v: Float) {
+        val cu = u.coerceIn(0f, 1f)
+        val cv = v.coerceIn(0f, 1f)
+        val f = fingers[owner]
+        if (f != null) {
+            if (f.u == cu && f.v == cv) return
+            f.u = cu
+            f.v = cv
+            sendTouch(MotionEvent.ACTION_MOVE)
+            return
+        }
+        val used = fingers.values.map { it.id }.toSet()
+        fingers[owner] = Finger((0..9).first { it !in used }, cu, cv)
+        if (fingers.size == 1) {
+            touchDown = SystemClock.uptimeMillis()
+            sendTouch(MotionEvent.ACTION_DOWN)
+        } else {
+            sendTouch(MotionEvent.ACTION_POINTER_DOWN or ((fingers.size - 1) shl MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+        }
+    }
+
+    private fun touchUp(owner: Any) {
+        if (owner !in fingers) return
+        val index = fingers.keys.indexOf(owner)
+        sendTouch(if (fingers.size == 1) MotionEvent.ACTION_UP else MotionEvent.ACTION_POINTER_UP or (index shl MotionEvent.ACTION_POINTER_INDEX_SHIFT))
+        fingers.remove(owner)
+    }
+
+    private val status = TextView(context).apply {
+        setTextColor(0xFF8BC34A.toInt())
+        textSize = 11f
+        gravity = Gravity.CENTER_VERTICAL
+        maxLines = 2
+        setPadding(dp(8f), 0, dp(8f), 0)
+    }
+
     init {
         setBackgroundColor(0xFF101010.toInt())
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, dp(44f)))
@@ -74,7 +128,17 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         bar.orientation = LinearLayout.HORIZONTAL
         bar.gravity = Gravity.CENTER_VERTICAL
         bar.setBackgroundColor(0xFF1C1C1C.toInt())
+        // Clear of the camera cutout and the rounded corners; Android's bars are hidden while the screen is open.
+        setOnApplyWindowInsetsListener { v, insets ->
+            val i = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+            v.setPadding(i.left, i.top, i.right, i.bottom)
+            insets
+        }
     }
+
+    /** Every touch stops here: none reaches the trackpad under the game screen. */
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean = true
 
     /** Shows the current layout; the activity turns to its orientation. */
     fun open() {
@@ -82,11 +146,19 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         editing = false
         rebuild()
         host.gameOrientation(store.profile.landscape)
+        host.gameImmersive(true)
+        GameStatus.listener = { line, problem ->
+            status.text = line
+            status.setTextColor(if (problem) 0xFFFF7043.toInt() else 0xFF8BC34A.toInt())
+        }
+        requestApplyInsets()
     }
 
     fun close() {
         releaseAll()
+        GameStatus.listener = null
         visibility = View.GONE
+        host.gameImmersive(false)
     }
 
     val isOpen: Boolean get() = visibility == View.VISIBLE
@@ -101,6 +173,7 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
 
     private fun releaseAll() {
         for (i in 0 until area.childCount) (area.getChildAt(i) as? ControlView)?.release()
+        fingers.keys.toList().forEach(::touchUp)
         if (buttons != 0 || axes.any { it != 0f }) {
             buttons = 0
             axes.fill(0f)
@@ -115,8 +188,10 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         if (!editing) {
             barButton("‹ Trackpad") { close(); host.gameExit() }
             barButton("◀") { switchProfile(-1) }
-            barText(store.profile.name, 1f)
+            barText(store.profile.name, 0f)
             barButton("▶") { switchProfile(1) }
+            (status.parent as? ViewGroup)?.removeView(status)
+            bar.addView(status, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             barButton("Edit") { editing = true; rebuild() }
         } else {
             barButton("+ Add") { addControl() }
@@ -152,7 +227,8 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             gravity = Gravity.CENTER
             maxLines = 1
         }
-        bar.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight))
+        bar.addView(t, if (weight > 0f) LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, weight)
+        else LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
     private fun switchProfile(step: Int) {
@@ -210,18 +286,23 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
     // ---- adding and changing controls ----
 
     private fun addControl() {
-        val kinds = arrayOf("Key", "Gamepad button", "Stick", "D-pad", "Mouse area")
+        val kinds = arrayOf("Key", "Gamepad button", "Stick", "D-pad", "Mouse area", "Touch on the game's screen (tap / hold)", "Touch stick (the game's on-screen stick)")
         dialog().setTitle("Add").setItems(kinds) { _, which ->
             val c = when (which) {
                 0 -> Control(ControlKind.KEY, 0.4f, 0.4f, 0.12f, 0.16f, KeyEvent.KEYCODE_SPACE)
                 1 -> Control(ControlKind.PAD_BUTTON, 0.4f, 0.4f, 0.10f, 0.16f, PadButton.A.ordinal)
                 2 -> Control(ControlKind.STICK, 0.35f, 0.3f, 0.26f, 0.44f, StickTarget.LEFT.ordinal)
                 3 -> Control(ControlKind.DPAD, 0.35f, 0.3f, 0.22f, 0.40f, StickTarget.LEFT.ordinal)
-                else -> Control(ControlKind.MOUSE, 0.3f, 0.2f, 0.4f, 0.6f, 0)
+                4 -> Control(ControlKind.MOUSE, 0.3f, 0.2f, 0.4f, 0.6f, 0)
+                5 -> Control(ControlKind.TOUCH, 0.4f, 0.4f, 0.12f, 0.16f, 0)
+                else -> Control(ControlKind.STICK, 0.35f, 0.3f, 0.26f, 0.44f, StickTarget.TOUCH.ordinal)
             }
             store.profile.controls.add(c)
             rebuild()
-            if (c.kind != ControlKind.MOUSE) choose(c)
+            when {
+                needsPoint(c) -> setPoint(c)
+                c.kind != ControlKind.MOUSE -> choose(c)
+            }
         }.show()
     }
 
@@ -237,18 +318,54 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             ControlKind.STICK, ControlKind.DPAD -> dialog().setTitle(if (c.kind == ControlKind.STICK) "Stick" else "D-pad")
                 .setItems(StickTarget.entries.map {
                     if (c.kind == ControlKind.DPAD && (it == StickTarget.LEFT || it == StickTarget.RIGHT)) "Gamepad D-pad" else it.label
-                }.toTypedArray()) { _, i -> c.code = i; store.save(); rebuild() }.show()
-            ControlKind.MOUSE -> Unit
+                }.toTypedArray()) { _, i ->
+                    c.code = i
+                    store.save()
+                    rebuild()
+                    if (needsPoint(c) && !c.hasPoint) setPoint(c)
+                }.show()
+            ControlKind.MOUSE, ControlKind.TOUCH -> Unit
         }
+    }
+
+    private fun needsPoint(c: Control) =
+        c.kind == ControlKind.TOUCH || ((c.kind == ControlKind.STICK || c.kind == ControlKind.DPAD) && c.code == StickTarget.TOUCH.ordinal)
+
+    /**
+     * The touch point is where Pocket XR's cursor last was on the game's window: point the cursor at the game's own
+     * button (with a mouse area here, or on the trackpad), then set it.
+     */
+    private fun setPoint(c: Control) {
+        val cur = GameStatus.cursor
+        val where = if (c.hasPoint) "\n\nNow: %.0f %%, %.0f %% of the window.".format(c.tx * 100, c.ty * 100) else ""
+        val b = dialog().setTitle("Touch point")
+        if (cur == null) {
+            b.setMessage("Move Pocket XR's cursor over the game's on-screen button first (with a Mouse area in this layout, or on the trackpad), then set the point here.$where")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        b.setMessage("Set this control's touch to where the cursor is now on ${cur.window}: %.0f %%, %.0f %% of the window?$where".format(cur.u * 100, cur.v * 100))
+            .setPositiveButton("Set") { _, _ -> c.tx = cur.u; c.ty = cur.v; store.save(); rebuild() }
+            .setNegativeButton("Cancel", null).show()
     }
 
     private fun controlMenu(c: Control) {
         val items = mutableListOf<String>()
-        if (c.kind != ControlKind.MOUSE) items += "Change what it sends"
-        items += listOf("Duplicate", "Make square", "Delete")
+        if (c.kind != ControlKind.MOUSE && c.kind != ControlKind.TOUCH) items += "Change what it sends"
+        if (needsPoint(c)) items += "Set the touch point at the cursor"
+        if (c.kind == ControlKind.STICK && c.code == StickTarget.TOUCH.ordinal) items += "How far the touch stick moves"
+        items += listOf("Rename", "Duplicate", "Make square", "Delete")
         dialog().setTitle(c.label.ifEmpty { "D-pad" }).setItems(items.toTypedArray()) { _, i ->
             when (items[i]) {
                 "Change what it sends" -> choose(c)
+                "Set the touch point at the cursor" -> setPoint(c)
+                "How far the touch stick moves" -> {
+                    val reach = floatArrayOf(0.04f, 0.06f, 0.08f, 0.11f, 0.15f)
+                    dialog().setTitle("Reach, of the window's width").setItems(reach.map { "%.0f %%".format(it * 100) }.toTypedArray()) { _, r ->
+                        c.tr = reach[r]; store.save()
+                    }.show()
+                }
+                "Rename" -> ask("Name (empty: automatic)", c.name) { c.name = it; store.save(); rebuild() }
                 "Duplicate" -> {
                     store.profile.controls.add(c.copy(x = (c.x + 0.04f).coerceAtMost(1f - c.w), y = (c.y + 0.04f).coerceAtMost(1f - c.h)))
                     store.save(); rebuild()
@@ -296,7 +413,7 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             stroke.pathEffect = null
             text.textSize = minOf(w, h) * 0.3f
             when (control.kind) {
-                ControlKind.KEY, ControlKind.PAD_BUTTON -> {
+                ControlKind.KEY, ControlKind.PAD_BUTTON, ControlKind.TOUCH -> {
                     val r = if (control.kind == ControlKind.PAD_BUTTON && control.code <= PadButton.Y.ordinal) minOf(w, h) / 2 else dpf(12f)
                     canvas.drawRoundRect(rect, r, r, fill)
                     canvas.drawRoundRect(rect, r, r, stroke)
@@ -354,7 +471,7 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             if (editing) return edit(e)
             when (control.kind) {
                 ControlKind.MOUSE -> host.gameMouse(e, width.toFloat(), height.toFloat())
-                ControlKind.KEY, ControlKind.PAD_BUTTON -> when (e.actionMasked) {
+                ControlKind.KEY, ControlKind.PAD_BUTTON, ControlKind.TOUCH -> when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> press(true)
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> press(false)
                 }
@@ -366,9 +483,9 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
                         var dy = (e.getY(0) - height / 2f) / radius
                         val len = hypot(dx, dy)
                         if (len > 1f) { dx /= len; dy /= len }
-                        stick(dx, dy)
+                        stick(dx, dy, true)
                     }
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stick(0f, 0f)
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> stick(0f, 0f, false)
                 }
             }
             return true
@@ -384,6 +501,9 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             }
             when (control.kind) {
                 ControlKind.KEY -> host.gameKey(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, control.code, downAt)
+                ControlKind.TOUCH -> if (!control.hasPoint) {
+                    if (down) GameStatus.report("${control.label}: no touch point yet (Edit, tap it, Set the touch point)", true)
+                } else if (down) touchAt(this, control.tx, control.ty) else touchUp(this)
                 ControlKind.PAD_BUTTON -> {
                     val b = PadButton.entries.getOrNull(control.code) ?: return
                     when (b) {
@@ -398,9 +518,9 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         }
 
         /** A stick or D-pad at [dx], [dy] (each -1 to 1, y down). */
-        private fun stick(dx: Float, dy: Float) {
+        private fun stick(dx: Float, dy: Float, on: Boolean) {
             val target = StickTarget.entries.getOrNull(control.code) ?: StickTarget.LEFT
-            pressedNow = dx != 0f || dy != 0f
+            pressedNow = on
             if (control.kind == ControlKind.DPAD) {
                 // Eight ways: a third of the radius from the centre counts.
                 knobX = if (abs(dx) > 0.33f) Math.signum(dx) else 0f
@@ -411,6 +531,16 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
             }
             invalidate()
             when (target) {
+                StickTarget.TOUCH -> when {
+                    !control.hasPoint -> if (pressedNow) GameStatus.report("${control.label}: no touch point yet (Edit, tap it, Set the touch point)", true)
+                    pressedNow -> {
+                        // The window is wider than tall: the reach is of its width, so a circle stays round on a 16:9 window.
+                        val x = if (control.kind == ControlKind.DPAD) knobX else dx
+                        val y = if (control.kind == ControlKind.DPAD) knobY else dy
+                        touchAt(this, control.tx + x * control.tr, control.ty + y * control.tr * 16f / 9f)
+                    }
+                    else -> touchUp(this)
+                }
                 StickTarget.LEFT, StickTarget.RIGHT -> {
                     if (control.kind == ControlKind.DPAD) {
                         axes[6] = knobX
@@ -453,7 +583,8 @@ class GameScreen(context: Context, private val host: GameHost) : FrameLayout(con
         }
 
         fun release() {
-            if (control.kind == ControlKind.KEY && pressedNow) press(false)
+            if ((control.kind == ControlKind.KEY || control.kind == ControlKind.TOUCH) && pressedNow) press(false)
+            touchUp(this)
             heldKeys.toMap().forEach { (code, t) -> host.gameKey(KeyEvent.ACTION_UP, code, t) }
             heldKeys.clear()
             pressedNow = false

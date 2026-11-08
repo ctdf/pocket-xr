@@ -555,6 +555,20 @@ class PanelHostService : IPanelHost.Stub() {
 
     override fun gamepad(displayId: Int, buttons: Int, axes: FloatArray): String? = guardText { pad.state(displayId, buttons, axes) }
 
+    override fun injectGameTouch(displayId: Int, action: Int, ids: IntArray, xs: FloatArray, ys: FloatArray, downTime: Long): String? = guardText {
+        val n = minOf(ids.size, xs.size, ys.size)
+        if (n == 0) return@guardText "No pointers"
+        val now = SystemClock.uptimeMillis()
+        val props = Array(n) { i -> MotionEvent.PointerProperties().apply { this.id = ids[i]; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+        val coords = Array(n) { i -> MotionEvent.PointerCoords().apply { x = xs[i]; y = ys[i]; pressure = 1f; size = 1f } }
+        val event = MotionEvent.obtain(if (downTime > 0) downTime else now, now, action, n, props, coords, 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+        try {
+            inject(event, displayId, "touch ${MotionEvent.actionToString(action)}")
+        } finally {
+            event.recycle()
+        }
+    }
+
     override fun gamepadClose() {
         runCatching { pad.close() }
     }

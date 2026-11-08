@@ -6,7 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 4F build: what one control on the game screen is. */
-enum class ControlKind { KEY, PAD_BUTTON, STICK, DPAD, MOUSE }
+enum class ControlKind { KEY, PAD_BUTTON, STICK, DPAD, MOUSE, TOUCH }
 
 /**
  * Where a stick or D-pad sends: the gamepad's left or right stick (a D-pad: the gamepad's D-pad), or held keys.
@@ -16,6 +16,7 @@ enum class StickTarget(val label: String) {
     RIGHT("Gamepad right stick"),
     WASD("W A S D keys"),
     ARROWS("Arrow keys"),
+    TOUCH("The game's on-screen stick (touch)"),
 }
 
 /**
@@ -29,8 +30,19 @@ data class Control(
     var w: Float,
     var h: Float,
     var code: Int = 0,
+    /** For touch controls: the point on the game's window (fractions), and a touch stick's reach (of its width). */
+    var tx: Float = -1f,
+    var ty: Float = -1f,
+    var tr: Float = 0.08f,
+    /** A name the user gave it; else the label comes from what it sends. */
+    var name: String = "",
 ) {
+    val hasPoint: Boolean get() = tx >= 0f && ty >= 0f
+
     val label: String
+        get() = name.ifEmpty { autoLabel }
+
+    private val autoLabel: String
         get() = when (kind) {
             ControlKind.KEY -> keyLabel(code)
             ControlKind.PAD_BUTTON -> PadButton.entries.getOrNull(code)?.label ?: "?"
@@ -39,20 +51,24 @@ data class Control(
                 StickTarget.RIGHT -> "R"
                 StickTarget.WASD -> "WASD"
                 StickTarget.ARROWS -> "Arrows"
+                StickTarget.TOUCH -> "Touch"
                 null -> "?"
             }
             ControlKind.DPAD -> ""
             ControlKind.MOUSE -> "Mouse"
+            ControlKind.TOUCH -> "Tap"
         }
 
     fun toJson(): JSONObject = JSONObject().put("k", kind.name).put("x", x.toDouble()).put("y", y.toDouble())
         .put("w", w.toDouble()).put("h", h.toDouble()).put("c", code)
+        .put("tx", tx.toDouble()).put("ty", ty.toDouble()).put("tr", tr.toDouble()).put("n", name)
 
     companion object {
         fun fromJson(o: JSONObject) = Control(
             ControlKind.valueOf(o.getString("k")),
             o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), o.getDouble("w").toFloat(), o.getDouble("h").toFloat(),
             o.optInt("c"),
+            o.optDouble("tx", -1.0).toFloat(), o.optDouble("ty", -1.0).toFloat(), o.optDouble("tr", 0.08).toFloat(), o.optString("n"),
         )
     }
 }

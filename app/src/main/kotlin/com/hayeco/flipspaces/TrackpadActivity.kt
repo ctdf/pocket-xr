@@ -195,7 +195,10 @@ class TrackpadActivity : Activity(), PadHost, com.hayeco.flipspaces.game.GameHos
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(screenOff, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenOff, filter)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val cb = OnBackInvokedCallback {
-                if (!screen.closeTop()) {
+                if (screen.gameScreen.isOpen) {
+                    screen.gameScreen.close()
+                    gameExit()
+                } else if (!screen.closeTop()) {
                     CoverTrackpad.leftByUser()
                     finish()
                 }
@@ -1660,6 +1663,21 @@ class TrackpadActivity : Activity(), PadHost, com.hayeco.flipspaces.game.GameHos
     override fun gameOrientation(landscape: Boolean) {
         if (cover) return
         requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    override fun gameTouch(action: Int, ids: IntArray, us: FloatArray, vs: FloatArray, downTime: Long) {
+        SpaceSession.send(SpaceCommand.PanelTouch(action, ids, us, vs, downTime))
+    }
+
+    override fun gameImmersive(on: Boolean) {
+        window.insetsController?.let { c ->
+            if (on) {
+                c.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                c.hide(WindowInsets.Type.systemBars())
+            } else if (!cover) {
+                c.show(WindowInsets.Type.systemBars())
+            }
+        }
     }
 
     override fun gameExit() {
