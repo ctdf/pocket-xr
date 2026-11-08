@@ -47,7 +47,7 @@ class Onboarding0119Test {
     @Test fun firstRunIsTheTrackpadPagesTheSetupIsTheCheck() {
         val pages = IntroPages.firstRun(landscapeHandheld = false, spatialMouse = true)
         // 1.2.1: with the add-on's page before the last one.
-        assertEquals(listOf("Point and click", "Scroll and zoom", "Three fingers", com.hayeco.flipspaces.core.AddonSetup.TITLE, IntroPages.SPATIAL_MOUSE_TITLE), pages.map { it.title })
+        assertEquals(listOf("Point and click", "Scroll and zoom", "Three or four fingers", com.hayeco.flipspaces.core.AddonSetup.TITLE, IntroPages.SPATIAL_MOUSE_TITLE), pages.map { it.title })
         val page = IntroPages.glassesSetup(GlassesModel.ONE_PRO)
         assertNotNull(page)
         assertEquals(IntroArt.GLASSES_MENU, page!!.art)
@@ -76,7 +76,7 @@ class Onboarding0119Test {
     @Test fun noSpatialMousePageWithoutTheSensor() {
         val pages = IntroPages.firstRun(landscapeHandheld = true, spatialMouse = false)
         // 1.2.1: with the add-on's page before the last one.
-        assertEquals(listOf("Point and click", "Scroll and zoom", com.hayeco.flipspaces.core.AddonSetup.TITLE, "Three fingers"), pages.map { it.title })
+        assertEquals(listOf("Point and click", "Scroll and zoom", com.hayeco.flipspaces.core.AddonSetup.TITLE, "Three or four fingers"), pages.map { it.title })
         // 1.1.10: the same pages as the gestures, the last one with where Exit is.
         assertEquals(IntroPages.GESTURES.map { it.title }, IntroPages.trackpad(landscapeHandheld = false, spatialMouse = false).map { it.title })
     }
