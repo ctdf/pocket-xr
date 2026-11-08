@@ -31,7 +31,7 @@ object IntroPages {
             listOf("Run a finger along the strip at the edge to scroll", "Move two fingers to scroll", "Pinch with two fingers to zoom"),
             IntroArt.SCROLL,
         ),
-        IntroPage("Three fingers", listOf("Swipe up: your apps", "Swipe down: Control Center", "Swipe sideways: Back"), IntroArt.THREE_FINGERS),
+        IntroPage("Three or four fingers", listOf("Swipe up: your apps", "Swipe down: Control Center", "Swipe sideways: Back"), IntroArt.THREE_FINGERS),
     )
 
     const val SPATIAL_MOUSE_TITLE = "Spatial Mouse (aim with your phone)"

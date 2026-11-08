@@ -1639,6 +1639,11 @@ class TrackpadActivity : Activity(), PadHost {
         }
     }
 
+    /** 4F build: a game key from [GameKeysView], to the focused window as a held key. */
+    override fun gameKey(action: Int, keyCode: Int, downTime: Long) {
+        SpaceSession.send(SpaceCommand.PanelKey(action, keyCode, 0, 0, downTime))
+    }
+
     private fun key(code: Int) {
         val t = SystemClock.uptimeMillis()
         SpaceSession.send(SpaceCommand.PanelKey(KeyEvent.ACTION_DOWN, code, 0, 0, t))

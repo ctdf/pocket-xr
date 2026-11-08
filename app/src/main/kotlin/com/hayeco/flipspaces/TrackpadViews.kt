@@ -690,6 +690,9 @@ internal class IntroCover(context: Context, private val art: com.hayeco.flipspac
 
 /** What the screen asks the trackpad to do; the activity implements it. */
 interface PadHost {
+    /** 4F build: a game key went down or up ([GameKeysView]). */
+    fun gameKey(action: Int, keyCode: Int, downTime: Long) {}
+
     /** 0.5.101: the Menu's settings back to Pocket XR's defaults (the pad type, presets and windows stay). */
     fun resetSettings()
 
@@ -1073,6 +1076,14 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
     private val rects = HashMap<View, IntArray>()
 
     val pad = PadArtView(context) { e, w, h -> host.padTouch(e, w, h) }
+
+    /** 4F build: game keys over the pad, off until the Menu turns them on. */
+    private val gameKeys = GameKeysView(context) { a, c, d -> host.gameKey(a, c, d) }.apply { visibility = View.GONE }
+    val gameKeysShown: Boolean get() = gameKeys.visibility == View.VISIBLE
+
+    fun showGameKeys(on: Boolean) {
+        gameKeys.visibility = if (on) View.VISIBLE else View.GONE
+    }
     private val drawerButton = ImageView(context).apply {
         setImageResource(R.drawable.ic_drawer_button)
         scaleType = ImageView.ScaleType.FIT_CENTER
@@ -1400,7 +1411,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
 
     init {
         setBackgroundColor(BACKGROUND)
-        listOf(pad, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
+        listOf(pad, gameKeys, drawerButton, selector, hint, laserTip, bar, sideBack, sideHome, curveKey, coverMouseChip, updateBanner).forEach { addView(it) }
         mainKeys.values.forEach { addView(it) }
         coverKeys.values.forEach { addView(it) }
         addView(lockKey)
@@ -1706,6 +1717,7 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         // over the selector, while typing into the Space (the cover's has its own place above).
         if (!cover && textOpen) put(textBar, dp(20f), dp(12f), w - dp(40f), dp(52f))
         if (landscape) put(hint, w - dp(23f) - dp(20f) - hw, selectorBottom + dp(35f), hw, hh) else put(hint, (w - hw) / 2, selectorBottom + dp(35f), hw, hh)
+        rects[pad]?.let { put(gameKeys, it[0], it[1], it[2], it[3]) }
         put(mask, 0, 0, w, h)
         put(drawerScrim, 0, 0, w, h)
         val dw = minOf(w, if (landscape) dp(316f) else dp(290f))
@@ -1960,6 +1972,12 @@ internal class PadScreen(context: Context, private val host: PadHost) : ViewGrou
         functions.addView(row(R.drawable.ic_unlock_icon, "Unlock phone") {
             closeDrawer()
             host.unlockPhone()
+        })
+        // 4F build: game keys (W A S D, Space, Shift, Esc, Q, E, H, Tab) over the pad.
+        functions.addView(c.divider(20f))
+        functions.addView(row(R.drawable.ic_settings_sliders, if (gameKeysShown) "Hide game keys" else "Game keys", subtitle = "Keys a game sees held down, over the trackpad") {
+            closeDrawer()
+            showGameKeys(!gameKeysShown)
         })
         drawerBody.addView(functions, cardParams(if (koFi) 12f else 25f))
 

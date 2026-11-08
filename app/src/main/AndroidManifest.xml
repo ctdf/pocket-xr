@@ -32,10 +32,10 @@
     <!-- 1.1.0: the link to the Pocket XR add-on, granted only to apps signed with the same key. Declared here too, so
          it is granted whichever of the two apps is installed first. -->
     <permission
-        android:name="com.hayeco.flipspaces.permission.ADDON_LINK"
+        android:name="${applicationId}.permission.ADDON_LINK"
         android:label="Pocket XR add-on link"
         android:protectionLevel="signature" />
-    <uses-permission android:name="com.hayeco.flipspaces.permission.ADDON_LINK" />
+    <uses-permission android:name="${applicationId}.permission.ADDON_LINK" />
 
     <!-- 1.1.11 (Google Play): LiteRT brings Play's asset pack library, whose extraction service is a dataSync foreground
          service (disabled in its own manifest). Pocket XR has no asset packs, so neither it nor its permission is

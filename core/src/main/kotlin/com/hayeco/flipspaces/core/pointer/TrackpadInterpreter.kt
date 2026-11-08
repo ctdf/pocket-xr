@@ -271,11 +271,13 @@ class TrackpadInterpreter(
                 endOne(out, nowMs)
                 startTwo(out)
             }
-            3 -> {
+            // Fork (four fingers): three or four fingers make the same gesture, for phones whose system
+            // keeps the three finger swipe. A fourth finger restarts the swipe from the four fingers' centre.
+            3, 4 -> {
                 endTwo(out)
+                if (!threeActive) threeStartMs = nowMs
                 threeActive = true
                 threeStart = centroid()
-                threeStartMs = nowMs
             }
         }
         return out
